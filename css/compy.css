@@ -99,8 +99,8 @@ html[data-theme^="light-"] select {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 html[data-theme^="light-"] .card {
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 html[data-theme^="light-"] .modal-content {
   border: 1px solid rgba(0, 0, 0, 0.15);
@@ -293,6 +293,7 @@ body {
 .file-btn {
   display: inline-flex;
   align-items: center;
+}
 
 /* Small badge for counters (e.g., active filter count) */
 .badge {
@@ -309,8 +310,6 @@ body {
   background: var(--accent);
   color: #07120a;
   font-weight: 700;
-}
-
 }
 .menu {
   position: relative;
@@ -1026,3 +1025,5 @@ html[data-theme^="light-"] .toggle .switch {
 .chip[data-color] {
   background: var(--chip-bg);
 }
+
+/* Card hover effects work consistently across all themes using CSS custom properties */
