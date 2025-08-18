@@ -27,7 +27,7 @@ Everything runs client‑side in your browser. Your data is stored locally via l
 ---
 
 ### Usage
-Visit the GitHub Pages site: [link to be added]
+Visit the GitHub Pages site: https://ajayparihar.github.io/Compy2.0/
 
 ### Data & privacy
 - Storage: Browser localStorage under keys like compy.items, compy.theme, compy.profile, compy.backups, compy.filters.
