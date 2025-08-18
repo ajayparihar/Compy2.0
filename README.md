@@ -1,14 +1,5 @@
 ## Compy 2.0 – Simple Clipboard & Snippet Manager (Web)
 
-### About this app
-- Name: Compy 2.0
-- Version: 2.0
-- Short description: A lightweight, offline‑first clipboard and snippet manager for the web. Save reusable text (commands, credentials, templates), organize with tags and search, and copy instantly — all stored locally in your browser with optional JSON/CSV import & export.
-- Repository: https://github.com/ajayparihar/Compy2.0.git
-- Issue reporting: https://github.com/ajayparihar/Compy2.0/issues
-- Developer: Bheb Developer
-- Contact: bhebdeveloper@gmail.com
-
 ### What it is
 Compy is a lightweight, single‑page web app to collect and quickly copy reusable text:
 - Commands and shell snippets
