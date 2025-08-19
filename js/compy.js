@@ -569,6 +569,17 @@
   loadTheme();
   renderProfile();
   renderFilterBadge();
+  // Ensure body top padding matches navbar height when fixed
+  function adjustForNavbar(){
+    const nav = document.querySelector('.navbar');
+    if (!nav) return;
+    const rect = nav.getBoundingClientRect();
+    const h = Math.round(rect.height);
+    document.documentElement.style.setProperty('--nav-h', h + 'px');
+  }
+  window.addEventListener('resize', adjustForNavbar);
+  window.addEventListener('load', adjustForNavbar);
+  requestAnimationFrame(adjustForNavbar);
   renderCards();
   // simple string hash for deterministic tag hue
   function hash(str){ let h=0; for(let i=0;i<str.length;i++){ h=(h<<5)-h+str.charCodeAt(i); h|=0; } return h; }

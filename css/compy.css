@@ -13,6 +13,8 @@
   /* UI sizing */
   --ctrl-h: 36px;
   --radius: 10px;
+  /* Navbar height (dynamic fallback); JS will update this on load/resize */
+  --nav-h: 56px;
 }
 
 /* Dark themes */
@@ -135,13 +137,17 @@ body {
     Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
   color: var(--text);
   background: var(--bg);
+  /* Ensure content does not slide under fixed navbar */
+  padding-top: var(--nav-h);
 }
 
 /* Navbar */
 .navbar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 10;
+  left: 0;
+  width: 100%;
+  z-index: 100;
   display: grid;
   grid-template-columns: auto minmax(260px, 1fr) auto;
   align-items: center;
