@@ -1,8 +1,12 @@
-/* Compy - vanilla JS implementation per Doc3 */
+/* Compy 2.0 - Enhanced vanilla JS implementation */
 (function(){
+  'use strict';
+  
+  // Utility functions
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-
+  
+  // Application constants
   const STORAGE_KEYS = {
     items: 'compy.items',
     theme: 'compy.theme',
@@ -10,6 +14,20 @@
     backups: 'compy.backups',
     filters: 'compy.filters',
   };
+  
+  const UI_CONFIG = {
+    maxVisibleTags: 5,
+    maxBackups: 10,
+    backupInterval: 60 * 60 * 1000, // 1 hour
+    backupDelay: 200, // ms
+    snackbarDuration: 1500, // ms
+    maxTextLength: 500,
+    maxDescLength: 500,
+    maxNameLength: 80,
+    skeletonCount: 6,
+  };
+  
+  const DEFAULT_THEME = 'dark-mystic-forest';
 
   let state = {
     items: [], // {id, text, desc, sensitive, tags:[]}
@@ -22,10 +40,15 @@
   // Utilities
   const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
   const saveState = () => {
-    localStorage.setItem(STORAGE_KEYS.items, JSON.stringify(state.items));
-    localStorage.setItem(STORAGE_KEYS.filters, JSON.stringify(state.filterTags));
-    if (state.profileName) localStorage.setItem(STORAGE_KEYS.profile, state.profileName);
-    scheduleBackup();
+    try {
+      localStorage.setItem(STORAGE_KEYS.items, JSON.stringify(state.items));
+      localStorage.setItem(STORAGE_KEYS.filters, JSON.stringify(state.filterTags));
+      if (state.profileName) localStorage.setItem(STORAGE_KEYS.profile, state.profileName);
+      scheduleBackup();
+    } catch (error) {
+      console.error('Failed to save state to localStorage:', error);
+      showSnackbar('Failed to save data. Storage may be full.');
+    }
   };
   const loadState = () => {
     try { state.items = JSON.parse(localStorage.getItem(STORAGE_KEYS.items) || '[]'); } catch { state.items = []; }
@@ -40,9 +63,31 @@
   };
 
   const copyToClipboard = async (txt) => {
-    try { await navigator.clipboard.writeText(txt); showSnackbar('Copied'); }
-    catch { // fallback
-      const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showSnackbar('Copied');
+    try { 
+      await navigator.clipboard.writeText(txt); 
+      showSnackbar('Copied'); 
+    }
+    catch (error) { 
+      console.warn('Clipboard API failed, using fallback:', error);
+      // fallback for older browsers or permission issues
+      try {
+        const ta = document.createElement('textarea'); 
+        ta.value = txt; 
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta); 
+        ta.select(); 
+        const success = document.execCommand('copy'); 
+        document.body.removeChild(ta); 
+        if (success) {
+          showSnackbar('Copied');
+        } else {
+          showSnackbar('Copy failed - please try manually');
+        }
+      } catch (fallbackError) {
+        console.error('Fallback copy also failed:', fallbackError);
+        showSnackbar('Copy not supported - please copy manually');
+      }
     }
   };
 
@@ -60,8 +105,16 @@
   // Rendering
   const renderCards = () => {
     const container = $('#cards');
-    const items = filteredAndSearchedItems();
-    container.innerHTML = '';
+    
+    // Show skeleton loading briefly to indicate processing
+    if (state.items.length > 0) {
+      showSkeletonCards();
+    }
+    
+    // Use requestAnimationFrame to ensure smooth rendering
+    requestAnimationFrame(() => {
+      const items = filteredAndSearchedItems();
+      container.innerHTML = '';
 
     // Home/Getting Started when there is no data at all
     if (state.items.length === 0) {
@@ -83,7 +136,22 @@
       return;
     }
 
-    for (const it of items) container.appendChild(renderCard(it));
+      for (const it of items) container.appendChild(renderCard(it));
+    });
+  };
+  
+  // Skeleton loading for better perceived performance
+  const showSkeletonCards = () => {
+    const container = $('#cards');
+    const skeletonCount = Math.min(6, state.items.length);
+    container.innerHTML = '';
+    
+    for (let i = 0; i < skeletonCount; i++) {
+      const skeleton = document.createElement('div');
+      skeleton.className = 'skel-card skeleton';
+      skeleton.setAttribute('aria-hidden', 'true');
+      container.appendChild(skeleton);
+    }
   };
 
   // Empty state (Getting Started)
@@ -256,7 +324,7 @@
     const desc = $('#itemDesc').value.trim();
     const sensitive = $('#itemSensitive').checked;
     const tags = getTagsFromChips();
-    if (!text || !desc) { showSnackbar('CompyItem and Description are required'); return; }
+    if (!text || !desc) { showSnackbar('Snippet content and description are required'); return; }
     upsertItem({ text, desc, sensitive, tags });
     closeModal($('#itemModal'));
   });
