@@ -282,7 +282,6 @@ body {
 .primary-btn,
 .secondary-btn,
 .menu > button {
-
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: var(--surface);
@@ -294,6 +293,28 @@ body {
   gap: 6px;
   line-height: 1;
   padding: 0 10px;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease, box-shadow 140ms ease, transform 120ms ease;
+}
+/* Subtle theme-aware hover/focus for toolbar buttons */
+.icon-btn:hover,
+.icon-text-btn:hover,
+.file-btn span:hover,
+.secondary-btn:hover,
+.menu > button:hover,
+select:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.icon-btn:focus-visible,
+.icon-text-btn:focus-visible,
+.file-btn span:focus-visible,
+.primary-btn:focus-visible,
+.secondary-btn:focus-visible,
+.menu > button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 .icon-btn {
   border-radius: 6px;
@@ -305,6 +326,11 @@ body {
   color: var(--primary-contrast);
   border-color: transparent;
   font-weight: 600;
+}
+/* Slight lift for primary on hover to keep contrast */
+.primary-btn:hover {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+  transform: translateY(-1px);
 }
 .secondary-btn {
   background: transparent;
@@ -374,6 +400,12 @@ select {
   height: var(--ctrl-h);
   width: fit-content;
   padding: 0 10px;
+}
+/* Focus style for select: match other controls (no thick outline) */
+select:focus,
+select:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 /* Cards grid */
@@ -477,7 +509,8 @@ select {
 }
 /* Theme-aware hover for modal close (X) and close/cancel buttons */
 .modal .modal-header .icon-btn {
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease, box-shadow 140ms ease;
 }
 .modal .modal-header .icon-btn:hover {
   color: var(--danger);
@@ -491,7 +524,8 @@ select {
 /* Close/Cancel buttons (secondary and elements with data-close-modal) */
 button[data-close-modal],
 .modal .secondary-btn {
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease, box-shadow 140ms ease;
 }
 button[data-close-modal]:hover,
 .modal .secondary-btn:hover {
@@ -683,7 +717,6 @@ button[data-close-modal]:focus-visible,
   padding: 32px;
 }
 
-
 /* Generic small empty note (e.g., inside lists) */
 .empty-note {
   color: var(--muted);
@@ -853,9 +886,6 @@ textarea:focus {
 }
 
 /* Tags input focus state */
-.tags-input {
-  background: var(--bg);
-}
 .tags-input:focus-within {
   border-color: var(--primary);
 }
@@ -897,7 +927,6 @@ textarea:focus {
   margin: 0;
   font-size: 18px;
 }
-
 
 /* Themed links for modals (better visibility than default blue) */
 .modal-body a {
@@ -994,7 +1023,8 @@ textarea:focus {
   background: var(--bg);
   color: var(--text);
   font-weight: 500;
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, transform 120ms ease;
+  transition: border-color 150ms ease, background-color 150ms ease,
+    box-shadow 150ms ease, transform 120ms ease;
 }
 #aboutModal .link-chip:hover {
   border-color: var(--primary);
@@ -1004,12 +1034,17 @@ textarea:focus {
 html[data-theme^="light-"] #aboutModal .link-chip:hover {
   background: rgba(0, 0, 0, 0.06);
 }
-#aboutModal .link-chip .icon { color: var(--primary); display: inline-flex; }
-#aboutModal .link-chip:hover { border-color: var(--primary); background: rgba(255, 255, 255, 0.1); }
-html[data-theme^="light-"] #aboutModal .link-chip:hover { background: rgba(0, 0, 0, 0.08); }
-#aboutModal .link-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-#aboutModal .link-chip:visited { color: var(--text); }
-
+#aboutModal .link-chip .icon {
+  color: var(--primary);
+  display: inline-flex;
+}
+#aboutModal .link-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+#aboutModal .link-chip:visited {
+  color: var(--text);
+}
 
 /* Slightly larger clickable close/clear icons on high-DPI */
 .icon-btn,
@@ -1065,11 +1100,8 @@ html[data-theme^="light-"] #aboutModal .link-chip:hover { background: rgba(0, 0,
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
-  transition: left 150ms ease, background 150ms ease;
-}
-.toggle .switch::after {
   background: var(--text);
+  transition: left 150ms ease, background 150ms ease;
 }
 .toggle input:checked + .switch::after {
   background: var(--primary-contrast);
@@ -1089,9 +1121,6 @@ html[data-theme^="light-"] .toggle .switch {
 .toggle input:checked + .switch::after {
   left: 21px;
   background: var(--primary-contrast);
-}
-.toggle-text {
-  color: var(--muted);
 }
 
 /* Colored chips for tags (subtle) */
