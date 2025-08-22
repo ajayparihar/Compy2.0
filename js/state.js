@@ -82,7 +82,6 @@ export const saveState = () => {
 };
 
 // Debounced backup function
-let backupTimer = null;
 const scheduleBackup = debounce(() => {
   doBackup();
 }, UI_CONFIG.backupDelay);

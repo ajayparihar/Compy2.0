@@ -10,7 +10,7 @@ import {
   getAllTags, filterItems, validateItem, debounce 
 } from './utils.js';
 import {
-  initState, getState, subscribe, updateState, upsertItem,
+  initState, getState, subscribe, upsertItem,
   deleteItem, updateFilterTags, updateSearch, updateProfile,
   setEditingId, getBackups
 } from './state.js';
@@ -27,13 +27,11 @@ class CompyApp {
     this.theme = null;
     this.search = null;
     this.cards = null;
-    this.eventHandlers = new Map();
     
     // Bind methods to maintain context
     this.handleStateChange = this.handleStateChange.bind(this);
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
     this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
-    this.adjustNavbarHeight = this.adjustNavbarHeight.bind(this);
   }
 
   /**
@@ -56,7 +54,6 @@ class CompyApp {
       this.initProfile();
       this.initExport();
       this.initImport();
-      this.initBackups();
       this.initEventHandlers();
       
       // Subscribe to state changes
@@ -388,7 +385,7 @@ class CompyApp {
     );
     
     card.querySelector('[data-act="delete"]').addEventListener('click', () => 
-      this.deleteItem(item.id)
+      this.removeItem(item.id)
     );
     
     card.querySelector('[data-act="copy"]').addEventListener('click', () => 
@@ -503,7 +500,6 @@ class CompyApp {
     $('#emptyAddBtn')?.addEventListener('click', () => this.openItemModal());
     $('#emptyImportBtn')?.addEventListener('click', () => $('#importFile').click());
     $('#clearSearchBtn')?.addEventListener('click', () => {
-      updateSearch('');
       this.search.clear();
     });
     $('#clearFiltersBtn')?.addEventListener('click', () => {
@@ -540,7 +536,7 @@ class CompyApp {
   /**
    * Delete an item
    */
-  deleteItem(itemId) {
+  removeItem(itemId) {
     deleteItem(itemId);
     this.showNotification('Snippet deleted');
   }
@@ -831,12 +827,6 @@ class CompyApp {
     return true;
   }
 
-  /**
-   * Initialize backup functionality
-   */
-  initBackups() {
-    // Handled in export menu
-  }
 
   /**
    * Open backups modal
@@ -1127,18 +1117,6 @@ class CompyApp {
     window.addEventListener('load', adjustHeight);
   }
 
-  /**
-   * Cleanup resources (for potential future use)
-   */
-  destroy() {
-    // Remove event listeners
-    this.eventHandlers.forEach((handler, element) => {
-      element.removeEventListener(handler.event, handler.func);
-    });
-    
-    this.eventHandlers.clear();
-    this.initialized = false;
-  }
 }
 
 // Initialize and export the app
