@@ -84,7 +84,7 @@ This document outlines the comprehensive improvements made to enhance the overal
 - **Better empty states** with helpful guidance
 - **Improved loading states** with skeleton screens
 - **Enhanced feedback** with better notifications
-- **Keyboard shortcuts** for power users (Ctrl+F, Ctrl+N, /)
+- **Keyboard shortcuts** for power users (Search: Ctrl+F or /; Copy: Enter; Add new: Ctrl+N in modules build)
 
 ### Interaction Patterns
 - **Consistent button behaviors** across the application
@@ -132,26 +132,27 @@ This document outlines the comprehensive improvements made to enhance the overal
 - **Error handling** throughout the application
 - **Type safety** through proper validation
 
-## 🚀 Migration Guide
+## 🚀 Usage & Builds
 
-### For Modern Browsers
-The application now uses ES6 modules by default:
+### Default runtime (recommended)
+index.html ships using the single-file runtime for maximum compatibility:
 ```html
-<script type="module">
-  import { initializeApp } from './js/app.js';
-  await initializeApp();
-</script>
+<script src="js/compy.js" defer></script>
 ```
 
-### For Legacy Browsers
-Fallback to the original script:
+### ES modules runtime (optional, modern browsers)
+A modular architecture is also available. To try it, replace the script tag with:
+```html
+<script type="module" src="js/main.js"></script>
+```
+Optionally keep a legacy fallback:
 ```html
 <script src="js/compy.js" defer nomodule></script>
 ```
 
-### Development Setup
-1. All modules are self-contained and can be developed independently
-2. The `app.js` serves as the main entry point
+### Development notes (ES modules build)
+1. Modules are self-contained and can be developed independently
+2. The `app.js` module contains the main application logic; `main.js` bootstraps it
 3. State management is centralized in `state.js`
 4. Performance utilities are available in `performance.js`
 

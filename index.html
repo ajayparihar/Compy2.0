@@ -25,6 +25,10 @@
 <body>
   <header class="navbar" role="banner">
     <div class="left">
+      <button id="navToggle" class="menu-toggle" aria-label="Open menu" aria-controls="navActions" aria-expanded="false">
+        <span class="sr-only">Open menu</span>
+        <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+      </button>
       <button id="brand" class="brand" title="Refresh page" aria-label="Compy - Refresh page">Compy 2.0</button>
       <span id="profileDisplay" class="profile-display" aria-label="Current user profile"></span>
     </div>
@@ -48,7 +52,7 @@
         </button>
       </div>
     </div>
-    <div class="right">
+    <div id="navActions" class="right" aria-hidden="true">
       <button 
         id="addBtn" 
         class="primary-btn" 
@@ -66,8 +70,9 @@
         Filter 
         <span id="filterBadge" class="badge" hidden aria-label="Active filters count">0</span>
       </button>
-      <label for="themeSelect" class="sr-only">Select theme</label>
-      <select id="themeSelect" title="Select theme" aria-label="Select color theme">
+      <div class="select-wrap with-caret">
+        <label for="themeSelect" class="sr-only">Select theme</label>
+        <select id="themeSelect" class="select-reset" title="Select theme" aria-label="Select color theme">
         <optgroup label="Dark themes">
           <option value="dark-mystic-forest">Mystic Forest</option>
           <option value="dark-crimson-night">Crimson Night</option>
@@ -79,6 +84,7 @@
           <option value="light-floral-breeze">Floral Breeze</option>
         </optgroup>
       </select>
+      </div>
       <label class="file-btn" title="Import snippets from file">
         <input 
           id="importFile" 
@@ -91,12 +97,12 @@
       <div class="menu">
         <button 
           id="exportMenuBtn" 
-          class="icon-text-btn" 
+          class="icon-text-btn with-caret" 
           title="Export options" 
           aria-label="Export options menu"
           aria-expanded="false"
           aria-haspopup="menu">
-          Export <span aria-hidden="true">▾</span>
+          Export
         </button>
         <div id="exportMenu" class="menu-panel" role="menu" aria-label="Export options">
           <button role="menuitem" data-export="json" aria-label="Export all snippets as JSON">Export JSON</button>
@@ -116,6 +122,7 @@
         aria-label="About Compy 2.0">About</button>
     </div>
   </header>
+  <div id="navBackdrop" class="nav-backdrop" hidden></div>
 
   <main id="main" role="main">
     <section id="cards" class="cards" aria-label="Snippet cards" role="region">
@@ -125,6 +132,13 @@
     <!-- Live region for announcements -->
     <div id="liveRegion" class="sr-only" aria-live="polite" aria-atomic="false"></div>
   </main>
+
+  <!-- Floating Add Button (mobile) -->
+  <button id="fabAdd" class="fab-add" aria-label="Add new snippet" title="Add new snippet">
+    <svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+    </svg>
+  </button>
 
   <!-- Add/Edit Modal -->
   <div 

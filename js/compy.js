@@ -275,7 +275,13 @@
   };
 
   // Modals
-  const openModal = (el) => { el.setAttribute('aria-hidden','false'); el.querySelector('[data-close-modal]')?.focus(); };
+  const openModal = (el) => {
+    // ensure any transient UI is closed and drawer is hidden
+    try { if (isMobile() && navToggle?.getAttribute('aria-expanded') === 'true') closeNav(); } catch {}
+    try { closeExportMenu(); } catch {}
+    el.setAttribute('aria-hidden','false');
+    el.querySelector('[data-close-modal]')?.focus();
+  };
   const closeModal = (el) => { el.setAttribute('aria-hidden','true'); };
   $$('#itemModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#itemModal'))));
   $$('#filterModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#filterModal'))));
@@ -344,6 +350,8 @@
   const openFilter = () => {
     renderFilterList();
     $('#filterTagSearch').value='';
+    // Close the drawer before opening overlay on mobile to avoid stacking issues
+    if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav();
     openModal($('#filterModal'));
   };
   const renderFilterList = () => {
@@ -412,12 +420,23 @@
     exportMenu.style.right = 'auto';
   }
   function openExportMenu() {
+    const inDrawer = isMobile() && navActions.getAttribute('aria-hidden') === 'false';
     if (!exportMenu.classList.contains('open')) {
-      document.body.appendChild(exportMenu);
-      positionExportMenu();
-      exportMenu.classList.add('open', 'floating');
-      window.addEventListener('resize', closeExportMenu, { once: true });
-      window.addEventListener('scroll', closeExportMenu, { once: true });
+      if (inDrawer) {
+        // Keep menu within drawer on mobile so it overlays correctly
+        exportHost.appendChild(exportMenu);
+        exportMenu.classList.add('open');
+        exportMenu.classList.remove('floating');
+        exportMenu.style.position = 'absolute';
+        exportMenu.style.right = '0';
+        exportMenu.style.top = 'calc(100% + 6px)';
+      } else {
+        document.body.appendChild(exportMenu);
+        positionExportMenu();
+        exportMenu.classList.add('open', 'floating');
+        window.addEventListener('resize', closeExportMenu, { once: true });
+        window.addEventListener('scroll', closeExportMenu, { once: true });
+      }
     }
   }
   function closeExportMenu() {
@@ -439,6 +458,8 @@
   });
 
   // Import
+  // Close drawer before invoking file picker on mobile
+  document.querySelector('.file-btn')?.addEventListener('click', ()=>{ if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav(); });
   $('#importFile').addEventListener('change', async (e)=>{
     const file = e.target.files?.[0]; if (!file) return;
     const text = await file.text();
@@ -463,6 +484,7 @@
     localStorage.setItem(STORAGE_KEYS.backups, JSON.stringify(arr));
   };
   const openBackups = () => {
+    if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav();
     const list = $('#backupsList'); list.innerHTML = '';
     let arr = [];
     try { arr = JSON.parse(localStorage.getItem(STORAGE_KEYS.backups) || '[]'); } catch {}
@@ -601,6 +623,7 @@
 
   $('#profileEditBtn').addEventListener('click', ()=>{
     // Open dedicated profile modal instead of prompt
+    if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav();
     $('#profileNameInput').value = state.profileName || '';
     openModal($('#profileModal'));
     $('#profileNameInput').focus();
@@ -620,19 +643,106 @@
   // Brand refresh
   $('#brand').addEventListener('click', ()=> location.reload());
 
-  // Add button
+  // Add button (toolbar) and Floating Action Button (mobile)
   $('#addBtn').addEventListener('click', ()=> openItemModal(null));
+  $('#fabAdd').addEventListener('click', ()=> openItemModal(null));
 
   // Theme change
   $('#themeSelect').addEventListener('change', (e)=> applyTheme(e.target.value));
 
   // About
-  $('#aboutBtn').addEventListener('click', ()=> openModal($('#aboutModal')));
+  $('#aboutBtn').addEventListener('click', ()=> { if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav(); openModal($('#aboutModal')); });
+
+  // Mobile navbar: hamburger/off-canvas drawer
+  const navToggle = $('#navToggle');
+  const navActions = $('#navActions');
+  const navBackdrop = $('#navBackdrop');
+  let lastFocusedBeforeMenu = null;
+
+  function isMobile() { return window.matchMedia('(max-width: 480px)').matches; }
+
+  function openNav() {
+    if (!isMobile()) return;
+    lastFocusedBeforeMenu = document.activeElement;
+    navToggle.setAttribute('aria-expanded', 'true');
+    navActions.setAttribute('aria-hidden', 'false');
+    navBackdrop.hidden = false;
+    navBackdrop.classList.add('show');
+    // Prevent background scroll
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    // Focus first item inside drawer
+    const first = navActions.querySelector('button, [href], input, select, textarea');
+    first?.focus();
+    // Trap focus within drawer
+    document.addEventListener('keydown', trapFocus, true);
+    document.addEventListener('keydown', onEscClose, true);
+    setTimeout(()=> document.addEventListener('click', onDocClickClose, true), 0);
+  }
+  function closeNav() {
+    navToggle.setAttribute('aria-expanded', 'false');
+    navActions.setAttribute('aria-hidden', 'true');
+    navBackdrop.classList.remove('show');
+    navBackdrop.hidden = true;
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    document.removeEventListener('keydown', trapFocus, true);
+    document.removeEventListener('keydown', onEscClose, true);
+    document.removeEventListener('click', onDocClickClose, true);
+    // Close any floating menus inside drawer (e.g., export)
+    try { closeExportMenu(); } catch {}
+    // return focus to toggle for accessibility
+    navToggle.focus();
+  }
+  function onEscClose(e){ if (e.key === 'Escape') { e.stopPropagation(); closeNav(); } }
+  function onDocClickClose(e){ if (!navActions.contains(e.target) && e.target !== navToggle) { closeNav(); } }
+  function trapFocus(e){
+    if (!isMobile()) return;
+    if (navActions.getAttribute('aria-hidden') === 'true') return;
+    const focusable = Array.from(navActions.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.key === 'Tab') {
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+
+  navToggle.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const expanded = navToggle.getAttribute('aria-expanded') === 'true';
+    if (expanded) closeNav(); else openNav();
+  });
+  navBackdrop.addEventListener('click', closeNav);
+
+  // Ensure drawer state resets when resizing to desktop/tablet
+  function syncNavAria() {
+    if (isMobile()) {
+      // keep closed by default on mobile unless toggle says expanded
+      const expanded = navToggle.getAttribute('aria-expanded') === 'true';
+      navActions.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+    } else {
+      // always visible in a11y tree on larger screens
+      navToggle.setAttribute('aria-expanded', 'false');
+      navActions.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      navBackdrop.classList.remove('show');
+      navBackdrop.hidden = true;
+    }
+  }
+  window.addEventListener('resize', ()=>{ if (!isMobile()) { closeNav(); } syncNavAria(); });
+  syncNavAria();
+
+  // Hide low-priority elements at certain breakpoints via classes (applied here for clarity)
+  // Example: mark optional elements if needed
+  // $('#someOptionalBtn')?.classList.add('nav-hide-mobile');
 
   // Clear chips via X inside card should not actually remove tags from item per requirements; only in modal we remove.
 
   // Init
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (c)=>({"&":"&amp;","<":"&lt;", ">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+  function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, (c)=>({"&":"&amp;","<":"&lt;", ">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
   loadState();
   loadTheme();
   renderProfile();
