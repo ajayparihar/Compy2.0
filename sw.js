@@ -4,19 +4,17 @@
  * Provides offline fallback to index.html for navigation requests.
  */
 /** Name of the versioned cache bucket. Increment to invalidate old caches. */
-const CACHE_NAME = 'compy-v1';
+const CACHE_NAME = 'compy-v2';
 /** Static assets to pre-cache during install for offline support. */
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/css/compy.css',
-  '/js/compy.js',
-  '/favicon_io/favicon.ico',
-  '/favicon_io/favicon-16x16.png',
-  '/favicon_io/favicon-32x32.png',
-  '/favicon_io/apple-touch-icon.png',
-  '/favicon_io/android-chrome-192x192.png',
-  '/favicon_io/android-chrome-512x512.png'
+  'index.html',
+  'css/compy.css',
+  'js/compy.js',
+  'favicon_io/favicon.ico',
+  'favicon_io/favicon-16x16.png',
+  'favicon_io/favicon-32x32.png',
+  'favicon_io/apple-touch-icon.png',
+  'favicon_io/site.webmanifest'
 ];
 
 /**
@@ -105,7 +103,7 @@ self.addEventListener('fetch', (event) => {
           .catch(() => {
             // Return a basic offline page for navigation requests
             if (event.request.mode === 'navigate') {
-              return caches.match('/index.html');
+              return caches.match('index.html');
             }
             throw new Error('Network failed and no cache available');
           });

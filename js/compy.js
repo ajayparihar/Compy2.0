@@ -405,9 +405,9 @@
     const q = $('#filterTagSearch').value.toLowerCase();
     for (const t of allTags) {
       if (q && !t.toLowerCase().includes(q)) continue;
-      const id = `tag-${t}`;
-      const row = document.createElement('label'); row.className = 'list-row'; row.htmlFor = id;
-      row.innerHTML = `<input id="${id}" type="checkbox" ${state.filterTags.includes(t)?'checked':''}/> ${escapeHtml(t)}`;
+      const safeId = `tag-${t.replace(/[^a-zA-Z0-9_-]/g,'-').toLowerCase()}`;
+      const row = document.createElement('label'); row.className = 'list-row'; row.htmlFor = safeId;
+      row.innerHTML = `<input id="${safeId}" type="checkbox" value="${escapeHtml(t)}" ${state.filterTags.includes(t)?'checked':''}/> <span>${escapeHtml(t)}</span>`;
       list.appendChild(row);
     }
     if (!list.children.length) {
@@ -421,7 +421,7 @@
   $('#filterBtn').addEventListener('click', openFilter);
   $('#filterTagSearch').addEventListener('input', renderFilterList);
   $('#applyFilterBtn').addEventListener('click', ()=>{
-    state.filterTags = $$(`#filterTagList input:checked`).map(i=>i.id.replace(/^tag-/,''));
+    state.filterTags = $$(`#filterTagList input:checked`).map(i=>i.value);
     localStorage.setItem(STORAGE_KEYS.filters, JSON.stringify(state.filterTags));
     renderFilterBadge();
     renderCards();

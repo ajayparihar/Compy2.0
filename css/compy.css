@@ -1042,6 +1042,16 @@ button[data-close-modal]:focus-visible,
 .snackbar.show {
   opacity: 1;
 }
+/* Variant styles for snackbar types */
+.snackbar.info {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.snackbar.error {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--danger) 25%, transparent);
+}
 
 /* Empty state */
 .empty {
