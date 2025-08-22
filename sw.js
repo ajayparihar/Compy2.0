@@ -1,5 +1,11 @@
-// Compy 2.0 Service Worker
+/**
+ * Compy 2.0 Service Worker
+ * Cache-first strategy for static assets with runtime caching for same-origin GET requests.
+ * Provides offline fallback to index.html for navigation requests.
+ */
+/** Name of the versioned cache bucket. Increment to invalidate old caches. */
 const CACHE_NAME = 'compy-v1';
+/** Static assets to pre-cache during install for offline support. */
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,7 +19,9 @@ const STATIC_ASSETS = [
   '/favicon_io/android-chrome-512x512.png'
 ];
 
-// Install event - cache static assets
+/**
+ * Install event: pre-cache known static assets and activate the service worker immediately.
+ */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -30,7 +38,9 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate event - clean up old caches
+/**
+ * Activate event: remove previous cache buckets that no longer match CACHE_NAME.
+ */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
@@ -50,7 +60,10 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+/**
+ * Fetch event: serve same-origin GET requests from cache first, then network.
+ * Navigation requests fall back to the cached index.html when offline.
+ */
 self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') {

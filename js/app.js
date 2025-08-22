@@ -16,9 +16,44 @@ import {
 } from './state.js';
 
 /**
+ * @typedef {Object} AppItem
+ * @property {string} id
+ * @property {string} text
+ * @property {string} desc
+ * @property {boolean} sensitive
+ * @property {string[]} tags
+ */
+/**
+ * @typedef {Object} AppState
+ * @property {AppItem[]} items
+ * @property {string[]} filterTags
+ * @property {string} search
+ * @property {string|null} editingId
+ * @property {string} profileName
+ */
+/**
+ * @typedef {Object} EmptyStateOptions
+ * @property {boolean} hasSearch
+ * @property {boolean} hasFilters
+ */
+
+/**
  * Main Application Class
+ *
+ * Orchestrates UI initialization, state subscriptions, event handlers, and import/export flows
+ * for the Compy application. This class does not own application data; it delegates persistence
+ * to the state module and reads configuration from constants.
+ *
+ * External dependencies:
+ * - Web Clipboard API (navigator.clipboard) with an execCommand fallback for older browsers
+ * - localStorage (via state and theme helpers) for persistence
+ * - requestAnimationFrame for smooth rendering
  */
 class CompyApp {
+  /**
+   * Construct a new CompyApp instance.
+   * Binds handlers to maintain context when used as event listeners.
+   */
   constructor() {
     this.initialized = false;
     this.clipboard = null;
@@ -35,7 +70,16 @@ class CompyApp {
   }
 
   /**
-   * Initialize the application
+   * Initialize the application UI and services.
+   *
+   * Responsibilities:
+   * - Load state and theme from storage
+   * - Initialize core components (clipboard, notifications, modals, search, cards, profile)
+   * - Subscribe to state changes and wire global keyboard handlers
+   * - Measure responsive navbar height
+   *
+   * Errors are surfaced to the user via a non-blocking notification.
+   * @returns {Promise<void>}
    */
   async init() {
     if (this.initialized) return;
@@ -76,7 +120,8 @@ class CompyApp {
   }
 
   /**
-   * Handle state changes
+   * React to state changes by updating dependent UI regions.
+   * @param {Object} state - Immutable snapshot of the current application state
    */
   handleStateChange(state) {
     this.renderCards(state);
@@ -86,12 +131,17 @@ class CompyApp {
   }
 
   /**
-   * Initialize clipboard functionality
+   * Initialize clipboard helpers used across the UI.
+   * Prefers the async Clipboard API with a robust execCommand fallback for older browsers
+   * or restricted contexts.
    */
   initClipboard() {
     this.clipboard = {
       /**
-       * Copy text to clipboard
+       * Copy text to the system clipboard.
+       * Falls back to a hidden textarea if navigator.clipboard is unavailable.
+       * @param {string} text - Plain text to copy
+       * @returns {Promise<void>}
        */
       copy: async (text) => {
         try {
@@ -106,7 +156,8 @@ class CompyApp {
   }
 
   /**
-   * Fallback clipboard copy method
+   * Fallback clipboard copy method using a temporary hidden textarea.
+   * @param {string} text - Plain text to copy
    */
   fallbackCopy(text) {
     try {
@@ -132,7 +183,8 @@ class CompyApp {
   }
 
   /**
-   * Initialize notification system
+   * Initialize ephemeral notification system (snackbar).
+   * Uses UI_CONFIG.snackbarDuration for auto-dismiss timing.
    */
   initNotifications() {
     const snackbar = $('#snackbar');
@@ -151,14 +203,17 @@ class CompyApp {
   }
 
   /**
-   * Show notification
+   * Show a transient snackbar message.
+   * @param {string} message - Message to display
+   * @param {'info'|'error'} [type='info'] - Visual style of the snackbar
    */
   showNotification(message, type = 'info') {
     this.notifications.show(message, type);
   }
 
   /**
-   * Initialize modal system
+   * Initialize modal helpers and close-button behaviors.
+   * Relies on [data-close-modal] attributes inside .modal elements.
    */
   initModals() {
     this.modals = {
@@ -193,7 +248,9 @@ class CompyApp {
   }
 
   /**
-   * Initialize theme system
+   * Initialize theme switching and persistence.
+   * Persists user choice in localStorage and applies a short CSS transition class
+   * to avoid abrupt theme changes.
    */
   initTheme() {
     const themeSelect = $('#themeSelect');
@@ -227,7 +284,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize search functionality
+   * Initialize search input, clear button, and debounced state updates.
    */
   initSearch() {
     const searchInput = $('#searchInput');
@@ -254,7 +311,8 @@ class CompyApp {
   }
 
   /**
-   * Update search input from state
+   * Keep the search input value in sync with state without causing extra input events.
+   * @param {Object} state - Current application state
    */
   updateSearchInput(state) {
     const searchInput = $('#searchInput');
@@ -264,7 +322,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize card rendering system
+   * Initialize card rendering helpers and the Add button handler.
    */
   initCards() {
     const cardsContainer = $('#cards');
@@ -292,7 +350,9 @@ class CompyApp {
   }
 
   /**
-   * Render cards based on current state
+   * Render the visible list of cards from state.
+   * Uses requestAnimationFrame to batch DOM work for smooth updates.
+   * @param {Object} state - Current application state
    */
   renderCards(state) {
     const container = $('#cards');
@@ -327,7 +387,11 @@ class CompyApp {
   }
 
   /**
-   * Create a card element
+   * Create a DOM element representing a single item card.
+   * Respects the 'sensitive' flag by masking the title.
+   * @param {Object} item - Item with text, desc, sensitive, tags
+   * @param {string} [searchQuery=''] - Current search query for highlighting
+   * @returns {HTMLElement}
    */
   createCardElement(item, searchQuery = '') {
     const card = document.createElement('article');
@@ -362,7 +426,10 @@ class CompyApp {
   }
 
   /**
-   * Setup event handlers for a card
+   * Wire click/keyboard handlers for a card's interactions.
+   * Click on card copies content unless an action button was clicked.
+   * @param {HTMLElement} card - Card element
+   * @param {Object} item - Item backing the card
    */
   setupCardEventHandlers(card, item) {
     // Click to copy (but not on action buttons)
@@ -394,7 +461,11 @@ class CompyApp {
   }
 
   /**
-   * Render tags for a card
+   * Render tag chips for a card with deterministic hues and optional highlighting.
+   * Limits visible chips to UI_CONFIG.maxVisibleTags and shows a '+N more' affordance.
+   * @param {string[]} [tags=[]]
+   * @param {string} [searchQuery='']
+   * @returns {string} HTML string
    */
   renderTags(tags = [], searchQuery = '') {
     const maxVisible = UI_CONFIG.maxVisibleTags;
@@ -415,7 +486,10 @@ class CompyApp {
   }
 
   /**
-   * Render empty states
+   * Render contextual empty state UI (welcome or no-results) into container.
+   * @param {HTMLElement} container - Target container
+   * @param {'welcome'|'no-results'} type - Empty state variant
+   * @param {Object} [options]
    */
   renderEmptyState(container, type, options = {}) {
     container.classList.add('empty-state');
@@ -436,7 +510,8 @@ class CompyApp {
   }
 
   /**
-   * Get welcome empty state HTML
+   * Generate HTML for the initial welcome empty state.
+   * @returns {string}
    */
   getWelcomeEmptyState() {
     return `
@@ -461,7 +536,9 @@ class CompyApp {
   }
 
   /**
-   * Get no results empty state HTML
+   * Generate HTML for the 'no results' empty state.
+   * @param {{hasSearch: boolean, hasFilters: boolean}} param0 - Flags indicating current UI filters
+   * @returns {string}
    */
   getNoResultsEmptyState({ hasSearch, hasFilters }) {
     let details = '';
@@ -494,7 +571,7 @@ class CompyApp {
   }
 
   /**
-   * Setup empty state event handlers
+   * Attach event handlers for buttons rendered inside empty state UIs.
    */
   setupEmptyStateHandlers() {
     $('#emptyAddBtn')?.addEventListener('click', () => this.openItemModal());
@@ -508,7 +585,8 @@ class CompyApp {
   }
 
   /**
-   * Open item modal for adding or editing
+   * Open the item modal for adding a new item or editing an existing one.
+   * @param {string|null} [itemId=null] - ID of the item to edit; null for a new item
    */
   openItemModal(itemId = null) {
     setEditingId(itemId);
@@ -534,7 +612,8 @@ class CompyApp {
   }
 
   /**
-   * Delete an item
+   * Delete an item by ID and notify the user.
+   * @param {string} itemId
    */
   removeItem(itemId) {
     deleteItem(itemId);
@@ -542,7 +621,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize profile functionality
+   * Initialize profile editing modal and related event handlers.
    */
   initProfile() {
     $('#profileEditBtn').addEventListener('click', () => {
@@ -569,7 +648,8 @@ class CompyApp {
   }
 
   /**
-   * Render profile display
+   * Render the profile name indicator next to the app title.
+   * @param {Object} state
    */
   renderProfile(state) {
     const display = $('#profileDisplay');
@@ -578,7 +658,8 @@ class CompyApp {
   }
 
   /**
-   * Initialize and render filter badge
+   * Update the filter count badge visibility and text.
+   * @param {Object} state
    */
   renderFilterBadge(state) {
     const badge = $('#filterBadge');
@@ -593,7 +674,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize export functionality
+   * Initialize export menu interactions (JSON, CSV, backups).
    */
   initExport() {
     // Export menu handling
@@ -630,7 +711,8 @@ class CompyApp {
   }
 
   /**
-   * Export data as JSON
+   * Export the current state as a JSON file.
+   * Uses a helper to trigger a safe, temporary download link.
    */
   exportJSON() {
     const state = getState();
@@ -649,7 +731,8 @@ class CompyApp {
   }
 
   /**
-   * Export data as CSV
+   * Export the current state as a CSV file.
+   * Includes an optional metadata section for profileName.
    */
   exportCSV() {
     const state = getState();
@@ -673,7 +756,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize import functionality
+   * Initialize file import handling for JSON and CSV formats.
    */
   initImport() {
     const importFile = $('#importFile');
@@ -702,7 +785,9 @@ class CompyApp {
   }
 
   /**
-   * Import JSON data
+   * Import items from a JSON payload.
+   * Accepts both legacy array-only exports and the newer object format containing { items, profileName }.
+   * @param {string} jsonText - Raw JSON string
    */
   importJSON(jsonText) {
     try {
@@ -739,7 +824,10 @@ class CompyApp {
   }
 
   /**
-   * Import CSV data
+   * Import items from a CSV payload.
+   * Supports an optional two-line metadata block with a single 'profileName' column.
+   * Robustly parses quoted fields and BOM.
+   * @param {string} csvText - Raw CSV string
    */
   importCSV(csvText) {
     try {
@@ -808,7 +896,9 @@ class CompyApp {
   }
 
   /**
-   * Add an imported item
+   * Validate and insert an imported item into state.
+   * @param {Object} itemData - Candidate item
+   * @returns {boolean} True if item was accepted
    */
   addImportedItem(itemData) {
     const validation = validateItem(itemData);
@@ -829,7 +919,7 @@ class CompyApp {
 
 
   /**
-   * Open backups modal
+   * Open the backups modal listing auto-saved snapshots with download actions.
    */
   openBackupsModal() {
     const backups = getBackups();
@@ -855,7 +945,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize all event handlers
+   * Register global UI event handlers for header actions, forms, tags, and overlays.
    */
   initEventHandlers() {
     // Brand click - refresh page
@@ -898,7 +988,7 @@ class CompyApp {
   }
 
   /**
-   * Initialize tag input functionality
+   * Initialize tag entry behaviors (Enter to add, Backspace to remove last).
    */
   initTagInput() {
     const tagEntry = $('#tagEntry');
@@ -920,7 +1010,8 @@ class CompyApp {
   }
 
   /**
-   * Set tag chips
+   * Render a set of tag chips into the edit form.
+   * @param {string[]} tags
    */
   setTagChips(tags) {
     const container = $('#tagChips');
@@ -929,7 +1020,8 @@ class CompyApp {
   }
 
   /**
-   * Add a tag chip
+   * Append a single tag chip if it is non-empty and not a duplicate.
+   * @param {string} tagText
    */
   addTagChip(tagText) {
     const normalizedTag = tagText.trim();
@@ -962,14 +1054,16 @@ class CompyApp {
   }
 
   /**
-   * Get tags from chips
+   * Collect tag values from the currently rendered chips.
+   * @returns {string[]}
    */
   getTagsFromChips() {
     return $$('#tagChips .chip').map(chip => chip.dataset.value);
   }
 
   /**
-   * Save item from form
+   * Validate and persist the item currently in the edit form.
+   * Shows a notification on success or the first validation error.
    */
   saveItem() {
     const text = $('#itemText').value.trim();
@@ -989,7 +1083,7 @@ class CompyApp {
   }
 
   /**
-   * Open filter modal
+   * Open the filter modal populated with the deduplicated tag list.
    */
   openFilterModal() {
     const state = getState();
@@ -999,7 +1093,10 @@ class CompyApp {
   }
 
   /**
-   * Render filter list
+   * Render the filterable tag checklist inside the modal.
+   * @param {string[]} allTags - All tags across items (unique, sorted)
+   * @param {string[]} selectedTags - Currently selected filter tags
+   * @param {string} [searchQuery=''] - Filter query for the list itself
    */
   renderFilterList(allTags, selectedTags, searchQuery = '') {
     const list = $('#filterTagList');
@@ -1040,7 +1137,8 @@ class CompyApp {
   }
 
   /**
-   * Show more tags modal
+   * Open a modal to display all tags for a specific card when '+N more' is clicked.
+   * @param {HTMLElement} moreButton - The '+N more' button element inside a card
    */
   showMoreTags(moreButton) {
     const card = moreButton.closest('.card');
@@ -1068,7 +1166,8 @@ class CompyApp {
   }
 
   /**
-   * Handle keyboard shortcuts
+   * Global keyboard shortcuts for search and new-item creation.
+   * @param {KeyboardEvent} e
    */
   handleKeyboardShortcuts(e) {
     // Search shortcuts
@@ -1087,7 +1186,8 @@ class CompyApp {
   }
 
   /**
-   * Handle modal keyboard shortcuts
+   * Close any open modal on Escape to align with common accessibility patterns.
+   * @param {KeyboardEvent} e
    */
   handleModalKeyboard(e) {
     if (e.key === 'Escape') {
@@ -1100,7 +1200,8 @@ class CompyApp {
   }
 
   /**
-   * Setup responsive navbar
+   * Measure the navbar height and expose it as a CSS custom property (--nav-h).
+   * Keeps layout spacing correct across resizes.
    */
   setupResponsiveNavbar() {
     const adjustHeight = () => {
@@ -1123,7 +1224,8 @@ class CompyApp {
 let appInstance = null;
 
 /**
- * Initialize the Compy application
+ * Initialize the Compy application singleton and return the instance.
+ * @returns {Promise<CompyApp>} Resolved app instance
  */
 export const initializeApp = async () => {
   if (appInstance) return appInstance;
@@ -1134,6 +1236,7 @@ export const initializeApp = async () => {
 };
 
 /**
- * Get the current app instance
+ * Get the current app instance if initialized.
+ * @returns {CompyApp|null}
  */
 export const getApp = () => appInstance;

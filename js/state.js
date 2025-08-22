@@ -4,6 +4,27 @@
 import { STORAGE_KEYS, UI_CONFIG } from './constants.js';
 import { generateUID, debounce } from './utils.js';
 
+/**
+ * @typedef {Object} AppItem
+ * @property {string} id
+ * @property {string} text
+ * @property {string} desc
+ * @property {boolean} sensitive
+ * @property {string[]} tags
+ */
+/**
+ * @typedef {Object} AppState
+ * @property {AppItem[]} items
+ * @property {string[]} filterTags
+ * @property {string} search
+ * @property {string|null} editingId
+ * @property {string} profileName
+ */
+/**
+ * @callback StateListener
+ * @param {AppState} state - Latest state snapshot
+ * @returns {void}
+ */
 // Initial state object
 const initialState = {
   items: [],
@@ -21,8 +42,8 @@ const listeners = new Set();
 
 /**
  * Subscribe to state changes
- * @param {Function} listener - Callback function to run on state change
- * @returns {Function} Unsubscribe function
+ * @param {StateListener} listener - Callback invoked with the latest state on changes
+ * @returns {() => void} Unsubscribe function
  */
 export const subscribe = (listener) => {
   listeners.add(listener);
@@ -39,7 +60,8 @@ const notifyListeners = () => {
 };
 
 /**
- * Load state from localStorage
+ * Load state from localStorage and notify subscribers.
+ * Keys used: STORAGE_KEYS.items, STORAGE_KEYS.filters, STORAGE_KEYS.profile.
  */
 export const loadState = () => {
   try {
@@ -63,7 +85,7 @@ export const loadState = () => {
 };
 
 /**
- * Save current state to localStorage
+ * Save current state to localStorage, schedule a debounced backup, and notify subscribers.
  */
 export const saveState = () => {
   try {
@@ -81,13 +103,15 @@ export const saveState = () => {
   }
 };
 
-// Debounced backup function
+/**
+ * Debounced backup scheduler that defers snapshot creation per UI_CONFIG.backupDelay.
+ */
 const scheduleBackup = debounce(() => {
   doBackup();
 }, UI_CONFIG.backupDelay);
 
 /**
- * Create a backup of the current state
+ * Create a timestamped backup snapshot and persist it to localStorage.
  */
 export const doBackup = () => {
   const now = new Date();
@@ -108,7 +132,7 @@ export const doBackup = () => {
 
 /**
  * Get current application state
- * @returns {Object} Current state
+ * @returns {AppState} Current state (copied)
  */
 export const getState = () => ({ ...state });
 
@@ -194,7 +218,7 @@ export const setEditingId = (id) => {
 
 /**
  * Get the current backup files
- * @returns {Array} Array of backup objects
+ * @returns {{ts: string, items: AppItem[]}[]} Array of backup objects
  */
 export const getBackups = () => {
   try {
@@ -205,12 +229,16 @@ export const getBackups = () => {
   }
 };
 
-// Setup automatic backup interval
+/**
+ * Start the recurring backup timer using UI_CONFIG.backupInterval.
+ */
 export const setupBackupInterval = () => {
   setInterval(doBackup, UI_CONFIG.backupInterval);
 };
 
-// Initialize the module
+/**
+ * Initialize state by hydrating from storage and scheduling backups.
+ */
 export const initState = () => {
   loadState();
   setupBackupInterval();

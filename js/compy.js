@@ -1,4 +1,8 @@
-/* Compy 2.0 - Enhanced vanilla JS implementation */
+/**
+ * Compy 2.0 - Enhanced vanilla JS implementation
+ * Single-file variant optimized for portability without modules.
+ * Manages state via localStorage and renders UI directly.
+ */
 (function(){
   'use strict';
   
@@ -103,6 +107,10 @@
   };
 
   // Rendering
+  /**
+   * Render the list of cards based on current state, showing skeletons and empty states.
+   * Uses requestAnimationFrame to batch DOM updates for smoothness.
+   */
   const renderCards = () => {
     const container = $('#cards');
     
@@ -141,6 +149,9 @@
   };
   
   // Skeleton loading for better perceived performance
+  /**
+   * Render a set of lightweight skeleton cards to improve perceived performance.
+   */
   const showSkeletonCards = () => {
     const container = $('#cards');
     const skeletonCount = Math.min(6, state.items.length);
@@ -192,6 +203,9 @@
   `;
 
   // No results state for search/filter
+  /**
+   * Generate the 'no results' empty state HTML based on current search/filter flags.
+   */
   const noResultsHtml = () => {
     const hasSearch = !!state.search?.trim();
     const hasFilters = state.filterTags.length > 0;
@@ -214,12 +228,19 @@
   };
 
 
+  /**
+   * Highlight occurrences of query in text using <mark> tags.
+   * Escapes the query to avoid regex injection.
+   */
   const highlight = (text, query) => {
     if (!query) return text;
     const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return text.replace(new RegExp(q, 'gi'), (m)=>`<mark>${m}</mark>`);
   };
 
+  /**
+   * Build a card element for an item with actions and accessibility bindings.
+   */
   const renderCard = (it) => {
     const card = document.createElement('article'); card.className = 'card'; card.tabIndex = 0;
     card.innerHTML = `
@@ -243,6 +264,9 @@
     return card;
   };
 
+  /**
+   * Build HTML for a limited set of tag chips with a '+N more' affordance.
+   */
   const tagsHtml = (tags=[]) => {
     const visible = tags.slice(0,5);
     const more = tags.length - visible.length;
@@ -251,6 +275,9 @@
     return html;
   };
 
+  /**
+   * Compute items that match the current filterTags and search query.
+   */
   const filteredAndSearchedItems = () => {
     let items = state.items.slice();
     if (state.filterTags.length) items = items.filter(it=> state.filterTags.every(t=> it.tags.includes(t)) );
@@ -262,6 +289,9 @@
   };
 
   // Item CRUD
+  /**
+   * Insert a new item at the top or update the currently edited item.
+   */
   const upsertItem = (payload) => {
     if (state.editingId) {
       const idx = state.items.findIndex(i=>i.id===state.editingId); if (idx>-1) state.items[idx] = { ...state.items[idx], ...payload };
@@ -270,11 +300,17 @@
     }
     saveState(); renderCards();
   };
+  /**
+   * Remove an item by id and persist the change.
+   */
   const deleteItem = (id) => {
     state.items = state.items.filter(i=>i.id!==id); saveState(); renderCards(); showSnackbar('Deleted');
   };
 
   // Modals
+  /**
+   * Open a modal element and focus its close control; also ensures drawer/menus are closed.
+   */
   const openModal = (el) => {
     // ensure any transient UI is closed and drawer is hidden
     try { if (isMobile() && navToggle?.getAttribute('aria-expanded') === 'true') closeNav(); } catch {}
@@ -282,6 +318,7 @@
     el.setAttribute('aria-hidden','false');
     el.querySelector('[data-close-modal]')?.focus();
   };
+  /** Close a modal element. */
   const closeModal = (el) => { el.setAttribute('aria-hidden','true'); };
   $$('#itemModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#itemModal'))));
   $$('#filterModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#filterModal'))));
@@ -291,6 +328,9 @@
   $$('#profileModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#profileModal'))));
 
   // Add/Edit modal logic
+  /**
+   * Open the item modal for creating or editing items.
+   */
   const openItemModal = (id=null) => {
     state.editingId = id;
     $('#itemModalTitle').textContent = id ? 'Edit Item' : 'Add Item';
@@ -303,11 +343,14 @@
     $('#itemText').focus();
   };
 
+  /** Collect tag values from the edit form chips. */
   const getTagsFromChips = () => $$('#tagChips .chip').map(c=>c.dataset.val);
+  /** Replace the tag chip list with the provided tags. */
   const setTagChips = (tags) => {
     const wrap = $('#tagChips'); wrap.innerHTML = '';
     tags.forEach(addTagChip);
   };
+  /** Append a tag chip if the normalized value is non-empty. */
   const addTagChip = (tag) => {
     if (!tag) return;
     const norm = tag.trim(); if (!norm) return;
@@ -347,6 +390,7 @@
   });
 
   // Filter
+  /** Open the filter modal, reset tag search, and close the drawer on mobile. */
   const openFilter = () => {
     renderFilterList();
     $('#filterTagSearch').value='';
@@ -354,6 +398,7 @@
     if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav();
     openModal($('#filterModal'));
   };
+  /** Render the checkbox list of unique tags, filtered by the query field. */
   const renderFilterList = () => {
     const list = $('#filterTagList'); list.innerHTML = '';
     const allTags = Array.from(new Set(state.items.flatMap(i=>i.tags))).sort();
@@ -470,10 +515,12 @@
 
   // Backups
   let backupTimer = null;
+  /** Debounce backup creation to avoid excessive writes. */
   const scheduleBackup = () => {
     if (backupTimer) clearTimeout(backupTimer);
     backupTimer = setTimeout(doBackup, 200);
   };
+  /** Create and persist a new backup snapshot in localStorage. */
   const doBackup = () => {
     const now = new Date();
     const backup = { ts: now.toISOString(), items: state.items };
@@ -483,6 +530,7 @@
     arr = arr.slice(0, 10);
     localStorage.setItem(STORAGE_KEYS.backups, JSON.stringify(arr));
   };
+  /** Populate and open the backups modal. */
   const openBackups = () => {
     if (isMobile() && navToggle.getAttribute('aria-expanded') === 'true') closeNav();
     const list = $('#backupsList'); list.innerHTML = '';
@@ -498,14 +546,17 @@
   };
 
   // Export/Import helpers
+  /** Trigger a download via a temporary object URL. */
   const download = (filename, text) => {
     const blob = new Blob([text], {type: 'application/json'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
   };
+  /** Export current data to a JSON file. */
   const exportJSON = () => {
     const payload = { profileName: state.profileName || '', items: state.items };
     download('compy-export.json', JSON.stringify(payload, null, 2));
   };
+  /** Export current data to a CSV file with a profile metadata section. */
   const exportCSV = () => {
     const header = ['profileName'];
     const meta = [[csvEscape(state.profileName || '')]];
@@ -516,6 +567,7 @@
     const blob = new Blob([csv], {type: 'text/csv'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'compy-export.csv'; a.click(); URL.revokeObjectURL(a.href);
   };
+  /** Import items from JSON (supports legacy array and new object format). */
   const importJSON = (json) => {
     try {
       const parsed = JSON.parse(json);
@@ -538,6 +590,7 @@
       saveState(); renderCards(); showSnackbar('Imported JSON');
     } catch { showSnackbar('Invalid JSON'); }
   };
+  /** Import items from CSV with optional two-line profile metadata. */
   const importCSV = (csv) => {
     const lines = csv.split(/\r?\n/).filter(l => l.trim().length > 0);
     if (!lines.length) { showSnackbar('Invalid CSV'); return; }
@@ -578,13 +631,16 @@
     }
     saveState(); renderCards(); showSnackbar('Imported CSV');
   };
+  /** Validate imported object and push to items if minimally valid. */
   const addImportedItem = (o) => {
     if (!o || !o.text || !o.desc) return;
     state.items.push({ id: uid(), text: String(o.text), desc: String(o.desc), sensitive: !!o.sensitive, tags: Array.isArray(o.tags)? o.tags.map(String) : [] });
   };
 
   // CSV helpers
+  /** Escape a string for safe inclusion in CSV. */
   const csvEscape = (s) => '"' + String(s).replace(/"/g, '""') + '"';
+  /** Parse a CSV line with support for quotes and escaped quotes. */
   const parseCSVLine = (line) => {
     const out = []; let cur=''; let inQ=false;
     for (let i=0;i<line.length;i++){
@@ -604,11 +660,13 @@
   };
 
   // Profile
+  /** Render user profile display next to the app title. */
   const renderProfile = () => {
     $('#profileDisplay').textContent = state.profileName ? `· ${state.profileName}'s Compy` : '';
   };
 
   // Filter badge counter in header
+  /** Update the filter counter badge visibility and value. */
   const renderFilterBadge = () => {
     const badge = $('#filterBadge');
     if (!badge) return;

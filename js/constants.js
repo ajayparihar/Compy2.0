@@ -2,6 +2,10 @@
  * Application constants and configuration
  */
 
+/**
+ * LocalStorage keys used by the application.
+ * Changing these values will break backward compatibility with existing data.
+ */
 export const STORAGE_KEYS = {
   items: 'compy.items',
   theme: 'compy.theme',
@@ -10,6 +14,9 @@ export const STORAGE_KEYS = {
   filters: 'compy.filters',
 };
 
+/**
+ * UI configuration knobs that affect behavior and limits across the app.
+ */
 export const UI_CONFIG = {
   maxVisibleTags: 5,
   maxBackups: 10,
@@ -22,6 +29,9 @@ export const UI_CONFIG = {
   skeletonCount: 6,
 };
 
+/**
+ * Inline SVG icon markup used by action buttons.
+ */
 export const ICONS = {
   edit: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <path fill="none" stroke="currentColor" stroke-width="2" d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0-3-3L4 18v3z"/>
@@ -39,6 +49,9 @@ export const ICONS = {
   </svg>`
 };
 
+/**
+ * Keyboard shortcut mappings used by the UI (normalized lower-case).
+ */
 export const KEYBOARD_SHORTCUTS = {
   search: ['/', 'ctrl+f'],
   copy: ['Enter'],
@@ -48,6 +61,9 @@ export const KEYBOARD_SHORTCUTS = {
   cancel: ['Escape'],
 };
 
+/**
+ * Available theme names that can be applied via data-theme.
+ */
 export const THEME_LIST = [
   'dark-mystic-forest',
   'dark-crimson-night', 
@@ -57,4 +73,5 @@ export const THEME_LIST = [
   'light-floral-breeze'
 ];
 
+/** Default theme applied on first load if none is saved. */
 export const DEFAULT_THEME = 'dark-mystic-forest';
