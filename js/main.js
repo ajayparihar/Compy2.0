@@ -19,9 +19,9 @@
  * @since 2025
  */
 
-// Import both original and refactored initialization functions
+// Import the original initialization function
 import { initializeApp } from './app.js';
-import { initializeRefactoredApp } from './app-refactored.js';
+// import { initializeRefactoredApp } from './app-refactored.js'; // Commented out - file doesn't exist
 
 /**
  * Configuration for application initialization
@@ -30,7 +30,7 @@ import { initializeRefactoredApp } from './app-refactored.js';
  * or false to use the original monolithic version for comparison.
  */
 const CONFIG = {
-  USE_REFACTORED_VERSION: true,  // Switch this to false to use original version
+  USE_REFACTORED_VERSION: false,  // Set to false to use original version (refactored version not available)
   ENABLE_PERFORMANCE_MONITORING: true,
   ENABLE_DEBUG_LOGGING: true
 };

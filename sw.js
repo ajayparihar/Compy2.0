@@ -61,12 +61,19 @@ const CACHE_NAME = 'compy-v2';
 const STATIC_ASSETS = [
   'index.html',                    // Main HTML entry point
   'css/compy.css',                 // Application styles
-  'js/compy.js',                   // Single-file implementation
-  'favicon_io/favicon.ico',        // Browser tab icon
-  'favicon_io/favicon-16x16.png',  // Small favicon variant
-  'favicon_io/favicon-32x32.png',  // Standard favicon variant
-  'favicon_io/apple-touch-icon.png', // iOS home screen icon
-  'favicon_io/site.webmanifest'    // PWA manifest file
+  // JavaScript modules actually present in the project
+  'js/main.js',
+  'js/app.js',
+  'js/constants.js',
+  'js/state.js',
+  'js/utils.js',
+  'js/performance.js',
+  'js/components/clipboard.js',
+  'js/components/confirmation.js',
+  'js/components/modals.js',
+  'js/components/notifications.js',
+  'js/core/componentFactory.js',
+  'js/services/itemService.js'
 ];
 
 // =============================================================================

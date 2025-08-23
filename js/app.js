@@ -14,6 +14,8 @@ import {
   deleteItem, updateFilterTags, updateSearch, updateProfile,
   setEditingId, getBackups
 } from './state.js';
+import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
+import { createModalManager } from './components/modals.js';
 
 /**
  * @typedef {Object} AppItem
@@ -58,15 +60,21 @@ class CompyApp {
     this.initialized = false;
     this.clipboard = null;
     this.notifications = null;
-    this.modals = null;
+    this.modalManager = null;
+    this.confirmationManager = null;
     this.theme = null;
     this.search = null;
     this.cards = null;
+    
+    // Filter modal transient state and handler guard
+    this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
+    this.filterHandlersBound = false;
     
     // Bind methods to maintain context
     this.handleStateChange = this.handleStateChange.bind(this);
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
     this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
+    this.removeItem = this.removeItem.bind(this);
   }
 
   /**
@@ -85,10 +93,7 @@ class CompyApp {
     if (this.initialized) return;
 
     try {
-      // Initialize state management
-      initState();
-      
-      // Initialize components
+      // Initialize components first
       this.initClipboard();
       this.initNotifications();
       this.initModals();
@@ -100,12 +105,14 @@ class CompyApp {
       this.initImport();
       this.initEventHandlers();
       
-      // Subscribe to state changes
+      // Subscribe to state changes before initializing state
       subscribe(this.handleStateChange);
+      
+      // Initialize state management (this will trigger initial render)
+      initState();
       
       // Setup keyboard shortcuts
       document.addEventListener('keydown', this.handleKeyboardShortcuts);
-      document.addEventListener('keydown', this.handleModalKeyboard);
       
       // Setup responsive navbar
       this.setupResponsiveNavbar();
@@ -232,35 +239,18 @@ class CompyApp {
    * Relies on [data-close-modal] attributes inside .modal elements.
    */
   initModals() {
-    this.modals = {
-      open: (selector) => {
-        const modal = $(selector);
-        if (modal) {
-          modal.setAttribute('aria-hidden', 'false');
-          // Focus first focusable element or close button
-          const focusTarget = modal.querySelector('[data-close-modal]') || 
-                             modal.querySelector('input, textarea, button');
-          focusElement(focusTarget, 100);
-        }
-      },
-      
-      close: (selector) => {
-        const modal = $(selector);
-        if (modal) {
-          modal.setAttribute('aria-hidden', 'true');
-        }
-      }
-    };
-
-    // Setup close handlers for all modals
-    $$('[data-close-modal]').forEach(button => {
-      button.addEventListener('click', (e) => {
-        const modal = e.target.closest('.modal');
-        if (modal) {
-          this.modals.close(`#${modal.id}`);
-        }
-      });
+    // Initialize accessible modal manager with focus handling
+    this.modalManager = createModalManager({
+      closeOnBackdropClick: true,
+      closeOnEscape: true,
+      focusDelay: 100
     });
+
+    // Initialize confirmation manager with modal manager
+    this.confirmationManager = createConfirmationManager(this.modalManager);
+
+    // Set global confirm function for easy access
+    setGlobalConfirm((options) => this.confirmationManager.show(options));
   }
 
   /**
@@ -623,17 +613,39 @@ class CompyApp {
     $('#itemSensitive').checked = item.sensitive;
     this.setTagChips(item.tags);
 
-    this.modals.open('#itemModal');
-    focusElement($('#itemText'), 100);
+    this.modalManager.open('#itemModal', { initialFocus: '#itemText' });
   }
 
   /**
-   * Delete an item by ID and notify the user.
+   * Show confirmation dialog and delete an item by ID if confirmed.
    * @param {string} itemId
    */
-  removeItem(itemId) {
-    deleteItem(itemId);
-    this.showNotification('Snippet deleted');
+  async removeItem(itemId) {
+    // Get the item details for the confirmation message
+    const state = getState();
+    const item = state.items.find(i => i.id === itemId);
+    
+    if (!item) {
+      this.showNotification('Item not found', 'error');
+      return;
+    }
+    
+    // Show confirmation dialog
+    const displayText = item.desc || item.text || 'this snippet';
+    const truncatedText = displayText.length > 50 ? displayText.substring(0, 50) + '...' : displayText;
+    
+    const confirmed = await this.confirmationManager.show({
+      title: 'Delete Snippet',
+      message: `Delete "${truncatedText}"?\n\nThis action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (confirmed) {
+      deleteItem(itemId);
+      this.showNotification('Snippet deleted');
+    }
   }
 
   /**
@@ -643,14 +655,13 @@ class CompyApp {
     $('#profileEditBtn').addEventListener('click', () => {
       const state = getState();
       $('#profileNameInput').value = state.profileName;
-      this.modals.open('#profileModal');
-      focusElement($('#profileNameInput'), 100);
+      this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
     });
 
     $('#profileSaveBtn').addEventListener('click', () => {
       const name = $('#profileNameInput').value.trim();
       updateProfile(name);
-      this.modals.close('#profileModal');
+      this.modalManager.close('#profileModal');
       this.showNotification('Profile updated');
     });
 
@@ -957,7 +968,7 @@ class CompyApp {
       });
     }
 
-    this.modals.open('#backupsModal');
+    this.modalManager.open('#backupsModal');
   }
 
   /**
@@ -968,7 +979,7 @@ class CompyApp {
     $('#brand').addEventListener('click', () => location.reload());
 
     // About button
-    $('#aboutBtn').addEventListener('click', () => this.modals.open('#aboutModal'));
+    $('#aboutBtn').addEventListener('click', () => this.modalManager.open('#aboutModal'));
 
     // Filter button
     $('#filterBtn').addEventListener('click', () => this.openFilterModal());
@@ -1094,7 +1105,7 @@ class CompyApp {
     }
 
     upsertItem({ text, desc, sensitive, tags });
-    this.modals.close('#itemModal');
+    this.modalManager.close('#itemModal');
     this.showNotification('Snippet saved');
   }
 
@@ -1103,9 +1114,25 @@ class CompyApp {
    */
   openFilterModal() {
     const state = getState();
-    this.renderFilterList(getAllTags(state.items), state.filterTags);
-    this.modals.open('#filterModal');
-    focusElement($('#filterTagSearch'), 100);
+    const allTags = getAllTags(state.items);
+
+    // Initialize transient filter modal state
+    this.filterState = {
+      allTags,
+      selectedTags: [...state.filterTags],
+      query: ''
+    };
+
+    // Reset search input and render initial list
+    const searchInput = $('#filterTagSearch');
+    if (searchInput) searchInput.value = '';
+    this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, this.filterState.query);
+
+    // Ensure handlers are attached once
+    this.ensureFilterModalHandlers();
+
+    // Open modal with focus on search
+    this.modalManager.open('#filterModal', { initialFocus: '#filterTagSearch' });
   }
 
   /**
@@ -1131,7 +1158,9 @@ class CompyApp {
     }
 
     filteredTags.forEach(tag => {
-      const id = `filter-tag-${tag}`;
+      // Stable, safe ID for label/input pairing (handles spaces/special chars)
+      const slug = tag.toLowerCase().replace(/[^a-z0-9\-_]+/g, '-').slice(0, 24);
+      const id = `filter-tag-${slug}-${Math.abs(stringHash(tag))}`;
       const isSelected = selectedTags.includes(tag);
       
       const label = document.createElement('label');
@@ -1145,11 +1174,73 @@ class CompyApp {
           value="${escapeHtml(tag)}"
           ${isSelected ? 'checked' : ''}
         />
-        <span>${escapeHtml(tag)}</span>
+        <span>${highlightText(escapeHtml(tag), searchQuery)}</span>
       `;
       
       list.appendChild(label);
     });
+  }
+
+  /**
+   * Ensure filter modal handlers are attached only once.
+   * Wires up search within filter, checkbox selection, and apply/clear actions.
+   */
+  ensureFilterModalHandlers() {
+    if (this.filterHandlersBound) return;
+
+    const list = $('#filterTagList');
+    const searchInput = $('#filterTagSearch');
+    const applyBtn = $('#applyFilterBtn');
+    const clearBtn = $('#clearFilterBtn');
+    const clearSearchBtn = document.querySelector('button[data-clear="#filterTagSearch"]');
+
+    // Event delegation for checkbox changes (preserves handlers across re-renders)
+    list.addEventListener('change', (e) => {
+      const cb = e.target?.closest('input[type="checkbox"]');
+      if (!cb) return;
+      const tag = cb.value;
+      if (!this.filterState) return;
+      const { selectedTags } = this.filterState;
+      const idx = selectedTags.indexOf(tag);
+      if (cb.checked) {
+        if (idx === -1) selectedTags.push(tag);
+      } else if (idx > -1) {
+        selectedTags.splice(idx, 1);
+      }
+    });
+
+    // Debounced search within tags list
+    const onSearchInput = debounce((e) => {
+      if (!this.filterState) return;
+      this.filterState.query = e.target.value;
+      this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, this.filterState.query);
+    }, 120);
+    searchInput.addEventListener('input', onSearchInput);
+
+    // When the clear button for the search input is clicked, also re-render
+    clearSearchBtn?.addEventListener('click', () => {
+      if (!this.filterState) return;
+      this.filterState.query = '';
+      // Let the global clear handler wipe the input; we just re-render
+      this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, '');
+    });
+
+    // Apply selected filters to state and close modal
+    applyBtn.addEventListener('click', () => {
+      if (!this.filterState) return;
+      updateFilterTags([...this.filterState.selectedTags]);
+      this.modalManager.close('#filterModal');
+    });
+
+    // Clear filters (keep modal open) and re-render list to reflect unselected state
+    clearBtn.addEventListener('click', () => {
+      if (!this.filterState) return;
+      this.filterState.selectedTags = [];
+      updateFilterTags([]);
+      this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, this.filterState.query || '');
+    });
+
+    this.filterHandlersBound = true;
   }
 
   /**
@@ -1178,7 +1269,7 @@ class CompyApp {
       list.appendChild(chip);
     });
 
-    this.modals.open('#moreTagsModal');
+    this.modalManager.open('#moreTagsModal');
   }
 
   /**
@@ -1206,12 +1297,9 @@ class CompyApp {
    * @param {KeyboardEvent} e
    */
   handleModalKeyboard(e) {
-    if (e.key === 'Escape') {
-      // Close any open modal
-      const openModal = $('[aria-hidden="false"].modal');
-      if (openModal) {
-        this.modals.close(`#${openModal.id}`);
-      }
+    if (e.key === 'Escape' && this.modalManager && this.modalManager.hasOpenModals && this.modalManager.hasOpenModals()) {
+      // Close the topmost modal using the modal manager
+      this.modalManager.close();
     }
   }
 

@@ -1,0 +1,346 @@
+# Testing outputs and reports (keep test source files)
+test-results/
+coverage/
+.nyc_output/
+playwright-report/
+cypress/videos/
+cypress/screenshots/
+junit.xml
+
+# Jest testing
+__tests__/__snapshots__/
+.jest/
+jest_*
+*.test.js.snap
+*.spec.js.snap
+jest-coverage/
+jest.config.*.js
+jest-html-reporters-attach/
+jest-stare/
+
+# Playwright testing
+playwright-report/
+test-results/
+playwright/.cache/
+playwright-report-*/
+playwright/.auth/
+
+# Mocha testing
+.mocha_*
+mocha.json
+mochawesome-report/
+
+# Jasmine testing
+jasmine-core/
+_SpecRunner.html
+.grunt/
+
+# Karma testing
+karma-coverage/
+.tmp/
+
+# Cypress testing
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+cypress/fixtures/downloads/
+cypress.env.json
+
+# Vitest testing
+vitest-coverage/
+vitest.config.*.js
+
+# Tap testing
+.tap/
+tap-snapshots/
+
+# AVA testing
+.ava-cache/
+
+# TestCafe testing
+testcafe-report/
+.testcafe-screenshots/
+
+# WebdriverIO
+wdio.log
+erroShots/
+allure-results/
+allure-report/
+
+# QUnit
+qunit-report/
+
+# Lab (hapi test runner)
+.lab_*
+
+# Storybook testing
+storybook-static/
+chromatic-builds/
+
+# Coverage tools
+nyc_output/
+.coverage/
+htmlcov/
+lcov.info
+clover.xml
+cobertura.xml
+coverage.xml
+*.lcov
+*.clover
+.c8_output/
+
+# Test databases
+*.test.db
+*.test.sqlite
+*.test.sqlite3
+test_database/
+
+# Temporary test files (but keep actual test suites)
+test_*.html
+test_temp_*
+*.test.temp.js
+*.spec.temp.js
+test_output/
+test_logs/
+test-output/
+
+# Test screenshots and videos
+screenshots/
+test-screenshots/
+test-videos/
+visual-regression/
+
+# Browser testing
+selenium-debug.log
+geckodriver.log
+chromedriver.log
+
+# Performance testing
+benchmark-results/
+performance-results/
+loadtest-results/
+
+# Mutation testing
+.stryker-tmp/
+mutation-testing-report/
+stryker.log
+
+# Node.js dependencies
+node_modules/
+yarn.lock
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Keep package-lock.json for reproducible builds
+# package-lock.json should be committed
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+.tmp/
+.temp/
+*.tmp
+*.temp
+
+# Build outputs (if any)
+dist/
+build/
+out/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Cache directories
+.cache/
+.parcel-cache/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Documentation build files
+docs/_build/
+docs/.doctrees/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Windows specific
+*.lnk
+*.exe (if not needed)
+*.msi
+*.cab
+*.msm
+*.msp
+
+# Browser debugging
+chrome_debug.log
+firefox_debug.log
+.vscode/launch.json
+
+# Jest specific
+jest-coverage/
+
+# npm/yarn files
+.npm
+.yarn-integrity
+yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+
+# Editor swap files
+*.swp
+*.swo
+*.tmp
+*~
+.#*
+
+# System files
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Mac specific
+.AppleDouble
+.LSOverride
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Development documentation and reports (often generated/temporary)
+GITIGNORE_UPDATES.md
+TEST_IMPROVEMENTS_REPORT.md
+IMPROVEMENTS.md
+REFACTORING_GUIDE.md
+WARP.md
+CHANGELOG.md
+UPDATES.md
+REPORT.md
+NOTES.md
+TODO.md
+*.report.md
+*.analysis.md
+*.summary.md
+
+# Lint and analysis outputs
+lint.log
+estlint-report.html
+jshint-report.html
+
+# Build and deployment artifacts
+build-report.json
+webpack-bundle-analyzer-report.html
+bundle-stats.json
+
+# Documentation build artifacts
+docs/.buildinfo
+docs/_static/
+docs/_templates/
+
+# Development utilities
+dev-notes.txt
+scratch.js
+playground.html
+test-page.html
+experiments/
+sandbox/
+
+# Package manager specific
+yarn-error.log
+npm-shrinkwrap.json
+.pnpm-debug.log
+pnpm-lock.yaml
+
+# Editor specific project files
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/extensions.json
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries/
+
+# Local configuration files (not meant to be shared)
+local.config.js
+local.env
+config.local.json
+.env.development
+
+# Runtime data
+*.pid
+*.seed
+*.pid.lock
+lib-cov
+
+# Optional logs
+eslint-debug.log
+stylelint-debug.log
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent

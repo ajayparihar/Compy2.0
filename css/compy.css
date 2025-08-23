@@ -622,6 +622,15 @@ select:hover {
   opacity: 0.9;
   transform: translateY(-1px);
 }
+.warning-btn {
+  background: var(--warning) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+.warning-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
 /* Slight lift for primary on hover to keep contrast */
 .primary-btn:hover {
   box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
@@ -629,6 +638,20 @@ select:hover {
 }
 .secondary-btn {
   background: transparent;
+}
+
+/* Modal danger button - matches modal button styling but with red color */
+.modal-danger-btn {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.modal-danger-btn:hover {
+  background: var(--danger-hover, #dc2626);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--danger) 25%, transparent);
+  transform: translateY(-1px);
 }
 .file-btn {
   display: inline-flex;
@@ -1425,6 +1448,20 @@ textarea:focus {
 .modal-header h3 {
   margin: 0;
   font-size: var(--text-xl);
+}
+
+/* Confirmation modal enhancements */
+.confirmation-icon {
+  display: inline-block;
+  margin-right: var(--space-6);
+  font-size: var(--text-xl);
+  vertical-align: middle;
+}
+
+/* Enhanced confirmation modal message styling */
+#confirmModalMessage {
+  line-height: var(--leading-relaxed);
+  margin: 0;
 }
 
 /* Themed links for modals (better visibility than default blue) */

@@ -146,9 +146,20 @@ export const escapeHtml = (str) => {
     '<': '&lt;',     // Prevents opening tags
     '>': '&gt;',     // Prevents closing tags
     '"': '&quot;',   // Prevents attribute values with double quotes
-    "'": '&#39;'    // Prevents attribute values with single quotes
+    "'": '&#39;',    // Prevents attribute values with single quotes
+    '/': '&#x2F;'     // Prevents forward slash for additional security
   };
-  return String(str).replace(/[&<>"']/g, (match) => escapeMap[match]);
+  
+  // First escape HTML characters
+  let escaped = String(str).replace(/[&<>"'\/]/g, (match) => escapeMap[match]);
+  
+  // Then neutralize potential event handler attributes by breaking them up
+  // This prevents things like 'onerror' from being functional even if injected
+  escaped = escaped.replace(/on[a-z]+/gi, (match) => {
+    return match.charAt(0) + '&#8203;' + match.slice(1); // Insert zero-width space
+  });
+  
+  return escaped;
 };
 
 /**
@@ -541,8 +552,21 @@ export const focusElement = (element, delay = 0) => {
  * getAllTags(items);
  * // Result: ['backend', 'frontend', 'javascript', 'python', 'react']
  */
-export const getAllTags = (items) => 
-  Array.from(new Set(items.flatMap(item => item.tags))).sort();
+export const getAllTags = (items) => {
+  // Filter out invalid items first, then extract tags
+  const validItems = items.filter(item => 
+    item && 
+    typeof item === 'object' &&
+    Array.isArray(item.tags)
+  );
+  
+  // Extract all tags, filter out empty/null values, and ensure uniqueness
+  const allTags = validItems.flatMap(item => 
+    item.tags.filter(tag => tag && typeof tag === 'string' && tag.trim())
+  );
+  
+  return Array.from(new Set(allTags)).sort();
+};
 
 /**
  * Filter items by search query and selected tags
@@ -572,7 +596,14 @@ export const getAllTags = (items) =>
  * filterItems(items, 'console', ['javascript']); // Returns second item
  */
 export const filterItems = (items, searchQuery = '', filterTags = []) => {
-  let filtered = items.slice();
+  // First filter out invalid items to prevent errors
+  let filtered = items.filter(item => 
+    item && 
+    typeof item === 'object' &&
+    typeof item.text === 'string' &&
+    typeof item.desc === 'string' &&
+    Array.isArray(item.tags)
+  );
 
   // Filter by tags using AND logic (item must have ALL selected tags)
   if (filterTags.length > 0) {

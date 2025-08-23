@@ -322,14 +322,16 @@ export class ModalManager {
       modalInfo = this.modalStack[stackIndex];
     }
 
-    // Hide the modal
-    this.hideModal(modalInfo.element);
-    
-    // Remove from stack
+    // Remove from stack first
     this.modalStack.splice(stackIndex, 1);
     
-    // Handle focus restoration
+    // Handle focus restoration BEFORE hiding modal to avoid ARIA issues
     this.handleFocusRestoration(modalInfo);
+    
+    // Small delay to ensure focus is moved before hiding modal
+    setTimeout(() => {
+      this.hideModal(modalInfo.element);
+    }, 10);
     
     // Update body class if no modals remain
     if (this.modalStack.length === 0) {
@@ -346,6 +348,11 @@ export class ModalManager {
    * @private
    */
   hideModal(modal) {
+    // Check if modal still has focused descendant and blur it first
+    if (modal.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    
     // Set accessibility attributes
     modal.setAttribute('aria-hidden', 'true');
     modal.removeAttribute('role');
