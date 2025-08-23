@@ -27,11 +27,8 @@ import {
 import { 
   validateItem, 
   filterItems, 
-  getAllTags, 
-  parseCSVLine, 
-  csvEscape 
+  getAllTags
 } from '../utils.js';
-import { generateUID } from '../utils.js';
 
 /**
  * ItemService handles all item-related business operations
