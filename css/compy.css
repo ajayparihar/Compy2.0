@@ -1,23 +1,174 @@
-/* Theme variables */
+/* =================================================================
+   COMPY 2.0 DESIGN SYSTEM
+   Enhanced design system with improved consistency and maintainability
+   ================================================================= */
+
 :root {
+  /* ============= COLOR SYSTEM ============= */
+  /* Base theme colors */
   --bg: #0a0d10;
   --surface: #1a2026;
+  --surface-elevated: #242b32;
+  --surface-overlay: rgba(26, 32, 38, 0.95);
+  
+  /* Brand colors */
   --primary: #4ade80;
+  --primary-hover: #22c55e;
   --primary-contrast: #052e16;
-  --text: #f1f5f9;
-  --muted: #cbd5e1;
+  --primary-muted: rgba(74, 222, 128, 0.1);
+  
+  /* Semantic colors */
   --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-muted: rgba(239, 68, 68, 0.1);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --info: #3b82f6;
   --accent: #3b82f6;
+  
+  /* Text colors */
+  --text: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-disabled: #64748b;
+  --text-inverse: #0f172a;
+  
+  /* Border colors */
+  --border: rgba(255, 255, 255, 0.12);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-interactive: rgba(255, 255, 255, 0.15);
+  
+  /* Component-specific colors */
   --chip-bg: #334155;
   --chip-text: #f1f5f9;
-  /* UI sizing */
-  --ctrl-h: 36px;
-  --radius: 10px;
-  /* Navbar height (dynamic fallback); JS will update this on load/resize */
-  --nav-h: 56px;
+  --input-bg: var(--bg);
+  --card-bg: var(--surface);
+  --navbar-bg: var(--surface);
+  --modal-bg: var(--surface);
+  --modal-overlay: rgba(0, 0, 0, 0.5);
+  
+  /* Interactive states */
+  --hover-overlay: rgba(255, 255, 255, 0.06);
+  --active-overlay: rgba(255, 255, 255, 0.1);
+  --focus-ring: 2px solid var(--primary);
+  
+  /* ============= SPACING SYSTEM ============= */
+  /* Consistent 4px-based spacing scale */
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-12: 24px;
+  --space-14: 28px;
+  --space-16: 32px;
+  --space-20: 40px;
+  --space-24: 48px;
+  --space-32: 64px;
+  --space-48: 96px;
+  
+  /* Component-specific spacing */
+  --content-padding: clamp(14px, (100vw - 1200px)/2, 32px);
+  --modal-padding: var(--space-14);
+  --card-padding: var(--space-12);
+  
+  /* ============= TYPOGRAPHY SYSTEM ============= */
+  /* Font families */
+  --font-family-base: system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  
+  /* Font sizes - Type scale based on 1.125 ratio */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 25px;
+  --text-4xl: 28px;
+  
+  /* Line heights */
+  --leading-none: 1;
+  --leading-tight: 1.25;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
+  
+  /* Font weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  
+  /* ============= LAYOUT SYSTEM ============= */
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+  
+  /* Component dimensions */
+  --ctrl-h: clamp(34px, 5.5vw, 40px);
+  --ctrl-h-sm: clamp(28px, 4.5vw, 36px);
+  --ctrl-h-lg: clamp(40px, 6.5vw, 52px);
+  --nav-h: clamp(52px, 8vw, 64px);
+  --card-min-h: 96px;
+  --modal-max-w: 720px;
+  --modal-max-w-sm: 520px;
+  --search-max-w: 680px;
+  
+  /* ============= SHADOW SYSTEM ============= */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 18px 50px rgba(0, 0, 0, 0.5);
+  --shadow-primary: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+  
+  /* ============= ANIMATION SYSTEM ============= */
+  /* Transition durations */
+  --duration-fast: 120ms;
+  --duration-normal: 140ms;
+  --duration-slow: 180ms;
+  --duration-slower: 250ms;
+  
+  /* Easing curves */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* Common transition combinations */
+  --transition-fast: all var(--duration-fast) var(--ease-out);
+  --transition-normal: all var(--duration-normal) var(--ease-out);
+  --transition-colors: background-color var(--duration-normal) var(--ease-out), 
+                       border-color var(--duration-normal) var(--ease-out), 
+                       color var(--duration-normal) var(--ease-out);
+  --transition-transform: transform var(--duration-fast) var(--ease-out);
+  
+  /* ============= Z-INDEX SYSTEM ============= */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
 }
 
-/* Dark themes */
+/* =================================================================
+   THEME VARIATIONS
+   ================================================================= */
+
+/* ============= DARK THEMES ============= */
 html[data-theme="dark-mystic-forest"] {
   --bg: #0a0d10;
   --surface: #1a2026;
@@ -45,7 +196,7 @@ html[data-theme="dark-royal-elegance"] {
   --chip-bg: #4c1d95;
   --chip-text: #f3f4f6;
 }
-/* Light themes */
+/* ============= LIGHT THEMES ============= */
 html[data-theme="light-sunrise"] {
   --bg: #fef7ed;
   --surface: #ffffff;
@@ -89,6 +240,16 @@ html[data-theme^="light-"] .navbar {
 }
 html[data-theme^="light-"] .search {
   border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+html[data-theme^="light-"] .search:focus-within {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent), 
+              0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 html[data-theme^="light-"] .icon-btn,
 html[data-theme^="light-"] .icon-text-btn,
@@ -101,7 +262,6 @@ html[data-theme^="light-"] select {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 html[data-theme^="light-"] .card {
-  border: 1px solid rgba(0, 0, 0, 0.1);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 html[data-theme^="light-"] .modal-content {
@@ -124,20 +284,27 @@ html[data-theme^="light-"] textarea {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
+/* =================================================================
+   BASE STYLES
+   ================================================================= */
+
 * {
   box-sizing: border-box;
 }
+
 html,
 body {
   height: 100%;
 }
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
     Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: clamp(13px, 1.2vw + 0.4rem, 16px);
+  line-height: var(--leading-normal);
   color: var(--text);
   background: var(--bg);
-  /* Ensure content does not slide under fixed navbar */
   padding-top: var(--nav-h);
 }
 
@@ -147,20 +314,79 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 100;
+  z-index: var(--z-fixed);
   display: grid;
   grid-template-columns: auto minmax(260px, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem; /* 12px */
   background: var(--surface);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--border);
   padding: 10px clamp(14px, (100vw - 1200px)/2, 32px);
+  /* Ensure a consistent typography baseline for all navbar items */
+  font-size: inherit;
+  line-height: 1;
+  font-family: inherit;
+}
+/* Make all interactive controls in the navbar inherit the base font for consistency */
+/* Exclude the brand so it can remain larger and styled independently */
+.navbar button:not(.brand),
+.navbar select,
+.navbar input,
+.navbar .file-btn span {
+  font: inherit;
 }
 .navbar .left {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+/* Hamburger menu toggle (hidden by default; shown on phones) */
+.menu-toggle {
+  display: none;
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
+  border: 1px solid var(--border-interactive);
+  color: var(--text);
+  width: 2.75rem; /* ~44px */
+  height: 2.75rem;
+  border-radius: var(--radius);
+  align-items: center;
+  justify-content: center;
+}
+.menu-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.menu-toggle .menu-icon {
+  position: relative;
+  width: 20px;
+  height: 14px;
+  display: inline-block;
+}
+.menu-toggle .menu-icon span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: transform var(--duration-normal) var(--ease-out), opacity var(--duration-fast) var(--ease-out), top var(--duration-normal) var(--ease-out), bottom var(--duration-normal) var(--ease-out);
+}
+.menu-toggle .menu-icon span:nth-child(1) { top: 0; }
+.menu-toggle .menu-icon span:nth-child(2) { top: 6px; }
+.menu-toggle .menu-icon span:nth-child(3) { bottom: 0; }
+.menu-toggle[aria-expanded="true"] .menu-icon span:nth-child(1) {
+  top: 6px;
+  transform: rotate(45deg);
+}
+.menu-toggle[aria-expanded="true"] .menu-icon span:nth-child(2) {
+  opacity: 0;
+}
+.menu-toggle[aria-expanded="true"] .menu-icon span:nth-child(3) {
+  bottom: auto;
+  top: 6px;
+  transform: rotate(-45deg);
 }
 .navbar .center {
   display: flex;
@@ -176,16 +402,28 @@ body {
   overflow: visible;
   -webkit-overflow-scrolling: touch;
 }
+/* Backdrop for mobile drawer */
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(1px);
+  z-index: calc(var(--z-fixed) - 1);
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.nav-backdrop.show { opacity: 1; }
 
 .brand {
   background: none;
   border: none;
   color: var(--primary);
   font-weight: 700;
-  font-size: 20px;
+  font-size: 22px;
+  line-height: 1;
   position: relative;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   height: var(--ctrl-h);
@@ -200,6 +438,7 @@ body {
   background: var(--primary);
   transition: width 180ms ease, left 180ms ease;
 }
+/* Strengthen specificity so brand styles always win over generic navbar button rules */
 .brand:hover::after {
   width: 100%;
   left: 0;
@@ -213,55 +452,115 @@ body {
   max-width: clamp(100px, 20vw, 240px);
 }
 
-/* Search */
+/* Search Bar - Single clean implementation */
 .search {
   position: relative;
   display: flex;
   align-items: center;
-  background: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  height: var(--ctrl-h);
-  padding-left: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  height: clamp(36px, 6vw, 44px);
+  padding: 0;
   width: min(680px, 100%);
+  transition: all var(--duration-normal) var(--ease-out);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 
+              0 1px 3px rgba(0, 0, 0, 0.2);
 }
+
 .search:focus-within {
   border-color: var(--primary);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15),
+              0 0 0 1px var(--primary),
+              0 2px 12px color-mix(in srgb, var(--primary) 25%, transparent);
+  transform: translateY(-1px);
 }
+
 .search input {
   background: transparent;
-  border: 0 !important;
-  outline: none;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--font-normal);
   -webkit-appearance: none;
   appearance: none;
-  padding: 0 10px;
-  padding-right: 34px; /* space for the clear X */
-  flex: 1 1 auto;
-  min-width: 0;
+  padding: 0 var(--space-12);
+  padding-right: 44px;
+  flex: 1;
   height: 100%;
+  width: 100%;
 }
-.search button {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  padding: 0 6px;
-  border-radius: 6px;
-  line-height: 1;
-  height: 28px;
+
+.search input::placeholder {
+  color: var(--text-muted);
+  font-weight: var(--font-normal);
+  opacity: 0.7;
 }
-.search button:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
-}
-/* Remove inner glow on input to avoid double outline */
+
 .search input:focus {
   box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}
+
+/* Hide native clear button from search inputs (Chrome, Safari, Edge) */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+/* Hide native clear button (legacy IE/Edge) */
+input[type="search"]::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Search clear button - completely separate from icon-btn styles */
+#searchClear {
+  position: absolute !important;
+  right: 8px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  border-radius: var(--radius-sm) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 12px !important;
+  opacity: 0.6 !important;
+  transition: all var(--duration-fast) var(--ease-out) !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+}
+
+#searchClear:hover {
+  opacity: 1 !important;
+  color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#searchClear:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 1px !important;
+  opacity: 1 !important;
 }
 .icon-btn,
 .icon-text-btn,
@@ -269,7 +568,6 @@ body {
 .primary-btn,
 .secondary-btn,
 .menu > button {
-
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: var(--surface);
@@ -281,6 +579,28 @@ body {
   gap: 6px;
   line-height: 1;
   padding: 0 10px;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease, box-shadow 140ms ease, transform 120ms ease;
+}
+/* Subtle theme-aware hover/focus for toolbar buttons */
+.icon-btn:hover,
+.icon-text-btn:hover,
+.file-btn span:hover,
+.secondary-btn:hover,
+.menu > button:hover,
+select:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.icon-btn:focus-visible,
+.icon-text-btn:focus-visible,
+.file-btn span:focus-visible,
+.primary-btn:focus-visible,
+.secondary-btn:focus-visible,
+.menu > button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 .icon-btn {
   border-radius: 6px;
@@ -293,6 +613,11 @@ body {
   border-color: transparent;
   font-weight: 600;
 }
+/* Slight lift for primary on hover to keep contrast */
+.primary-btn:hover {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+  transform: translateY(-1px);
+}
 .secondary-btn {
   background: transparent;
 }
@@ -302,7 +627,7 @@ body {
 }
 
 /* Small badge for counters (e.g., active filter count) */
-.badge {
+  .badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -313,9 +638,13 @@ body {
   border-radius: 999px;
   font-size: 11px;
   line-height: 1;
-  background: var(--accent);
-  color: #07120a;
+  background: var(--primary);
+  color: var(--primary-contrast, #07120a);
   font-weight: 700;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.badge[hidden] {
+  display: none !important;
 }
 .menu {
   position: relative;
@@ -330,7 +659,10 @@ body {
   padding: 6px;
   display: none;
   min-width: 150px;
-  z-index: 1000;
+  max-width: min(90vw, 320px);
+  max-height: min(60vh, 420px);
+  overflow: auto;
+  z-index: var(--z-popover);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 .menu-panel.open {
@@ -345,12 +677,21 @@ body {
   text-align: left;
   background: transparent;
   border: none;
-  padding: 8px;
+  padding: var(--space-8);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-colors);
+  font-size: var(--text-base);
+  cursor: pointer;
 }
 .menu-panel button:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-overlay);
+  color: var(--text);
+}
+.menu-panel button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background: var(--hover-overlay);
 }
 
 select {
@@ -359,7 +700,35 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   height: var(--ctrl-h);
+  width: fit-content;
   padding: 0 10px;
+}
+/* Theme selector: use custom caret like Export */
+/* Generic caret utility using a CSS triangle (works for buttons or wrappers) */
+.with-caret { position: relative; }
+.with-caret::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid currentColor; /* triangle pointing down */
+  pointer-events: none;
+}
+button.with-caret { padding-right: 28px; }
+.with-caret > select { padding-right: 28px; }
+/* Hide native arrow for the themed select */
+select.select-reset { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+select.select-reset::-ms-expand { display: none; }
+
+/* Focus style for select: match other controls (no thick outline) */
+select:focus,
+select:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 /* Cards grid */
@@ -392,10 +761,12 @@ select {
   white-space: pre-wrap;
 }
 .card .desc {
-  color: var(--muted);
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
   word-break: break-word;
   white-space: pre-wrap;
+  margin-bottom: var(--space-8);
 }
 .card .tags {
   margin-top: 10px;
@@ -416,6 +787,16 @@ select {
 .chip .x {
   opacity: 0.7;
   cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-normal) var(--ease-out),
+              background-color var(--duration-normal) var(--ease-out),
+              opacity var(--duration-normal) var(--ease-out);
+}
+.chip .x:hover {
+  opacity: 1;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
 }
 .card .more {
   color: var(--accent);
@@ -429,24 +810,35 @@ select {
   right: 8px;
   bottom: 8px;
   display: none;
-  gap: 8px;
+  gap: clamp(4px, 1.8vw, 8px);
 }
 .card .actions .icon-btn {
-  width: 34px;
-  height: 34px;
+  width: clamp(26px, 8vw, 34px);
+  height: clamp(26px, 8vw, 34px);
   padding: 0;
   display: inline-grid;
   place-items: center;
 }
 .card .actions .icon-btn svg {
-  width: 18px;
-  height: 18px;
+  width: clamp(14px, 3.8vw, 18px);
+  height: clamp(14px, 3.8vw, 18px);
 }
 .card:hover .actions {
   display: flex;
 }
 .card:focus-within .actions {
   display: flex;
+}
+
+/* Red hover effect for delete buttons in cards */
+.card .actions .icon-btn[data-act="delete"]:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+.card .actions .icon-btn[data-act="delete"]:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
 }
 
 /* Modal */
@@ -457,18 +849,64 @@ select {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.5);
+  z-index: var(--z-modal);
 }
 .modal[aria-hidden="false"] {
   display: flex;
+}
+/* Theme-aware hover for modal close (X) and close/cancel buttons */
+.modal .modal-header .icon-btn {
+  /* Make the close (X) button a perfect square and center the glyph */
+  width: var(--ctrl-h);
+  height: var(--ctrl-h);
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease, box-shadow 140ms ease;
+}
+.modal .modal-header .icon-btn:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+.modal .modal-header .icon-btn:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+/* Close/Cancel buttons (secondary and elements with data-close-modal) */
+button[data-close-modal],
+.modal .secondary-btn {
+  transition: background-color 140ms ease, border-color 140ms ease,
+    color 140ms ease, box-shadow 140ms ease;
+}
+button[data-close-modal]:hover,
+.modal .secondary-btn:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+/* Red hover effect for Cancel buttons specifically */
+.modal .secondary-btn[data-close-modal]:hover {
+  color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+}
+button[data-close-modal]:focus-visible,
+.modal .secondary-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 .modal-content {
   background: var(--surface);
   color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  width: min(720px, 92vw);
+  width: min(var(--modal-max-w), 94vw);
   max-height: 90vh;
   overflow: auto;
+  margin: clamp(8px, 2vw, 16px);
 }
 .modal-content.small {
   width: min(520px, 92vw);
@@ -490,6 +928,10 @@ select {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   border-bottom: none;
 }
+/* Center the Close button on About modal */
+#aboutModal .modal-footer {
+  justify-content: center;
+}
 .modal-body {
   padding: 12px 14px;
 }
@@ -498,9 +940,10 @@ select {
 }
 .field label {
   display: block;
-  font-size: 14px;
-  color: var(--muted);
-  margin-bottom: 6px;
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  margin-bottom: var(--space-6);
+  font-weight: var(--font-medium);
 }
 /* Ensure toggle label uses flex layout and spacing; override block label rule */
 .field label.toggle {
@@ -599,6 +1042,16 @@ select {
 .snackbar.show {
   opacity: 1;
 }
+/* Variant styles for snackbar types */
+.snackbar.info {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.snackbar.error {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--danger) 25%, transparent);
+}
 
 /* Empty state */
 .empty {
@@ -636,7 +1089,6 @@ select {
   gap: 0;
   padding: 32px;
 }
-
 
 /* Generic small empty note (e.g., inside lists) */
 .empty-note {
@@ -720,55 +1172,161 @@ mark {
 @media (max-width: 720px) {
   .navbar {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
     gap: 8px;
-    padding-inline: 10px;
+    padding: 10px;
+    height: auto;
   }
+  
   .navbar .left {
-    justify-content: space-between;
-  }
-  .navbar .right {
+    grid-column: 1;
+    grid-row: 1;
     justify-content: flex-start;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    gap: 8px;
+    width: 100%;
   }
-  .navbar .right::-webkit-scrollbar {
-    display: none;
-    height: 0;
+  
+  .navbar .center {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    margin-bottom: 0;
   }
-  .navbar .center .search,
-  .search {
+  
+  .navbar .center .search {
     width: 100%;
     min-width: 0;
   }
 }
 
+/* Phones (<= 480px): collapse actions into an off-canvas drawer */
+@media (max-width: 480px) {
+  .menu-toggle { display: inline-flex; }
+  
+  .navbar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: var(--space-6);
+  }
+  .navbar .left { justify-content: flex-start; gap: var(--space-6); }
+  .navbar .center { grid-row: 2; width: 100%; display: flex; justify-content: center; }
+  .navbar .center .search { width: min(92vw, var(--search-max-w)); margin: 0 auto; }
+  
+  /* Drawer styles */
+  #navActions {
+    position: fixed !important;
+    top: var(--nav-h);
+    right: 0;
+    bottom: 0;
+    width: min(84vw, 22rem);
+    max-width: 100vw;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    padding: var(--space-12);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start; /* ensure items start at the top */
+    gap: var(--space-8);
+    z-index: var(--z-fixed);
+    transform: translateX(100%);
+    transition: transform var(--duration-slower) var(--ease-out);
+    pointer-events: none;
+    overflow-y: auto; /* allow scrolling if content exceeds height */
+  }
+  #navActions[aria-hidden="false"] {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+  
+  /* Backdrop visible only when drawer open */
+  #navBackdrop[hidden] { display: none; }
+  #navBackdrop.show { display: block; }
+  
+  /* stack actions full width & align consistently */
+  #navActions > * { width: 100%; }
+  #navActions .menu { width: 100%; }
+  #navActions .menu > button { width: 100%; }
+  #navActions .file-btn { width: 100%; }
+  #navActions select { width: 100%; }
+  #navActions .file-btn span { width: 100%; justify-content: center; }
+  #navActions .icon-btn,
+  #navActions .icon-text-btn,
+  #navActions .primary-btn,
+  #navActions .secondary-btn,
+  #navActions select,
+  #navActions .file-btn span,
+  #navActions .menu > button {
+    height: 44px;
+    justify-content: center;
+    text-align: center;
+  }
+  #navActions select {
+    text-align: center;
+    text-align-last: center;
+  }
+  
+  /* compact search */
+  .search { height: 40px; }
+  
+  /* Hide inline Add in navbar; use FAB instead */
+  #addBtn { display: none !important; }
+  
+  /* Hide low priority inline text inside buttons to save space */
+  .navbar .right .icon-text-btn span:not(.badge) { display: none; }
+}
+
+/* Tablets (481px–768px): show core actions, hide low-priority */
+@media (min-width: 481px) and (max-width: 768px) {
+  .menu-toggle { display: none; }
+  .navbar {
+    grid-template-columns: auto minmax(200px, 1fr) auto;
+    padding-inline: clamp(12px, 4vw, 24px);
+  }
+  .nav-hide-tablet { display: none !important; }
+}
+
+/* Laptops (769px–1024px): show most actions; allow tighter spacing */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .menu-toggle { display: none; }
+  .navbar { padding-inline: clamp(16px, 4vw, 28px); }
+  .nav-hide-laptop { display: none !important; }
+}
+
+/* Desktops (>= 1025px): everything visible */
+@media (min-width: 1025px) {
+  .menu-toggle { display: none; }
+}
+
+/* Utility visibility classes */
+.nav-hide-mobile { /* hidden <=480 */ }
+@media (max-width: 480px) { .nav-hide-mobile { display: none !important; } }
+.nav-hide-tablet { /* hidden <=768: set above in media */ }
+.nav-hide-laptop { /* hidden <=1024: set above in media */ }
+
 /* ----- UI polish: modal + form controls ----- */
-/* Inputs/Textareas */
-input[type="text"],
-input[type="search"],
+/* Inputs/Textareas - exclude main search input and ensure proper modal styling */
+input[type="text"]:not(#searchInput):not(#filterTagSearch),
+input[type="search"]:not(#searchInput):not(#filterTagSearch),
 textarea {
   width: 100%;
   background: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border-interactive);
   color: var(--text);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  padding: var(--space-10) var(--space-12);
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease,
-    background-color 150ms ease;
+  transition: var(--transition-colors);
 }
 input[type="text"]::placeholder,
 input[type="search"]::placeholder,
 textarea::placeholder {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 input[type="text"]:focus,
 input[type="search"]:focus,
 textarea:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.3);
 }
 
 /* Input wrapper to place the clear X consistently for input + textarea */
@@ -788,15 +1346,16 @@ textarea:focus {
   top: 50%;
   transform: translateY(-50%);
   opacity: 0.85;
-  line-height: 1;
-  font-size: 14px;
+  line-height: var(--leading-none);
+  font-size: var(--text-base);
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .clear-field:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 .clear-field:focus-visible {
   outline: 2px solid var(--primary);
@@ -808,12 +1367,30 @@ textarea:focus {
 }
 
 /* Tags input focus state */
-.tags-input {
-  background: var(--bg);
-}
 .tags-input:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.3);
+}
+
+/* Filter modal search input - ensure proper styling and theme consistency */
+#filterTagSearch {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-interactive);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: var(--space-10) var(--space-12);
+  outline: none;
+  transition: var(--transition-colors);
+  font-size: var(--text-base);
+}
+
+#filterTagSearch::placeholder {
+  color: var(--text-muted);
+}
+
+#filterTagSearch:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 /* Avoid double border/glow inside tags input */
@@ -822,44 +1399,35 @@ textarea:focus {
   border: none;
   box-shadow: none;
   background: transparent;
-  padding: 6px;
+  padding: var(--space-6);
 }
 
 /* Hints */
 .hint {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-6);
 }
 
 /* Modal refinements */
 .modal-content {
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
-}
-.modal[aria-hidden="false"] .modal-content {
-  animation: modalIn 160ms ease;
-}
-@keyframes modalIn {
-  from {
-    transform: translateY(6px) scale(0.99);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
+  box-shadow: var(--shadow-xl);
 }
 .modal-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-xl);
 }
-
 
 /* Themed links for modals (better visibility than default blue) */
 .modal-body a {
   color: var(--primary);
   text-decoration: none;
   text-underline-offset: 3px;
+}
+/* About modal: justify long description text for neat edges */
+#aboutModal .modal-body p {
+  text-align: justify;
+  text-justify: inter-word;
 }
 .modal-body a:hover,
 .modal-body a:focus-visible {
@@ -871,62 +1439,76 @@ textarea:focus {
 .modal-body a:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
-/* About modal specific layout */
-#aboutModal .about-links {
-  display: inline-flex;
-  gap: 10px;
-  flex-wrap: wrap;
+/* About modal layout and typography improvements */
+#aboutModal .modal-content.small {
+  width: min(640px, 92vw);
 }
-
-/* Icon links in About modal */
-#aboutModal .icon-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--primary);
+#aboutModal .modal-header h3 {
+  font-size: var(--text-2xl);
+  letter-spacing: 0.2px;
 }
-#aboutModal .icon-link svg {
-  display: inline-block;
+#aboutModal .modal-body {
+  display: grid;
+  gap: var(--space-12);
 }
-#aboutModal .about-icons {
-  display: inline-flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 4px;
+#aboutModal .modal-body p {
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: var(--leading-relaxed);
+  font-size: var(--text-md);
 }
 #aboutModal .about-meta {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 6px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+/* About modal meta styling */
+#aboutModal .about-meta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-6);
+  text-align: center;
 }
 
 /* Chip-style links for About modal */
 #aboutModal .about-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--space-10);
+  margin-top: var(--space-10);
+  justify-content: center;
 }
 #aboutModal .link-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-14);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
   background: var(--bg);
   color: var(--text);
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+  font-weight: var(--font-medium);
+  transition: var(--transition-colors), transform var(--duration-fast) var(--ease-out);
 }
-#aboutModal .link-chip .icon { color: var(--primary); display: inline-flex; }
-#aboutModal .link-chip:hover { border-color: var(--primary); background: rgba(255, 255, 255, 0.1); }
-html[data-theme^="light-"] #aboutModal .link-chip:hover { background: rgba(0, 0, 0, 0.08); }
-#aboutModal .link-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-#aboutModal .link-chip:visited { color: var(--text); }
-
+#aboutModal .link-chip:hover {
+  border-color: var(--primary);
+  background: var(--hover-overlay);
+  transform: translateY(-1px);
+}
+#aboutModal .link-chip .icon {
+  color: var(--primary);
+  display: inline-flex;
+}
+#aboutModal .link-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+#aboutModal .link-chip:visited {
+  color: var(--text);
+}
 
 /* Slightly larger clickable close/clear icons on high-DPI */
 .icon-btn,
@@ -938,7 +1520,7 @@ html[data-theme^="light-"] #aboutModal .link-chip:hover { background: rgba(0, 0,
 .toggle {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-10);
   cursor: pointer;
   user-select: none;
   position: relative;
@@ -965,14 +1547,14 @@ html[data-theme^="light-"] #aboutModal .link-chip:hover { background: rgba(0, 0,
   display: inline-block;
   width: 42px;
   height: 24px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
+  background: var(--border);
+  border-radius: var(--radius-full);
   position: relative;
   flex: 0 0 42px;
-  transition: background 150ms ease;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: background var(--duration-normal) var(--ease-out);
+  box-shadow: inset 0 0 0 1px var(--border-light);
   vertical-align: middle;
-  margin-right: 2px;
+  margin-right: var(--space-2);
 }
 .toggle .switch::after {
   content: "";
@@ -982,22 +1564,19 @@ html[data-theme^="light-"] #aboutModal .link-chip:hover { background: rgba(0, 0,
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
-  transition: left 150ms ease, background 150ms ease;
-}
-.toggle .switch::after {
   background: var(--text);
+  transition: left var(--duration-normal) var(--ease-out), background var(--duration-normal) var(--ease-out);
 }
 .toggle input:checked + .switch::after {
   background: var(--primary-contrast);
 }
 .toggle-text {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 /* Light theme tweak for track tone */
 html[data-theme^="light-"] .toggle .switch {
-  background: rgba(0, 0, 0, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  background: var(--border);
+  box-shadow: inset 0 0 0 1px var(--border-light);
 }
 
 .toggle input:checked + .switch {
@@ -1006,9 +1585,6 @@ html[data-theme^="light-"] .toggle .switch {
 .toggle input:checked + .switch::after {
   left: 21px;
   background: var(--primary-contrast);
-}
-.toggle-text {
-  color: var(--muted);
 }
 
 /* Colored chips for tags (subtle) */
@@ -1019,7 +1595,7 @@ html[data-theme^="light-"] .toggle .switch {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0),
@@ -1033,3 +1609,392 @@ html[data-theme^="light-"] .toggle .switch {
 }
 
 /* Card hover effects work consistently across all themes using CSS custom properties */
+
+/* =================================================================
+   DESIGN SYSTEM IMPROVEMENTS
+   ================================================================= */
+
+/* ============= ENHANCED THEME CONSISTENCY ============= */
+/* Complete missing theme variables for all themes */
+html[data-theme="dark-mystic-forest"] {
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-disabled: #64748b;
+  --text-inverse: #0f172a;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-interactive: rgba(255, 255, 255, 0.15);
+}
+
+html[data-theme="dark-crimson-night"] {
+  --text-secondary: #fca5a5;
+  --text-muted: #f87171;
+  --text-disabled: #7f1d1d;
+  --text-inverse: #350a0a;
+  --border: rgba(248, 113, 113, 0.15);
+  --border-light: rgba(248, 113, 113, 0.08);
+  --border-strong: rgba(248, 113, 113, 0.25);
+  --border-interactive: rgba(248, 113, 113, 0.18);
+}
+
+html[data-theme="dark-royal-elegance"] {
+  --text-secondary: #d1d5db;
+  --text-muted: #a78bfa;
+  --text-disabled: #6b7280;
+  --text-inverse: #1e1b3a;
+  --border: rgba(167, 139, 250, 0.15);
+  --border-light: rgba(167, 139, 250, 0.08);
+  --border-strong: rgba(167, 139, 250, 0.25);
+  --border-interactive: rgba(167, 139, 250, 0.18);
+}
+
+html[data-theme="light-sunrise"] {
+  --text-secondary: #57534e;
+  --text-muted: #78716c;
+  --text-disabled: #a8a29e;
+  --text-inverse: #ffffff;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --border-interactive: rgba(0, 0, 0, 0.15);
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --active-overlay: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="light-soft-glow"] {
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+  --text-inverse: #ffffff;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --border-interactive: rgba(0, 0, 0, 0.15);
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --active-overlay: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="light-floral-breeze"] {
+  --text-secondary: #374151;
+  --text-muted: #4b5563;
+  --text-disabled: #9ca3af;
+  --text-inverse: #ffffff;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --border-interactive: rgba(0, 0, 0, 0.15);
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --active-overlay: rgba(0, 0, 0, 0.08);
+}
+
+/* ============= THEME SWITCHING ENHANCEMENTS ============= */
+/* Prevent flash of unstyled content during theme transitions */
+html {
+  color-scheme: dark light;
+}
+
+html[data-theme^="light-"] {
+  color-scheme: light;
+}
+
+html[data-theme^="dark-"] {
+  color-scheme: dark;
+}
+
+/* Smooth theme transitions for all elements */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--ease-out);
+}
+
+/* Apply theme transition class temporarily via JS when switching themes */
+html.theme-switching * {
+  transition: background-color 300ms ease,
+              border-color 300ms ease,
+              color 300ms ease !important;
+}
+
+/* ============= ACCESSIBILITY ENHANCEMENTS ============= */
+/* Enhanced contrast for better readability */
+.card .desc {
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+}
+
+/* Improved focus visibility for interactive elements */
+.card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-color: var(--primary);
+}
+
+/* Better keyboard navigation for menu panels */
+.menu-panel button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background: var(--hover-overlay);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: rgba(255, 255, 255, 0.3);
+    --border-interactive: rgba(255, 255, 255, 0.4);
+  }
+  
+  html[data-theme^="light-"] {
+    --border: rgba(0, 0, 0, 0.3);
+    --border-interactive: rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ============= ENHANCED RESPONSIVENESS ============= */
+/* Improved mobile-first breakpoint system */
+@media (max-width: 480px) {
+  /* Ultra-compact mobile layout */
+  .navbar {
+    padding-inline: var(--space-6);
+    gap: var(--space-4);
+  }
+  
+  .navbar .right {
+    gap: var(--space-4);
+  }
+  
+  .cards {
+    grid-template-columns: 1fr;
+    gap: var(--space-10);
+    padding: var(--space-12) var(--space-8);
+  }
+  
+  .modal-content {
+    width: min(100vw - 16px, 92vw);
+    margin: var(--space-4);
+  }
+  
+  /* Larger touch targets on mobile */
+  .icon-btn,
+  .clear-field,
+  .menu > button,
+  select,
+  .file-btn span {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  /* Improved text sizing for readability */
+  .card .title {
+    font-size: var(--text-lg);
+    line-height: var(--leading-tight);
+  }
+}
+
+@media (max-width: 600px) {
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--space-12);
+    padding: var(--space-16) var(--space-10);
+  }
+}
+
+/* Enhanced tablet layout */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-16);
+  }
+  
+  .navbar {
+    padding-inline: var(--space-16);
+  }
+}
+
+/* ============= ANIMATION & TRANSITION POLISH ============= */
+/* Enhanced card hover animations */
+.card {
+  transition: transform var(--duration-fast) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+/* Smooth modal entrance with spring animation */
+.modal[aria-hidden="false"] {
+  animation: modalBackdropIn var(--duration-slower) var(--ease-out);
+}
+
+.modal[aria-hidden="false"] .modal-content {
+  animation: modalContentIn var(--duration-slower) var(--ease-spring);
+}
+
+@keyframes modalBackdropIn {
+  from {
+    background-color: transparent;
+  }
+  to {
+    background-color: var(--modal-overlay);
+  }
+}
+
+@keyframes modalContentIn {
+  from {
+    transform: translateY(16px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Staggered card entrance animations */
+.card:nth-child(1) { animation-delay: 0ms; }
+.card:nth-child(2) { animation-delay: 40ms; }
+.card:nth-child(3) { animation-delay: 80ms; }
+.card:nth-child(4) { animation-delay: 120ms; }
+.card:nth-child(5) { animation-delay: 160ms; }
+.card:nth-child(6) { animation-delay: 200ms; }
+
+.cards:not(.empty-state) .card {
+  animation: cardIn var(--duration-slower) var(--ease-out) both;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced button press feedback */
+.btn-base:active,
+.icon-btn:active,
+.icon-text-btn:active,
+.secondary-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.primary-btn:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+/* Smooth search input focus transition */
+.search {
+  transition: border-color var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.search:focus-within {
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-primary);
+}
+
+/* Enhanced chip animations - subtle and responsive */
+.chip {
+  transition: background-color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+  border: 1px solid transparent;
+}
+
+.chip:hover {
+  background: color-mix(in srgb, var(--chip-bg) 85%, var(--primary) 15%);
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  transform: translateY(-1px);
+}
+
+/* Improved skeleton loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    background-position: -200% 0;
+    opacity: 0.4;
+  }
+}
+
+.skeleton {
+  animation-duration: 1.6s;
+  animation-timing-function: ease-in-out;
+}
+
+.fab-add {
+  position: fixed;
+  right: clamp(12px, 4vw, 20px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  z-index: calc(var(--z-fixed) + 1);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  display: none; /* default hidden; shown on small screens */
+  place-items: center;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  line-height: 1;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 35%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.fab-add .icon { width: 28px; height: 28px; display: block; }
+.fab-add:focus-visible {
+  outline: 2px solid var(--primary-contrast);
+  outline-offset: 2px;
+}
+@media (max-width: 480px) { .fab-add { display: grid; } }
+
+/* Phone-specific tweaks: make card action buttons smaller */
+@media (max-width: 480px) {
+  .card .actions { gap: 4px; right: 6px; bottom: 6px; }
+  .card .actions .icon-btn { width: 22px; height: 22px; }
+  .card .actions .icon-btn svg { width: 12px; height: 12px; }
+}
+
+/* ============= UTILITY CLASSES ============= */
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
