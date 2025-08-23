@@ -284,7 +284,8 @@ export class ConfirmationManager {
       this.currentResolver(false);
       this.currentResolver = null;
     }
-    // Modal will be closed by the modal manager
+    // Close modal using modal manager to handle focus properly
+    this.modalManager.close(this.modalSelector);
   }
   
   /**
