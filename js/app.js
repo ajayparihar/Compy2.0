@@ -131,55 +131,71 @@ class CompyApp {
   }
 
   /**
-   * Initialize clipboard helpers used across the UI.
-   * Prefers the async Clipboard API with a robust execCommand fallback for older browsers
-   * or restricted contexts.
+   * Initialize clipboard functionality with fallback support
+   * 
+   * Creates a clipboard management object with intelligent fallback handling.
+   * The modern Clipboard API is preferred for better security and user experience,
+   * but falls back to execCommand for broader browser compatibility.
+   * 
+   * Clipboard Security:
+   * - Modern browsers require secure context (HTTPS or localhost)
+   * - User interaction is required for clipboard access
+   * - Some browsers require explicit permissions
+   * 
+   * Performance Optimization:
+   * - Checks API availability once during initialization
+   * - Avoids repeated feature detection on each copy operation
    */
   initClipboard() {
+    // Pre-check clipboard API availability for performance
+    const hasClipboardAPI = navigator.clipboard && 
+                          typeof navigator.clipboard.writeText === 'function';
+    
     this.clipboard = {
-      /**
-       * Copy text to the system clipboard.
-       * Falls back to a hidden textarea if navigator.clipboard is unavailable.
-       * @param {string} text - Plain text to copy
-       * @returns {Promise<void>}
-       */
       copy: async (text) => {
+        // Input validation - prevent empty or invalid copy operations
+        if (!text || typeof text !== 'string') {
+          console.warn('Clipboard copy attempted with invalid text:', text);
+          return false;
+        }
+        
         try {
-          await navigator.clipboard.writeText(text);
-          this.showNotification('Copied to clipboard');
+          if (hasClipboardAPI) {
+            // Use modern Clipboard API for better security and UX
+            await navigator.clipboard.writeText(text);
+            this.showNotification('Copied to clipboard', 'success');
+            return true;
+          } else {
+            // Fall back to legacy method for older browsers
+            return this.fallbackCopy(text);
+          }
         } catch (error) {
-          console.warn('Modern clipboard API failed, using fallback:', error);
-          this.fallbackCopy(text);
+          // Modern API failed - try fallback as last resort
+          console.warn('Modern clipboard API failed, trying fallback:', error);
+          return this.fallbackCopy(text);
         }
       }
     };
   }
 
   /**
-   * Fallback clipboard copy method using a temporary hidden textarea.
-   * @param {string} text - Plain text to copy
+   * Fallback clipboard copy method using execCommand
    */
   fallbackCopy(text) {
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'absolute';
-      textarea.style.left = '-9999px';
-      document.body.appendChild(textarea);
-      textarea.select();
-      
-      const success = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      
-      if (success) {
-        this.showNotification('Copied to clipboard');
-      } else {
-        this.showNotification('Copy failed - please try manually', 'error');
-      }
-    } catch (error) {
-      console.error('Fallback copy also failed:', error);
-      this.showNotification('Copy not supported - please copy manually', 'error');
-    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    const success = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    
+    this.showNotification(
+      success ? 'Copied to clipboard' : 'Copy failed - please try manually',
+      success ? 'info' : 'error'
+    );
   }
 
   /**
