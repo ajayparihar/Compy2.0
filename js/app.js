@@ -14,6 +14,7 @@ import {
   deleteItem, updateFilterTags, updateSearch, updateProfile,
   setEditingId, getBackups
 } from './state.js';
+import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
 
 /**
  * @typedef {Object} AppItem
@@ -59,6 +60,7 @@ class CompyApp {
     this.clipboard = null;
     this.notifications = null;
     this.modals = null;
+    this.confirmationManager = null;
     this.theme = null;
     this.search = null;
     this.cards = null;
@@ -67,6 +69,7 @@ class CompyApp {
     this.handleStateChange = this.handleStateChange.bind(this);
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
     this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
+    this.removeItem = this.removeItem.bind(this);
   }
 
   /**
@@ -249,6 +252,11 @@ class CompyApp {
         if (modal) {
           modal.setAttribute('aria-hidden', 'true');
         }
+      },
+      
+      isOpen: (selector) => {
+        const modal = $(selector);
+        return modal && modal.getAttribute('aria-hidden') === 'false';
       }
     };
 
@@ -261,6 +269,12 @@ class CompyApp {
         }
       });
     });
+    
+    // Initialize confirmation manager
+    this.confirmationManager = createConfirmationManager(this.modals);
+    
+    // Set global confirm function for easy access
+    setGlobalConfirm((options) => this.confirmationManager.show(options));
   }
 
   /**
@@ -628,12 +642,35 @@ class CompyApp {
   }
 
   /**
-   * Delete an item by ID and notify the user.
+   * Show confirmation dialog and delete an item by ID if confirmed.
    * @param {string} itemId
    */
-  removeItem(itemId) {
-    deleteItem(itemId);
-    this.showNotification('Snippet deleted');
+  async removeItem(itemId) {
+    // Get the item details for the confirmation message
+    const state = getState();
+    const item = state.items.find(i => i.id === itemId);
+    
+    if (!item) {
+      this.showNotification('Item not found', 'error');
+      return;
+    }
+    
+    // Show confirmation dialog
+    const displayText = item.desc || item.text || 'this snippet';
+    const truncatedText = displayText.length > 50 ? displayText.substring(0, 50) + '...' : displayText;
+    
+    const confirmed = await this.confirmationManager.show({
+      title: 'Delete Snippet',
+      message: `Delete "${truncatedText}"?\n\nThis action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    
+    if (confirmed) {
+      deleteItem(itemId);
+      this.showNotification('Snippet deleted');
+    }
   }
 
   /**

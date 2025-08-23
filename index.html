@@ -408,18 +408,35 @@
   </div>
 
   <!-- Confirmation Modal -->
-  <div id="confirmModal" class="modal" aria-hidden="true">
+  <div id="confirmModal" class="modal" role="dialog" aria-hidden="true" aria-modal="true">
     <div class="modal-content small">
       <div class="modal-header">
         <h3 id="confirmModalTitle">Confirm Action</h3>
-        <button class="icon-btn" data-close-modal>✕</button>
+        <button 
+          class="icon-btn" 
+          data-close-modal 
+          aria-label="Close confirmation dialog" 
+          title="Close dialog">
+          <span aria-hidden="true">✕</span>
+        </button>
       </div>
       <div class="modal-body">
         <p id="confirmModalMessage">Are you sure you want to proceed?</p>
       </div>
       <div class="modal-footer">
-        <button class="secondary-btn" data-close-modal>Cancel</button>
-        <button id="confirmModalAction" class="primary-btn danger-btn">Confirm</button>
+        <button 
+          class="secondary-btn" 
+          data-close-modal 
+          aria-label="Cancel action">
+          Cancel
+        </button>
+        <button 
+          id="confirmModalAction" 
+          class="danger-btn" 
+          data-primary="true"
+          aria-label="Confirm action">
+          Confirm
+        </button>
       </div>
     </div>
   </div>
