@@ -170,7 +170,7 @@
     });
     card.addEventListener('keydown', (e)=>{ if (e.key==='Enter') copyToClipboard(it.text); });
     card.querySelector('[data-act="edit"]').addEventListener('click', ()=>openItemModal(it.id));
-    card.querySelector('[data-act="delete"]').addEventListener('click', ()=>deleteItem(it.id));
+    card.querySelector('[data-act="delete"]').addEventListener('click', ()=>confirmDeleteItem(it.id));
     card.querySelector('[data-act="copy"]').addEventListener('click', ()=>copyToClipboard(it.text));
     return card;
   };
@@ -206,6 +206,64 @@
     state.items = state.items.filter(i=>i.id!==id); saveState(); renderCards(); showSnackbar('Deleted');
   };
 
+  const confirmDeleteItem = (id) => {
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+    
+    const itemPreview = item.text.length > 50 ? item.text.substring(0, 50) + '...' : item.text;
+    
+    showConfirmModal({
+      title: 'Delete Item',
+      message: `Are you sure you want to delete "${itemPreview}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      confirmClass: 'danger-btn',
+      onConfirm: () => deleteItem(id)
+    });
+  };
+
+  // Confirmation Modal
+  const showConfirmModal = (options = {}) => {
+    const {
+      title = 'Confirm Action',
+      message = 'Are you sure you want to proceed?',
+      confirmText = 'Confirm',
+      confirmClass = 'danger-btn',
+      onConfirm = () => {},
+      onCancel = () => {}
+    } = options;
+
+    $('#confirmModalTitle').textContent = title;
+    $('#confirmModalMessage').textContent = message;
+    const confirmBtn = $('#confirmModalAction');
+    confirmBtn.textContent = confirmText;
+    confirmBtn.className = `primary-btn ${confirmClass}`;
+
+    // Remove existing event listeners
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+    // Add new event listeners
+    newConfirmBtn.addEventListener('click', () => {
+      closeModal($('#confirmModal'));
+      onConfirm();
+    });
+
+    // Handle cancel - already bound via data-close-modal
+    const originalCancel = () => {
+      closeModal($('#confirmModal'));
+      onCancel();
+    };
+
+    // Override close modal temporarily for this instance
+    const modal = $('#confirmModal');
+    const closeButtons = modal.querySelectorAll('[data-close-modal]');
+    closeButtons.forEach(btn => {
+      btn.addEventListener('click', originalCancel, { once: true });
+    });
+
+    openModal($('#confirmModal'));
+  };
+
   // Modals
   const openModal = (el) => { el.setAttribute('aria-hidden','false'); el.querySelector('[data-close-modal]')?.focus(); };
   const closeModal = (el) => { el.setAttribute('aria-hidden','true'); };
@@ -215,6 +273,7 @@
   $$('#aboutModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#aboutModal'))));
   $$('#backupsModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#backupsModal'))));
   $$('#profileModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#profileModal'))));
+  $$('#confirmModal [data-close-modal]').forEach(b=>b.addEventListener('click', ()=>closeModal($('#confirmModal'))));
 
   // Add/Edit modal logic
   const openItemModal = (id=null) => {

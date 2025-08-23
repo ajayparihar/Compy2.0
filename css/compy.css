@@ -293,6 +293,15 @@ body {
   border-color: transparent;
   font-weight: 600;
 }
+.danger-btn {
+  background: var(--danger) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+.danger-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
 .secondary-btn {
   background: transparent;
 }
