@@ -221,8 +221,11 @@ export class ConfirmationManager {
       // Update aria-label
       confirmButton.setAttribute('aria-label', `${config.confirmText} - ${config.title.toLowerCase()}`);
       
-      // Add data-primary for focus management
+      // Add data-primary for focus management (ensure it's always present)
       confirmButton.setAttribute('data-primary', 'true');
+      
+      // Ensure proper aria-describedby relationship
+      confirmButton.setAttribute('aria-describedby', 'confirmModalMessage');
     }
     
     if (cancelButton) {
