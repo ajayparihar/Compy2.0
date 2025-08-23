@@ -85,10 +85,7 @@ class CompyApp {
     if (this.initialized) return;
 
     try {
-      // Initialize state management
-      initState();
-      
-      // Initialize components
+      // Initialize components first
       this.initClipboard();
       this.initNotifications();
       this.initModals();
@@ -100,8 +97,11 @@ class CompyApp {
       this.initImport();
       this.initEventHandlers();
       
-      // Subscribe to state changes
+      // Subscribe to state changes before initializing state
       subscribe(this.handleStateChange);
+      
+      // Initialize state management (this will trigger initial render)
+      initState();
       
       // Setup keyboard shortcuts
       document.addEventListener('keydown', this.handleKeyboardShortcuts);
