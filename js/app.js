@@ -15,6 +15,7 @@ import {
   setEditingId, getBackups
 } from './state.js';
 import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
+import { createModalManager } from './components/modals.js';
 
 /**
  * @typedef {Object} AppItem
@@ -59,7 +60,7 @@ class CompyApp {
     this.initialized = false;
     this.clipboard = null;
     this.notifications = null;
-    this.modals = null;
+    this.modalManager = null;
     this.confirmationManager = null;
     this.theme = null;
     this.search = null;
@@ -108,7 +109,6 @@ class CompyApp {
       
       // Setup keyboard shortcuts
       document.addEventListener('keydown', this.handleKeyboardShortcuts);
-      document.addEventListener('keydown', this.handleModalKeyboard);
       
       // Setup responsive navbar
       this.setupResponsiveNavbar();
@@ -235,44 +235,16 @@ class CompyApp {
    * Relies on [data-close-modal] attributes inside .modal elements.
    */
   initModals() {
-    this.modals = {
-      open: (selector) => {
-        const modal = $(selector);
-        if (modal) {
-          modal.setAttribute('aria-hidden', 'false');
-          // Focus first focusable element or close button
-          const focusTarget = modal.querySelector('[data-close-modal]') || 
-                             modal.querySelector('input, textarea, button');
-          focusElement(focusTarget, 100);
-        }
-      },
-      
-      close: (selector) => {
-        const modal = $(selector);
-        if (modal) {
-          modal.setAttribute('aria-hidden', 'true');
-        }
-      },
-      
-      isOpen: (selector) => {
-        const modal = $(selector);
-        return modal && modal.getAttribute('aria-hidden') === 'false';
-      }
-    };
-
-    // Setup close handlers for all modals
-    $$('[data-close-modal]').forEach(button => {
-      button.addEventListener('click', (e) => {
-        const modal = e.target.closest('.modal');
-        if (modal) {
-          this.modals.close(`#${modal.id}`);
-        }
-      });
+    // Initialize accessible modal manager with focus handling
+    this.modalManager = createModalManager({
+      closeOnBackdropClick: true,
+      closeOnEscape: true,
+      focusDelay: 100
     });
-    
-    // Initialize confirmation manager
-    this.confirmationManager = createConfirmationManager(this.modals);
-    
+
+    // Initialize confirmation manager with modal manager
+    this.confirmationManager = createConfirmationManager(this.modalManager);
+
     // Set global confirm function for easy access
     setGlobalConfirm((options) => this.confirmationManager.show(options));
   }
@@ -637,8 +609,7 @@ class CompyApp {
     $('#itemSensitive').checked = item.sensitive;
     this.setTagChips(item.tags);
 
-    this.modals.open('#itemModal');
-    focusElement($('#itemText'), 100);
+    this.modalManager.open('#itemModal', { initialFocus: '#itemText' });
   }
 
   /**
@@ -680,14 +651,13 @@ class CompyApp {
     $('#profileEditBtn').addEventListener('click', () => {
       const state = getState();
       $('#profileNameInput').value = state.profileName;
-      this.modals.open('#profileModal');
-      focusElement($('#profileNameInput'), 100);
+      this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
     });
 
     $('#profileSaveBtn').addEventListener('click', () => {
       const name = $('#profileNameInput').value.trim();
       updateProfile(name);
-      this.modals.close('#profileModal');
+      this.modalManager.close('#profileModal');
       this.showNotification('Profile updated');
     });
 
@@ -994,7 +964,7 @@ class CompyApp {
       });
     }
 
-    this.modals.open('#backupsModal');
+    this.modalManager.open('#backupsModal');
   }
 
   /**
@@ -1005,7 +975,7 @@ class CompyApp {
     $('#brand').addEventListener('click', () => location.reload());
 
     // About button
-    $('#aboutBtn').addEventListener('click', () => this.modals.open('#aboutModal'));
+    $('#aboutBtn').addEventListener('click', () => this.modalManager.open('#aboutModal'));
 
     // Filter button
     $('#filterBtn').addEventListener('click', () => this.openFilterModal());
@@ -1131,7 +1101,7 @@ class CompyApp {
     }
 
     upsertItem({ text, desc, sensitive, tags });
-    this.modals.close('#itemModal');
+    this.modalManager.close('#itemModal');
     this.showNotification('Snippet saved');
   }
 
@@ -1141,8 +1111,7 @@ class CompyApp {
   openFilterModal() {
     const state = getState();
     this.renderFilterList(getAllTags(state.items), state.filterTags);
-    this.modals.open('#filterModal');
-    focusElement($('#filterTagSearch'), 100);
+    this.modalManager.open('#filterModal', { initialFocus: '#filterTagSearch' });
   }
 
   /**
@@ -1215,7 +1184,7 @@ class CompyApp {
       list.appendChild(chip);
     });
 
-    this.modals.open('#moreTagsModal');
+    this.modalManager.open('#moreTagsModal');
   }
 
   /**
@@ -1243,12 +1212,9 @@ class CompyApp {
    * @param {KeyboardEvent} e
    */
   handleModalKeyboard(e) {
-    if (e.key === 'Escape') {
-      // Close any open modal
-      const openModal = $('[aria-hidden="false"].modal');
-      if (openModal) {
-        this.modals.close(`#${openModal.id}`);
-      }
+    if (e.key === 'Escape' && this.modalManager && this.modalManager.hasOpenModals && this.modalManager.hasOpenModals()) {
+      // Close the topmost modal using the modal manager
+      this.modalManager.close();
     }
   }
 
