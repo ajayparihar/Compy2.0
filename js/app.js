@@ -66,6 +66,10 @@ class CompyApp {
     this.search = null;
     this.cards = null;
     
+    // Filter modal transient state and handler guard
+    this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
+    this.filterHandlersBound = false;
+    
     // Bind methods to maintain context
     this.handleStateChange = this.handleStateChange.bind(this);
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
@@ -1110,7 +1114,24 @@ class CompyApp {
    */
   openFilterModal() {
     const state = getState();
-    this.renderFilterList(getAllTags(state.items), state.filterTags);
+    const allTags = getAllTags(state.items);
+
+    // Initialize transient filter modal state
+    this.filterState = {
+      allTags,
+      selectedTags: [...state.filterTags],
+      query: ''
+    };
+
+    // Reset search input and render initial list
+    const searchInput = $('#filterTagSearch');
+    if (searchInput) searchInput.value = '';
+    this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, this.filterState.query);
+
+    // Ensure handlers are attached once
+    this.ensureFilterModalHandlers();
+
+    // Open modal with focus on search
     this.modalManager.open('#filterModal', { initialFocus: '#filterTagSearch' });
   }
 
@@ -1137,7 +1158,9 @@ class CompyApp {
     }
 
     filteredTags.forEach(tag => {
-      const id = `filter-tag-${tag}`;
+      // Stable, safe ID for label/input pairing (handles spaces/special chars)
+      const slug = tag.toLowerCase().replace(/[^a-z0-9\-_]+/g, '-').slice(0, 24);
+      const id = `filter-tag-${slug}-${Math.abs(stringHash(tag))}`;
       const isSelected = selectedTags.includes(tag);
       
       const label = document.createElement('label');
@@ -1151,11 +1174,73 @@ class CompyApp {
           value="${escapeHtml(tag)}"
           ${isSelected ? 'checked' : ''}
         />
-        <span>${escapeHtml(tag)}</span>
+        <span>${highlightText(escapeHtml(tag), searchQuery)}</span>
       `;
       
       list.appendChild(label);
     });
+  }
+
+  /**
+   * Ensure filter modal handlers are attached only once.
+   * Wires up search within filter, checkbox selection, and apply/clear actions.
+   */
+  ensureFilterModalHandlers() {
+    if (this.filterHandlersBound) return;
+
+    const list = $('#filterTagList');
+    const searchInput = $('#filterTagSearch');
+    const applyBtn = $('#applyFilterBtn');
+    const clearBtn = $('#clearFilterBtn');
+    const clearSearchBtn = document.querySelector('button[data-clear="#filterTagSearch"]');
+
+    // Event delegation for checkbox changes (preserves handlers across re-renders)
+    list.addEventListener('change', (e) => {
+      const cb = e.target?.closest('input[type="checkbox"]');
+      if (!cb) return;
+      const tag = cb.value;
+      if (!this.filterState) return;
+      const { selectedTags } = this.filterState;
+      const idx = selectedTags.indexOf(tag);
+      if (cb.checked) {
+        if (idx === -1) selectedTags.push(tag);
+      } else if (idx > -1) {
+        selectedTags.splice(idx, 1);
+      }
+    });
+
+    // Debounced search within tags list
+    const onSearchInput = debounce((e) => {
+      if (!this.filterState) return;
+      this.filterState.query = e.target.value;
+      this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, this.filterState.query);
+    }, 120);
+    searchInput.addEventListener('input', onSearchInput);
+
+    // When the clear button for the search input is clicked, also re-render
+    clearSearchBtn?.addEventListener('click', () => {
+      if (!this.filterState) return;
+      this.filterState.query = '';
+      // Let the global clear handler wipe the input; we just re-render
+      this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, '');
+    });
+
+    // Apply selected filters to state and close modal
+    applyBtn.addEventListener('click', () => {
+      if (!this.filterState) return;
+      updateFilterTags([...this.filterState.selectedTags]);
+      this.modalManager.close('#filterModal');
+    });
+
+    // Clear filters (keep modal open) and re-render list to reflect unselected state
+    clearBtn.addEventListener('click', () => {
+      if (!this.filterState) return;
+      this.filterState.selectedTags = [];
+      updateFilterTags([]);
+      this.renderFilterList(this.filterState.allTags, this.filterState.selectedTags, this.filterState.query || '');
+    });
+
+    this.filterHandlersBound = true;
   }
 
   /**
