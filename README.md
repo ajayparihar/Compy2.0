@@ -27,7 +27,22 @@ Everything runs client‑side in your browser. Your data is stored locally via l
 ---
 
 ### Usage
-Visit the GitHub Pages site: https://ajayparihar.github.io/Compy2.0/
+- Web (hosted): https://ajayparihar.github.io/Compy2.0/
+- Local: open index.html directly in your browser, or serve the folder with any static server.
+- Offline: Compy is fully client-side and works offline. When served over HTTPS or localhost, a service worker (/sw.js) is registered to cache assets. When opened as a file://, there is no service worker, but all functionality still works via localStorage.
+
+#### Script options (choose one)
+Default (recommended, widest compatibility):
+```html
+<script src="js/compy.js" defer></script>
+```
+
+ES modules variant (optional, modern browsers):
+```html
+<script type="module" src="js/main.js"></script>
+<!-- Optionally keep a fallback for legacy browsers -->
+<script src="js/compy.js" defer nomodule></script>
+```
 
 ### Data & privacy
 - Storage: Browser localStorage under keys like compy.items, compy.theme, compy.profile, compy.backups, compy.filters.
@@ -38,6 +53,10 @@ Visit the GitHub Pages site: https://ajayparihar.github.io/Compy2.0/
 - Search focus: Press / (slash) or Ctrl+F
 - Copy: Select a card and press Enter
 - Tags input: Enter to add; Backspace to remove last chip when empty
+
+### Themes
+- Built-in: dark-mystic-forest, dark-crimson-night, dark-royal-elegance, light-sunrise, light-soft-glow, light-floral-breeze
+- Change from the header dropdown; your pick is saved to localStorage (compy.theme).
 
 ### Import/Export formats
 - JSON
@@ -98,6 +117,12 @@ text,desc,sensitive,tags
 - Clipboard blocked? Some browsers require user interaction; try clicking the card or using HTTPS/local files.
 - Import errors? Ensure required columns (text, desc) exist in CSV, or valid JSON structure.
 
+### Links
+- Website: https://ajayparihar.github.io/Compy2.0/
+- Source: https://github.com/ajayparihar/Compy2.0
+- Issues: https://github.com/ajayparihar/Compy2.0/issues
+- Author: Bheb Developer — bhebdeveloper@gmail.com (GitHub: https://github.com/ajayparihar)
+
 ### License
-Currently unpublished; treat as personal use unless a LICENSE file is added.
+MIT — see LICENSE for full text.
 
