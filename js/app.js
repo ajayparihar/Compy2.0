@@ -16,6 +16,7 @@ import {
 } from './state.js';
 import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
 import { createModalManager } from './components/modals.js';
+import { createTagAutocomplete } from './components/tagAutocomplete.js';
 
 /**
  * @typedef {Object} AppItem
@@ -65,6 +66,7 @@ class CompyApp {
     this.theme = null;
     this.search = null;
     this.cards = null;
+    this.tagAutocomplete = null;
     
     // Filter modal transient state and handler guard
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
@@ -1133,23 +1135,64 @@ class CompyApp {
   }
 
   /**
-   * Initialize tag entry behaviors (Enter to add, Backspace to remove last).
+   * Initialize tag entry behaviors with autocomplete support.
+   * Includes Enter to add, Backspace to remove last, and autocomplete suggestions.
    */
   initTagInput() {
     const tagEntry = $('#tagEntry');
     
+    // Initialize tag autocomplete
+    this.tagAutocomplete = createTagAutocomplete('#tagEntry', {
+      onTagSelect: (tag) => {
+        this.addTagChip(tag);
+        // Refresh autocomplete suggestions after adding tag
+        setTimeout(() => {
+          if (this.tagAutocomplete) {
+            this.tagAutocomplete.refresh();
+          }
+        }, 50);
+      },
+      getExistingTags: () => this.getTagsFromChips(),
+      maxSuggestions: 8,
+      minChars: 1,
+      debounceMs: 150
+    });
+    
     tagEntry.addEventListener('keydown', (e) => {
       const value = e.target.value.trim();
       
+      // Handle Enter key - only add tag if no autocomplete suggestion is selected
       if (e.key === 'Enter' && value) {
+        // Check if autocomplete dropdown is visible and has a selection
+        if (this.tagAutocomplete && this.tagAutocomplete.isDropdownVisible()) {
+          // Let autocomplete handle the Enter key
+          return;
+        }
+        
+        // No autocomplete suggestion selected, add the typed value
         e.preventDefault();
         this.addTagChip(value);
         e.target.value = '';
+        
+        // Refresh autocomplete after adding tag
+        setTimeout(() => {
+          if (this.tagAutocomplete) {
+            this.tagAutocomplete.refresh();
+          }
+        }, 50);
       } else if (e.key === 'Backspace' && !e.target.value) {
         // Remove last tag chip
         const chips = $$('#tagChips .chip');
         const lastChip = chips[chips.length - 1];
-        lastChip?.remove();
+        if (lastChip) {
+          lastChip.remove();
+          // Refresh autocomplete after removing tag
+          setTimeout(() => {
+            if (this.tagAutocomplete) {
+              this.tagAutocomplete.refresh();
+            }
+          }, 50);
+        }
       }
     });
   }
