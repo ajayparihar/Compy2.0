@@ -881,9 +881,10 @@ class CompyApp {
       const hasExistingData = currentState.items.length > 0 || currentState.profileName;
       
       let shouldClearExisting = false;
+      let importOption = 'add';
       
       if (hasExistingData) {
-        const importOption = await this.showImportOptionsDialog({
+        importOption = await this.showImportOptionsDialog({
           existingCount: currentState.items.length,
           existingProfile: currentState.profileName || 'Not set',
           importingCount: items.length,
@@ -894,10 +895,26 @@ class CompyApp {
           this.showNotification('Import cancelled', 'info');
           return;
         } else if (importOption === 'replace') {
+          // Final confirmation to prevent accidental data loss
+          const confirmed = await this.confirmationManager.show({
+            title: 'Replace All Data',
+            message: `This will delete ${currentState.items.length} existing snippets and reset your profile ("${currentState.profileName || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
+            confirmText: 'Replace All',
+            cancelText: 'Cancel',
+            variant: 'danger'
+          });
+          if (!confirmed) {
+            this.showNotification('Replace cancelled', 'info');
+            return;
+          }
           shouldClearExisting = true;
         }
         // if importOption === 'add', we just continue without clearing
       }
+
+      // Prepare duplicate-detection set (based on existing items when adding)
+      const buildSig = (i) => `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
+      const dedupeSet = shouldClearExisting ? new Set() : new Set((currentState.items || []).map(buildSig));
 
       // Clear existing data if user chose replace
       if (shouldClearExisting) {
@@ -910,13 +927,19 @@ class CompyApp {
       }
 
       let importCount = 0;
+      let skippedCount = 0;
       for (const item of items) {
-        if (this.addImportedItem(item)) {
+        if (this.addImportedItem(item, dedupeSet)) {
           importCount++;
+        } else {
+          skippedCount++;
         }
       }
 
-      this.showNotification(`Imported ${importCount} items`);
+      const message = skippedCount > 0
+        ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
+        : `Imported ${importCount} items`;
+      this.showNotification(message);
       
     } catch (error) {
       console.error('JSON import failed:', error);
@@ -954,6 +977,7 @@ class CompyApp {
       // Remove BOM (Byte Order Mark) that may be present in UTF-8 files from Excel
       const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, ''));
       let headerIndex = 0; // Track where the actual data headers start
+      let importedProfileName = null; // capture profile name if provided in metadata
       
       // PHASE 1: Check for optional profile metadata block
       // Format: single column 'profileName' followed by data line
@@ -966,10 +990,9 @@ class CompyApp {
           const profileData = parseCSVLine(profileLine);
           const profileName = (profileData[0] || '').trim();
           
-          // Update profile if valid name provided
+          // Capture profile to apply later (after choosing Add/Replace)
           if (profileName) {
-            console.log('Importing profile name:', profileName);
-            updateProfile(profileName);
+            importedProfileName = profileName;
           }
         }
         
@@ -1013,9 +1036,10 @@ class CompyApp {
       const hasExistingData = currentState.items.length > 0 || currentState.profileName;
       
       let shouldClearExisting = false;
+      let importOption = 'add';
       
       if (hasExistingData) {
-        const importOption = await this.showImportOptionsDialog({
+        importOption = await this.showImportOptionsDialog({
           existingCount: currentState.items.length,
           existingProfile: currentState.profileName || 'Not set',
           importingCount: itemsToImport,
@@ -1026,14 +1050,35 @@ class CompyApp {
           this.showNotification('Import cancelled', 'info');
           return;
         } else if (importOption === 'replace') {
+          // Final confirmation to prevent accidental data loss
+          const confirmed = await this.confirmationManager.show({
+            title: 'Replace All Data',
+            message: `This will delete ${currentState.items.length} existing snippets and reset your profile ("${currentState.profileName || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
+            confirmText: 'Replace All',
+            cancelText: 'Cancel',
+            variant: 'danger'
+          });
+          if (!confirmed) {
+            this.showNotification('Replace cancelled', 'info');
+            return;
+          }
           shouldClearExisting = true;
         }
         // if importOption === 'add', we just continue without clearing
       }
 
+      // Prepare duplicate-detection set (based on existing items when adding)
+      const buildSig = (i) => `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
+      const dedupeSet = shouldClearExisting ? new Set() : new Set((currentState.items || []).map(buildSig));
+
       // Clear existing data if user chose replace
       if (shouldClearExisting) {
         this.clearAllData();
+      }
+
+      // Update profile after options are confirmed
+      if (importedProfileName) {
+        updateProfile(importedProfileName);
       }
 
       // PHASE 3: Process data rows
@@ -1064,7 +1109,7 @@ class CompyApp {
               ['1', 'true'].includes((values[columnMapping.sensitive] || '').toLowerCase()) : false,
             
             // PHASE 3C: Parse tags with pipe separator
-            // Format: "tag1|tag2|tag3" -> ['tag1', 'tag2', 'tag3']
+            // Format: \"tag1|tag2|tag3\" -> ['tag1', 'tag2', 'tag3']
             tags: columnMapping.tags >= 0 ? 
               (values[columnMapping.tags] || '')
                 .split('|') // Split on pipe separator
@@ -1073,12 +1118,12 @@ class CompyApp {
               : []
           };
 
-          // PHASE 3D: Validate and import the item
-          if (this.addImportedItem(itemData)) {
+          // PHASE 3D: Validate and import the item (with duplicate skipping in 'Add' mode)
+          if (this.addImportedItem(itemData, dedupeSet)) {
             importCount++;
           } else {
             skippedCount++;
-            console.warn(`Skipped invalid item on line ${i + 1}:`, itemData);
+            console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, itemData);
           }
           
         } catch (lineError) {
@@ -1090,7 +1135,7 @@ class CompyApp {
 
       // Provide detailed feedback to user
       const message = skippedCount > 0 
-        ? `Imported ${importCount} items (${skippedCount} skipped due to validation errors)`
+        ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
         : `Imported ${importCount} items`;
       
       this.showNotification(message, importCount > 0 ? 'success' : 'info');
@@ -1114,20 +1159,34 @@ class CompyApp {
    * @param {Object} itemData - Candidate item
    * @returns {boolean} True if item was accepted
    */
-  addImportedItem(itemData) {
+  addImportedItem(itemData, dedupeSet = undefined) {
+    // Validate first
     const validation = validateItem(itemData);
     if (!validation.isValid) {
       console.warn('Skipping invalid item:', validation.errors);
       return false;
     }
 
+    // Build a simple signature for duplicate detection based on primary fields
+    // Duplicate criteria: same text + desc + sensitive flag (tags are ignored for matching)
+    const text = (itemData.text || '').trim();
+    const desc = (itemData.desc || '').trim();
+    const sensitiveSig = itemData.sensitive ? '1' : '0';
+    const signature = `${text}||${desc}||${sensitiveSig}`;
+
+    if (dedupeSet && dedupeSet.has(signature)) {
+      // Duplicate of existing or previously imported item
+      return false;
+    }
+
     upsertItem({
-      text: itemData.text,
-      desc: itemData.desc,
+      text,
+      desc,
       sensitive: !!itemData.sensitive,
       tags: Array.isArray(itemData.tags) ? itemData.tags : []
     });
 
+    if (dedupeSet) dedupeSet.add(signature);
     return true;
   }
 
@@ -1169,125 +1228,108 @@ class CompyApp {
    */
   async showImportOptionsDialog({ existingCount, existingProfile, importingCount, importingProfile }) {
     return new Promise((resolve) => {
+      // Remove any previous instance to avoid duplicates
+      const prior = document.getElementById('importOptionsModal');
+      if (prior) prior.remove();
+
       const modal = document.createElement('div');
       modal.className = 'modal';
+      modal.id = 'importOptionsModal';
+      modal.setAttribute('aria-hidden', 'true');
       modal.innerHTML = `
-        <div class="modal-content import-options-modal">
-          <h2>Import Options</h2>
-          <div class="import-comparison">
-            <div class="import-section">
-              <h3>📂 Existing Data</h3>
-              <p><strong>${existingCount} snippets</strong></p>
-              <p>Profile: ${existingProfile}</p>
-            </div>
-            <div class="import-section">
-              <h3>📥 Importing</h3>
-              <p><strong>${importingCount} snippets</strong></p>
-              <p>Profile: ${importingProfile}</p>
-            </div>
+        <div class="modal-content small import-options-modal" role="dialog" aria-labelledby="importOptionsTitle" aria-describedby="importOptionsDesc">
+          <div class="modal-header">
+            <h3 id="importOptionsTitle">Import Options</h3>
+            <button class="icon-btn" data-close-modal aria-label="Close dialog" title="Close dialog">
+              <span aria-hidden="true">✕</span>
+            </button>
           </div>
-          <p class="import-message">How would you like to handle the import?</p>
-          <div class="import-actions">
-            <button id="importCancel" class="secondary-btn">Cancel</button>
-            <button id="importAdd" class="primary-btn">Add to Existing</button>
-            <button id="importReplace" class="danger-btn">Replace All</button>
+          <div class="modal-body">
+            <div class="import-comparison">
+              <div class="import-section">
+                <h3>📂 Existing Data</h3>
+                <p><strong>${existingCount} snippets</strong></p>
+                <p>Profile: ${existingProfile}</p>
+              </div>
+              <div class="import-section">
+                <h3>📥 Importing</h3>
+                <p><strong>${importingCount} snippets</strong></p>
+                <p>Profile: ${importingProfile}</p>
+              </div>
+            </div>
+            <p id="importOptionsDesc" class="import-message">How would you like to handle the import?</p>
+          </div>
+          <div class="modal-footer">
+            <button id="importCancel" class="secondary-btn" data-close-modal>Cancel</button>
+            <div class="end-actions">
+              <button id="importAdd" class="primary-btn" data-primary="true">Add to Existing</button>
+              <button id="importReplace" class="modal-danger-btn">Replace All</button>
+            </div>
           </div>
         </div>
       `;
-      
-      // Add temporary styles
+
+      // Add temporary styles scoped to this modal content
       const style = document.createElement('style');
       style.textContent = `
-        .import-options-modal {
-          max-width: 500px;
-          text-align: center;
-        }
-        .import-comparison {
-          display: flex;
-          gap: 2rem;
-          margin: 1.5rem 0;
-          text-align: left;
-        }
-        .import-section {
-          flex: 1;
-          padding: 1rem;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          background: var(--card-bg);
-        }
-        .import-section h3 {
-          margin: 0 0 0.5rem 0;
-          color: var(--text-primary);
-          font-size: 1rem;
-        }
-        .import-section p {
-          margin: 0.25rem 0;
-          color: var(--text-secondary);
-        }
-        .import-message {
-          margin: 1.5rem 0 1rem 0;
-          color: var(--text-primary);
-          font-weight: 500;
-        }
-        .import-actions {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          margin-top: 1.5rem;
-        }
-        .danger-btn {
-          background: var(--color-danger);
-          color: white;
-          border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 0.9rem;
-        }
-        .danger-btn:hover {
-          background: var(--color-danger-hover, #d32f2f);
-        }
-        @media (max-width: 600px) {
-          .import-comparison {
-            flex-direction: column;
-            gap: 1rem;
-          }
-          .import-actions {
-            flex-direction: column;
-          }
-        }
+        .import-options-modal { max-width: 540px; text-align: center; }
+        .import-comparison { display: flex; gap: 1rem; margin: 0.75rem 0 1.25rem; text-align: left; }
+        .import-section { flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); }
+        .import-section h3 { margin: 0 0 0.5rem 0; color: var(--text); font-size: 1rem; }
+        .import-section p { margin: 0.25rem 0; color: var(--text-secondary); }
+        .import-message { margin: 0.5rem 0 0; color: var(--text); font-weight: 500; }
+        @media (max-width: 600px) { .import-comparison { flex-direction: column; gap: 0.75rem; } }
       `;
       document.head.appendChild(style);
-      
-      // Add modal to DOM
+
+      // Add modal to DOM before opening with modal manager
       document.body.appendChild(modal);
-      
-      // Add event handlers
+
+      let settled = false;
       const cleanup = () => {
-        document.body.removeChild(modal);
-        document.head.removeChild(style);
+        if (settled) return;
+        settled = true;
+        // Remove listeners first
+        document.removeEventListener('keydown', onKeydown);
+        modal.removeEventListener('click', onBackdropClick);
+        // Remove style and element
+        if (style.parentNode) style.parentNode.removeChild(style);
+        if (modal.parentNode) modal.parentNode.removeChild(modal);
       };
-      
-      modal.querySelector('#importCancel').addEventListener('click', () => {
+
+      const finalize = (choice) => {
+        // Close via modal manager (idempotent) then cleanup and resolve
+        this.modalManager.close('#importOptionsModal');
         cleanup();
-        resolve('cancel');
-      });
-      
-      modal.querySelector('#importAdd').addEventListener('click', () => {
-        cleanup();
-        resolve('add');
-      });
-      
-      modal.querySelector('#importReplace').addEventListener('click', () => {
-        cleanup();
-        resolve('replace');
-      });
-      
-      // Show modal
-      requestAnimationFrame(() => {
-        modal.classList.add('open');
-        modal.querySelector('#importAdd').focus();
-      });
+        resolve(choice);
+      };
+
+      // Close on ESC while open -> treat as cancel
+      const onKeydown = (e) => {
+        if (e.key === 'Escape' && this.modalManager.isOpen('#importOptionsModal')) {
+          finalize('cancel');
+        }
+      };
+      document.addEventListener('keydown', onKeydown);
+
+      // Backdrop click -> cancel
+      const onBackdropClick = (e) => {
+        if (e.target === modal) {
+          finalize('cancel');
+        }
+      };
+      modal.addEventListener('click', onBackdropClick);
+
+      // Wire button handlers
+      modal.querySelector('#importCancel').addEventListener('click', () => finalize('cancel'));
+      modal.querySelector('#importAdd').addEventListener('click', () => finalize('add'));
+      modal.querySelector('#importReplace').addEventListener('click', () => finalize('replace'));
+      // Header close (X) should behave like cancel
+      const headerCloseBtn = modal.querySelector('.modal-header [data-close-modal]');
+      if (headerCloseBtn) headerCloseBtn.addEventListener('click', () => finalize('cancel'));
+
+      // Open with modal manager for focus trap and ARIA attributes
+      this.modalManager.open('#importOptionsModal', { initialFocus: '#importAdd', restoreFocus: true });
     });
   }
 
