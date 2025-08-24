@@ -859,10 +859,11 @@ class CompyApp {
    * Accepts both legacy array-only exports and the newer object format containing { items, profileName }.
    * @param {string} jsonText - Raw JSON string
    */
-  importJSON(jsonText) {
+  async importJSON(jsonText) {
     try {
       const parsed = JSON.parse(jsonText);
       let items = [];
+      let profileName = '';
       
       if (Array.isArray(parsed)) {
         // Legacy format: array of items
@@ -870,12 +871,33 @@ class CompyApp {
       } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
         // New format with profile
         items = parsed.items;
-        
-        if (typeof parsed.profileName === 'string' && parsed.profileName.trim()) {
-          updateProfile(parsed.profileName.trim());
-        }
+        profileName = (parsed.profileName || '').trim();
       } else {
         throw new Error('Invalid JSON format');
+      }
+
+      // Check if there's existing data and ask for confirmation
+      const currentState = getState();
+      const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+      
+      if (hasExistingData) {
+        const confirmed = await this.confirmationManager.show({
+          title: 'Replace Existing Data?',
+          message: `You have existing data in Compy:\n\n• ${currentState.items.length} snippets\n• Profile: ${currentState.profileName || 'Not set'}\n\nImporting will replace all existing data. This action cannot be undone.\n\nWould you like to continue and replace your existing data?`,
+          confirmText: 'Replace Data',
+          cancelText: 'Cancel Import',
+          variant: 'danger'
+        });
+        
+        if (!confirmed) {
+          this.showNotification('Import cancelled', 'info');
+          return;
+        }
+      }
+
+      // Update profile if provided
+      if (profileName) {
+        updateProfile(profileName);
       }
 
       let importCount = 0;
@@ -910,7 +932,7 @@ class CompyApp {
    * 
    * @param {string} csvText - Raw CSV string from uploaded file
    */
-  importCSV(csvText) {
+  async importCSV(csvText) {
     try {
       // Split into lines and filter out empty lines
       // Handle both Windows (\r\n) and Unix (\n) line endings
@@ -969,6 +991,25 @@ class CompyApp {
       }
       
       console.log('CSV column mapping:', columnMapping);
+
+      // Check if there's existing data and ask for confirmation
+      const currentState = getState();
+      const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+      
+      if (hasExistingData) {
+        const confirmed = await this.confirmationManager.show({
+          title: 'Replace Existing Data?',
+          message: `You have existing data in Compy:\n\n• ${currentState.items.length} snippets\n• Profile: ${currentState.profileName || 'Not set'}\n\nImporting will replace all existing data. This action cannot be undone.\n\nWould you like to continue and replace your existing data?`,
+          confirmText: 'Replace Data',
+          cancelText: 'Cancel Import',
+          variant: 'danger'
+        });
+        
+        if (!confirmed) {
+          this.showNotification('Import cancelled', 'info');
+          return;
+        }
+      }
 
       // PHASE 3: Process data rows
       let importCount = 0;
