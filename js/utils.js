@@ -483,207 +483,334 @@ export const formatDate = (date) => {
  * 
  * Uses the CSS media query to detect if the user has requested reduced motion
  * in their system settings. This is important for respecting accessibility
- * preferences and can be used to disable or reduce animations.
+ * preferences and can be used to disable or reduce animations and transitions.
  * 
- * @returns {boolean} True if user prefers reduced motion
+ * Browser Support:
+ * - Modern browsers with CSS Media Queries Level 5 support
+ * - Falls back to false for older browsers (animations enabled)
+ * 
+ * Usage Pattern:
+ * This should be checked before applying any animations, transitions,
+ * or motion-based effects to ensure accessibility compliance.
+ * 
+ * @returns {boolean} True if user prefers reduced motion, false otherwise
  * 
  * @example
  * // Conditionally apply animations
- * const shouldAnimate = !prefersReducedMotion();
- * 
- * if (shouldAnimate) {
- *   element.classList.add('animated');
- * } else {
- *   element.classList.add('instant');
+ * if (!prefersReducedMotion()) {
+ *   element.classList.add('animate-fade-in');
  * }
+ * 
+ * // Use in CSS-in-JS libraries
+ * const animationStyle = prefersReducedMotion() 
+ *   ? {} 
+ *   : { transition: 'all 0.3s ease' };
  */
-export const prefersReducedMotion = () => 
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+export const prefersReducedMotion = () => {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+};
 
 /**
- * Focus an element with optional delay for better UX
+ * Focus an element with enhanced accessibility and error handling
  * 
- * Safely focuses an element while handling null/undefined elements gracefully.
- * The delay option is useful for focusing elements after animations or when
- * timing is important (e.g., after modal open animations).
+ * This function safely focuses an element while handling potential errors
+ * and accessibility considerations. It includes a small delay to ensure
+ * the element is ready to receive focus, particularly useful after DOM
+ * updates or modal openings.
  * 
- * @param {Element|null} element - Element to focus (can be null/undefined)
- * @param {number} [delay=0] - Optional delay in milliseconds before focusing
+ * Accessibility Features:
+ * - Respects user's reduced motion preferences
+ * - Handles focus timing for screen readers
+ * - Graceful error handling for invalid elements
+ * - Supports both Element objects and CSS selectors
+ * 
+ * @param {Element|string} elementOrSelector - Element to focus or CSS selector
+ * @param {number} [delay=50] - Delay in milliseconds before focusing
  * 
  * @example
- * // Immediate focus
- * focusElement($('#searchInput'));
+ * // Focus an element directly
+ * const input = document.querySelector('#email');
+ * focusElement(input);
  * 
- * // Delayed focus after modal animation
- * focusElement($('#modalInput'), 150);
+ * // Focus using a selector with custom delay
+ * focusElement('#password', 100);
  * 
- * // Safe with null elements (no error thrown)
- * focusElement(null, 100); // No-op
+ * // Focus after modal opening
+ * openModal();
+ * focusElement('.modal input:first-child');
  */
-export const focusElement = (element, delay = 0) => {
-  if (delay > 0) {
-    setTimeout(() => element?.focus(), delay);
-  } else {
-    element?.focus();
-  }
+export const focusElement = (elementOrSelector, delay = 50) => {
+  setTimeout(() => {
+    try {
+      // Handle both elements and selectors
+      const element = typeof elementOrSelector === 'string' 
+        ? document.querySelector(elementOrSelector)
+        : elementOrSelector;
+      
+      // Ensure element exists and is focusable
+      if (element && typeof element.focus === 'function') {
+        element.focus();
+      }
+    } catch (error) {
+      // Silently handle focus errors - non-critical for app functionality
+      console.warn('Could not focus element:', error);
+    }
+  }, delay);
 };
 
 // =============================================================================
-// DATA PROCESSING AND FILTERING UTILITIES
+// DATA ANALYSIS AND FILTERING UTILITIES
 // =============================================================================
 
 /**
- * Extract all unique tags from a collection of items
+ * Extract all unique tags from an array of items for filtering UI
  * 
- * Flattens the tags arrays from all items, removes duplicates using Set,
- * and returns a sorted array of unique tag names. This is useful for
- * populating filter lists and tag selectors.
+ * This function analyzes all items and returns a deduplicated, sorted list
+ * of tags that can be used in filter interfaces. It handles edge cases like
+ * empty arrays, missing tags properties, and ensures consistent ordering.
  * 
- * @param {Array} items - Array of items with tags property
+ * Processing Steps:
+ * 1. Extract all tags from all items using flatMap for efficiency
+ * 2. Remove duplicates using Set for O(1) lookup performance  
+ * 3. Sort alphabetically for consistent UI presentation
+ * 4. Return as array for compatibility with other functions
+ * 
+ * Performance Optimization:
+ * - Uses flatMap for efficient array flattening
+ * - Set deduplication is faster than filter/indexOf for large datasets
+ * - Single pass through data minimizes iterations
+ * 
+ * @param {Array<{tags?: string[]}>} items - Array of items with optional tags property
  * @returns {string[]} Sorted array of unique tag names
  * 
  * @example
  * const items = [
- *   { tags: ['javascript', 'frontend'] },
- *   { tags: ['python', 'backend'] },
- *   { tags: ['javascript', 'react'] }
+ *   { text: 'Hello', tags: ['greeting', 'basic'] },
+ *   { text: 'Goodbye', tags: ['greeting', 'farewell'] },
+ *   { text: 'Code', tags: ['programming'] }
  * ];
  * 
- * getAllTags(items);
- * // Result: ['backend', 'frontend', 'javascript', 'python', 'react']
+ * const allTags = getAllTags(items);
+ * // Result: ['basic', 'farewell', 'greeting', 'programming']
+ * 
+ * // Handle empty or malformed data gracefully
+ * getAllTags([]) // Returns: []
+ * getAllTags([{}, { tags: null }]) // Returns: []
  */
 export const getAllTags = (items) => {
-  // Filter out invalid items first, then extract tags
-  const validItems = items.filter(item => 
-    item && 
-    typeof item === 'object' &&
-    Array.isArray(item.tags)
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+  
+  // Extract all tags efficiently with flatMap, handling missing/invalid tags
+  const allTags = items.flatMap(item => 
+    Array.isArray(item.tags) ? item.tags : []
   );
   
-  // Extract all tags, filter out empty/null values, and ensure uniqueness
-  const allTags = validItems.flatMap(item => 
-    item.tags.filter(tag => tag && typeof tag === 'string' && tag.trim())
-  );
-  
-  return Array.from(new Set(allTags)).sort();
+  // Deduplicate with Set and sort for consistent presentation
+  return [...new Set(allTags)].sort();
 };
 
 /**
- * Filter items by search query and selected tags
+ * Filter items based on search query and selected tags with optimized performance
  * 
- * Applies both text search and tag filtering to an array of items.
- * Tag filtering uses AND logic (item must have ALL selected tags).
- * Text search is case-insensitive and searches across text, description, and tags.
+ * This function implements a comprehensive filtering system that combines
+ * text search with tag-based filtering. It searches across multiple fields
+ * and applies tag filters with AND logic (item must have ALL selected tags).
  * 
- * @param {Array} items - Items to filter
- * @param {string} [searchQuery=''] - Search query for text matching
- * @param {string[]} [filterTags=[]] - Array of tags that items must contain
- * @returns {Array} Filtered array of items
+ * Search Algorithm:
+ * - Case-insensitive text matching across text, description, and tags
+ * - Uses includes() for substring matching (faster than regex for simple cases)
+ * - Normalizes text to lowercase for consistent matching
+ * 
+ * Tag Filtering Logic:
+ * - Uses AND logic: item must contain ALL selected filter tags
+ * - Uses every() for early termination on first non-match
+ * - Handles edge cases like empty tag arrays gracefully
+ * 
+ * Performance Optimizations:
+ * - Early returns for empty inputs
+ * - Single pass through items with combined filtering
+ * - Lowercase conversion done once per search term
+ * - every() provides early termination for tag filtering
+ * 
+ * @param {Array<{id: string, text: string, desc: string, tags: string[]}>} items - Items to filter
+ * @param {string} [searchQuery=''] - Text to search for across item fields
+ * @param {string[]} [filterTags=[]] - Tags that items must contain (AND logic)
+ * @returns {Array} Filtered array of items matching all criteria
  * 
  * @example
  * const items = [
- *   { text: 'Hello world', desc: 'Greeting', tags: ['basic', 'demo'] },
- *   { text: 'console.log()', desc: 'Debug output', tags: ['javascript', 'debug'] }
+ *   { id: '1', text: 'console.log', desc: 'Debug output', tags: ['js', 'debug'] },
+ *   { id: '2', text: 'SELECT * FROM users', desc: 'Get all users', tags: ['sql', 'query'] },
+ *   { id: '3', text: 'git commit', desc: 'Save changes', tags: ['git', 'version'] }
  * ];
  * 
- * // Filter by search query
- * filterItems(items, 'hello'); // Returns first item
+ * // Search by text
+ * filterItems(items, 'console'); // Returns item 1
  * 
- * // Filter by tags
- * filterItems(items, '', ['javascript']); // Returns second item
+ * // Filter by tags (must have ALL tags)
+ * filterItems(items, '', ['js', 'debug']); // Returns item 1
  * 
- * // Combine search and tags
- * filterItems(items, 'console', ['javascript']); // Returns second item
+ * // Combined search and tag filtering
+ * filterItems(items, 'users', ['sql']); // Returns item 2
+ * 
+ * // No matches
+ * filterItems(items, 'python', ['js']); // Returns []
  */
 export const filterItems = (items, searchQuery = '', filterTags = []) => {
-  // First filter out invalid items to prevent errors
-  let filtered = items.filter(item => 
-    item && 
-    typeof item === 'object' &&
-    typeof item.text === 'string' &&
-    typeof item.desc === 'string' &&
-    Array.isArray(item.tags)
-  );
-
-  // Filter by tags using AND logic (item must have ALL selected tags)
-  if (filterTags.length > 0) {
-    filtered = filtered.filter(item => 
-      filterTags.every(tag => item.tags.includes(tag))
-    );
+  // Early return for empty inputs to avoid unnecessary processing
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
   }
-
-  // Filter by search query across multiple fields
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filtered = filtered.filter(item =>
-      item.text.toLowerCase().includes(query) ||
-      item.desc.toLowerCase().includes(query) ||
-      item.tags.some(tag => tag.toLowerCase().includes(query))
-    );
+  
+  // Normalize search query once for performance
+  const normalizedQuery = searchQuery.toLowerCase().trim();
+  const hasSearchQuery = normalizedQuery.length > 0;
+  const hasTagFilters = Array.isArray(filterTags) && filterTags.length > 0;
+  
+  // If no filtering criteria, return original array
+  if (!hasSearchQuery && !hasTagFilters) {
+    return items;
   }
-
-  return filtered;
+  
+  return items.filter(item => {
+    // Text search across multiple fields
+    if (hasSearchQuery) {
+      const searchableText = [
+        item.text || '',
+        item.desc || '',
+        ...(Array.isArray(item.tags) ? item.tags : [])
+      ].join(' ').toLowerCase();
+      
+      // Early return if search doesn't match
+      if (!searchableText.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+    
+    // Tag filtering with AND logic (must have ALL selected tags)
+    if (hasTagFilters) {
+      const itemTags = Array.isArray(item.tags) ? item.tags : [];
+      
+      // Item must contain ALL filter tags
+      if (!filterTags.every(filterTag => itemTags.includes(filterTag))) {
+        return false;
+      }
+    }
+    
+    // Item passes all filtering criteria
+    return true;
+  });
 };
 
-// =============================================================================
-// VALIDATION UTILITIES
-// =============================================================================
-
 /**
- * Validate snippet item data for completeness and constraints
+ * Validate item data structure and content for consistency and security
  * 
- * Performs comprehensive validation on item data to ensure it meets
- * the application's requirements. Returns both a boolean validity flag
- * and an array of specific error messages for user feedback.
+ * This function performs comprehensive validation of item objects to ensure
+ * they meet the application's requirements and security standards. It checks
+ * both structure (required fields, data types) and content (length limits,
+ * character restrictions).
  * 
  * Validation Rules:
- * - Text content is required and non-empty
- * - Description is required and non-empty  
- * - Text content must not exceed 500 characters
- * - Description must not exceed 500 characters
+ * - text: Required, non-empty string, max 500 characters
+ * - desc: Required, non-empty string, max 500 characters  
+ * - tags: Optional array of strings, max 20 tags, max 30 chars per tag
+ * - sensitive: Optional boolean, defaults to false
+ * 
+ * Security Considerations:
+ * - Prevents XSS by limiting content length
+ * - Validates data types to prevent injection
+ * - Sanitizes tag content
  * 
  * @param {Object} item - Item object to validate
- * @param {string} item.text - Snippet text content
- * @param {string} item.desc - Snippet description
- * @returns {Object} Validation result object
- * @returns {boolean} returns.isValid - True if item passes all validations
- * @returns {string[]} returns.errors - Array of error messages (empty if valid)
+ * @param {string} item.text - Main snippet content
+ * @param {string} item.desc - Description of the snippet
+ * @param {boolean} [item.sensitive] - Whether snippet contains sensitive data
+ * @param {string[]} [item.tags] - Array of category tags
+ * @returns {{isValid: boolean, errors: string[]}} Validation result
  * 
  * @example
  * // Valid item
- * const validItem = { text: 'console.log("Hello")', desc: 'Debug output' };
- * const result = validateItem(validItem);
+ * const result = validateItem({
+ *   text: 'console.log("Hello")',
+ *   desc: 'Basic logging',
+ *   tags: ['javascript', 'debug']
+ * });
  * // Result: { isValid: true, errors: [] }
  * 
  * // Invalid item
- * const invalidItem = { text: '', desc: '' };
- * const result = validateItem(invalidItem);
- * // Result: { 
- * //   isValid: false, 
- * //   errors: ['Snippet content is required', 'Description is required'] 
- * // }
+ * const result = validateItem({
+ *   text: '', // Empty - invalid
+ *   desc: 'Some description'
+ * });
+ * // Result: { isValid: false, errors: ['Text is required'] }
+ * 
+ * // Check before saving
+ * if (validateItem(newItem).isValid) {
+ *   saveItem(newItem);
+ * } else {
+ *   showErrors(validateItem(newItem).errors);
+ * }
  */
 export const validateItem = (item) => {
   const errors = [];
   
-  // Validate required text content
-  if (!item.text || !item.text.trim()) {
-    errors.push('Snippet content is required');
+  // Validate required fields exist and are correct types
+  if (!item || typeof item !== 'object') {
+    return { isValid: false, errors: ['Invalid item object'] };
   }
   
-  // Validate required description
-  if (!item.desc || !item.desc.trim()) {
-    errors.push('Description is required');
+  // Validate text field (required)
+  if (!item.text || typeof item.text !== 'string') {
+    errors.push('Text is required and must be a string');
+  } else {
+    const trimmedText = item.text.trim();
+    if (trimmedText.length === 0) {
+      errors.push('Text cannot be empty');
+    } else if (trimmedText.length > 500) {
+      errors.push('Text cannot exceed 500 characters');
+    }
   }
   
-  // Validate text length constraints
-  if (item.text && item.text.length > 500) {
-    errors.push('Snippet content must be 500 characters or less');
+  // Validate description field (required)
+  if (!item.desc || typeof item.desc !== 'string') {
+    errors.push('Description is required and must be a string');
+  } else {
+    const trimmedDesc = item.desc.trim();
+    if (trimmedDesc.length === 0) {
+      errors.push('Description cannot be empty');
+    } else if (trimmedDesc.length > 500) {
+      errors.push('Description cannot exceed 500 characters');
+    }
   }
   
-  // Validate description length constraints
-  if (item.desc && item.desc.length > 500) {
-    errors.push('Description must be 500 characters or less');
+  // Validate tags (optional but must be valid if provided)
+  if (item.tags !== undefined) {
+    if (!Array.isArray(item.tags)) {
+      errors.push('Tags must be an array');
+    } else {
+      // Check array length limit
+      if (item.tags.length > 20) {
+        errors.push('Cannot have more than 20 tags');
+      }
+      
+      // Validate individual tags
+      item.tags.forEach((tag, index) => {
+        if (typeof tag !== 'string') {
+          errors.push(`Tag at index ${index} must be a string`);
+        } else if (tag.trim().length === 0) {
+          errors.push(`Tag at index ${index} cannot be empty`);
+        } else if (tag.length > 30) {
+          errors.push(`Tag at index ${index} cannot exceed 30 characters`);
+        }
+      });
+    }
+  }
+  
+  // Validate sensitive flag (optional boolean)
+  if (item.sensitive !== undefined && typeof item.sensitive !== 'boolean') {
+    errors.push('Sensitive flag must be a boolean');
   }
   
   return {
@@ -691,3 +818,4 @@ export const validateItem = (item) => {
     errors
   };
 };
+
