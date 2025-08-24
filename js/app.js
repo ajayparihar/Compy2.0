@@ -876,23 +876,32 @@ class CompyApp {
         throw new Error('Invalid JSON format');
       }
 
-      // Check if there's existing data and ask for confirmation
+      // Check if there's existing data and ask for import options
       const currentState = getState();
       const hasExistingData = currentState.items.length > 0 || currentState.profileName;
       
+      let shouldClearExisting = false;
+      
       if (hasExistingData) {
-        const confirmed = await this.confirmationManager.show({
-          title: 'Replace Existing Data?',
-          message: `You have existing data in Compy:\n\n• ${currentState.items.length} snippets\n• Profile: ${currentState.profileName || 'Not set'}\n\nImporting will replace all existing data. This action cannot be undone.\n\nWould you like to continue and replace your existing data?`,
-          confirmText: 'Replace Data',
-          cancelText: 'Cancel Import',
-          variant: 'danger'
+        const importOption = await this.showImportOptionsDialog({
+          existingCount: currentState.items.length,
+          existingProfile: currentState.profileName || 'Not set',
+          importingCount: items.length,
+          importingProfile: profileName || 'Not set'
         });
         
-        if (!confirmed) {
+        if (importOption === 'cancel') {
           this.showNotification('Import cancelled', 'info');
           return;
+        } else if (importOption === 'replace') {
+          shouldClearExisting = true;
         }
+        // if importOption === 'add', we just continue without clearing
+      }
+
+      // Clear existing data if user chose replace
+      if (shouldClearExisting) {
+        this.clearAllData();
       }
 
       // Update profile if provided
@@ -992,23 +1001,39 @@ class CompyApp {
       
       console.log('CSV column mapping:', columnMapping);
 
-      // Check if there's existing data and ask for confirmation
+      // Count items that will be imported
+      let itemsToImport = 0;
+      for (let i = headerIndex + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line) itemsToImport++;
+      }
+
+      // Check if there's existing data and ask for import options
       const currentState = getState();
       const hasExistingData = currentState.items.length > 0 || currentState.profileName;
       
+      let shouldClearExisting = false;
+      
       if (hasExistingData) {
-        const confirmed = await this.confirmationManager.show({
-          title: 'Replace Existing Data?',
-          message: `You have existing data in Compy:\n\n• ${currentState.items.length} snippets\n• Profile: ${currentState.profileName || 'Not set'}\n\nImporting will replace all existing data. This action cannot be undone.\n\nWould you like to continue and replace your existing data?`,
-          confirmText: 'Replace Data',
-          cancelText: 'Cancel Import',
-          variant: 'danger'
+        const importOption = await this.showImportOptionsDialog({
+          existingCount: currentState.items.length,
+          existingProfile: currentState.profileName || 'Not set',
+          importingCount: itemsToImport,
+          importingProfile: 'From CSV'
         });
         
-        if (!confirmed) {
+        if (importOption === 'cancel') {
           this.showNotification('Import cancelled', 'info');
           return;
+        } else if (importOption === 'replace') {
+          shouldClearExisting = true;
         }
+        // if importOption === 'add', we just continue without clearing
+      }
+
+      // Clear existing data if user chose replace
+      if (shouldClearExisting) {
+        this.clearAllData();
       }
 
       // PHASE 3: Process data rows
@@ -1131,6 +1156,160 @@ class CompyApp {
     }
 
     this.modalManager.open('#backupsModal');
+  }
+
+  /**
+   * Show a custom three-option dialog for import operations.
+   * @param {Object} options - Dialog configuration
+   * @param {number} options.existingCount - Number of existing items
+   * @param {string} options.existingProfile - Current profile name
+   * @param {number} options.importingCount - Number of items to import
+   * @param {string} options.importingProfile - Profile from import
+   * @returns {Promise<'cancel'|'add'|'replace'>} - User's choice
+   */
+  async showImportOptionsDialog({ existingCount, existingProfile, importingCount, importingProfile }) {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.innerHTML = `
+        <div class="modal-content import-options-modal">
+          <h2>Import Options</h2>
+          <div class="import-comparison">
+            <div class="import-section">
+              <h3>📂 Existing Data</h3>
+              <p><strong>${existingCount} snippets</strong></p>
+              <p>Profile: ${existingProfile}</p>
+            </div>
+            <div class="import-section">
+              <h3>📥 Importing</h3>
+              <p><strong>${importingCount} snippets</strong></p>
+              <p>Profile: ${importingProfile}</p>
+            </div>
+          </div>
+          <p class="import-message">How would you like to handle the import?</p>
+          <div class="import-actions">
+            <button id="importCancel" class="secondary-btn">Cancel</button>
+            <button id="importAdd" class="primary-btn">Add to Existing</button>
+            <button id="importReplace" class="danger-btn">Replace All</button>
+          </div>
+        </div>
+      `;
+      
+      // Add temporary styles
+      const style = document.createElement('style');
+      style.textContent = `
+        .import-options-modal {
+          max-width: 500px;
+          text-align: center;
+        }
+        .import-comparison {
+          display: flex;
+          gap: 2rem;
+          margin: 1.5rem 0;
+          text-align: left;
+        }
+        .import-section {
+          flex: 1;
+          padding: 1rem;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          background: var(--card-bg);
+        }
+        .import-section h3 {
+          margin: 0 0 0.5rem 0;
+          color: var(--text-primary);
+          font-size: 1rem;
+        }
+        .import-section p {
+          margin: 0.25rem 0;
+          color: var(--text-secondary);
+        }
+        .import-message {
+          margin: 1.5rem 0 1rem 0;
+          color: var(--text-primary);
+          font-weight: 500;
+        }
+        .import-actions {
+          display: flex;
+          gap: 1rem;
+          justify-content: center;
+          margin-top: 1.5rem;
+        }
+        .danger-btn {
+          background: var(--color-danger);
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.9rem;
+        }
+        .danger-btn:hover {
+          background: var(--color-danger-hover, #d32f2f);
+        }
+        @media (max-width: 600px) {
+          .import-comparison {
+            flex-direction: column;
+            gap: 1rem;
+          }
+          .import-actions {
+            flex-direction: column;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+      
+      // Add modal to DOM
+      document.body.appendChild(modal);
+      
+      // Add event handlers
+      const cleanup = () => {
+        document.body.removeChild(modal);
+        document.head.removeChild(style);
+      };
+      
+      modal.querySelector('#importCancel').addEventListener('click', () => {
+        cleanup();
+        resolve('cancel');
+      });
+      
+      modal.querySelector('#importAdd').addEventListener('click', () => {
+        cleanup();
+        resolve('add');
+      });
+      
+      modal.querySelector('#importReplace').addEventListener('click', () => {
+        cleanup();
+        resolve('replace');
+      });
+      
+      // Show modal
+      requestAnimationFrame(() => {
+        modal.classList.add('open');
+        modal.querySelector('#importAdd').focus();
+      });
+    });
+  }
+
+  /**
+   * Clear all existing data (items and profile).
+   * Used when user chooses "Replace All" during import.
+   */
+  clearAllData() {
+    // Clear all items by setting empty array
+    const currentState = getState();
+    
+    // Remove all items one by one
+    currentState.items.forEach(item => {
+      deleteItem(item.id);
+    });
+    
+    // Clear profile
+    updateProfile('');
+    
+    // Clear any active filters and search
+    updateFilterTags([]);
+    updateSearch('');
   }
 
   /**
