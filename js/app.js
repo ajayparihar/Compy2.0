@@ -75,6 +75,8 @@ class CompyApp {
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
     this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
     this.removeItem = this.removeItem.bind(this);
+    this.setupMobileNavigation = this.setupMobileNavigation.bind(this);
+    this.setupResponsiveNavbar = this.setupResponsiveNavbar.bind(this);
   }
 
   /**
@@ -116,6 +118,9 @@ class CompyApp {
       
       // Setup responsive navbar
       this.setupResponsiveNavbar();
+      
+      // Setup mobile navigation menu
+      this.setupMobileNavigation();
       
       this.initialized = true;
       console.log('Compy 2.0 initialized successfully');
@@ -353,6 +358,9 @@ class CompyApp {
 
     // Handle add button
     $('#addBtn').addEventListener('click', () => this.openItemModal());
+    
+    // Handle floating action button (FAB) for mobile
+    $('#fabAdd')?.addEventListener('click', () => this.openItemModal());
   }
 
   /**
@@ -985,7 +993,6 @@ class CompyApp {
     $('#filterBtn').addEventListener('click', () => this.openFilterModal());
 
     // Item form submission
-    $('#saveItemBtn').addEventListener('click', () => this.saveItem());
     $('#itemForm').addEventListener('submit', (e) => {
       e.preventDefault();
       this.saveItem();
@@ -1320,6 +1327,99 @@ class CompyApp {
     adjustHeight();
     window.addEventListener('resize', adjustHeight);
     window.addEventListener('load', adjustHeight);
+  }
+
+  /**
+   * Initialize mobile navigation menu functionality.
+   * Sets up the hamburger menu button to toggle the navigation drawer.
+   */
+  setupMobileNavigation() {
+    const navToggle = $('#navToggle');
+    const navActions = $('#navActions');
+    const navBackdrop = $('#navBackdrop');
+    
+    if (!navToggle || !navActions) {
+      console.warn('Mobile navigation elements not found');
+      return;
+    }
+
+    // Toggle navigation drawer
+    const toggleNav = () => {
+      const isExpanded = navToggle.getAttribute('aria-expanded') === 'true';
+      const newState = !isExpanded;
+      
+      // Update toggle button state
+      navToggle.setAttribute('aria-expanded', newState.toString());
+      
+      // Update drawer visibility
+      navActions.setAttribute('aria-hidden', (!newState).toString());
+      
+      // Update backdrop visibility if it exists
+      if (navBackdrop) {
+        navBackdrop.setAttribute('aria-hidden', (!newState).toString());
+      }
+      
+      // Add/remove open class for CSS transitions
+      if (newState) {
+        navActions.classList.add('open');
+        if (navBackdrop) navBackdrop.classList.add('open');
+      } else {
+        navActions.classList.remove('open');
+        if (navBackdrop) navBackdrop.classList.remove('open');
+      }
+    };
+
+    // Close navigation drawer
+    const closeNav = () => {
+      navToggle.setAttribute('aria-expanded', 'false');
+      navActions.setAttribute('aria-hidden', 'true');
+      navActions.classList.remove('open');
+      
+      if (navBackdrop) {
+        navBackdrop.setAttribute('aria-hidden', 'true');
+        navBackdrop.classList.remove('open');
+      }
+    };
+
+    // Handle hamburger menu click
+    navToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleNav();
+    });
+
+    // Handle backdrop click to close drawer
+    if (navBackdrop) {
+      navBackdrop.addEventListener('click', () => {
+        closeNav();
+      });
+    }
+
+    // Close drawer when clicking outside or on navigation items
+    document.addEventListener('click', (e) => {
+      const isNavContent = e.target.closest('#navActions');
+      const isNavToggle = e.target.closest('#navToggle');
+      
+      if (!isNavContent && !isNavToggle && navToggle.getAttribute('aria-expanded') === 'true') {
+        closeNav();
+      }
+    });
+
+    // Close drawer when navigation items are clicked
+    navActions.addEventListener('click', (e) => {
+      const isButton = e.target.closest('button');
+      if (isButton && navToggle.getAttribute('aria-expanded') === 'true') {
+        // Add small delay to allow action to complete before closing
+        setTimeout(() => closeNav(), 100);
+      }
+    });
+
+    // Handle Escape key to close drawer
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && navToggle.getAttribute('aria-expanded') === 'true') {
+        closeNav();
+      }
+    });
   }
 
 }
