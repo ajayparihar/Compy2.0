@@ -16,6 +16,7 @@ import {
 } from './state.js';
 import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
 import { createModalManager } from './components/modals.js';
+import { createTagAutocomplete } from './components/tagAutocomplete.js';
 
 /**
  * @typedef {Object} AppItem
@@ -65,6 +66,7 @@ class CompyApp {
     this.theme = null;
     this.search = null;
     this.cards = null;
+    this.tagAutocomplete = null;
     
     // Filter modal transient state and handler guard
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
@@ -75,6 +77,8 @@ class CompyApp {
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
     this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
     this.removeItem = this.removeItem.bind(this);
+    this.setupMobileNavigation = this.setupMobileNavigation.bind(this);
+    this.setupResponsiveNavbar = this.setupResponsiveNavbar.bind(this);
   }
 
   /**
@@ -116,6 +120,9 @@ class CompyApp {
       
       // Setup responsive navbar
       this.setupResponsiveNavbar();
+      
+      // Setup mobile navigation menu
+      this.setupMobileNavigation();
       
       this.initialized = true;
       console.log('Compy 2.0 initialized successfully');
@@ -186,23 +193,56 @@ class CompyApp {
   }
 
   /**
-   * Fallback clipboard copy method using execCommand
+   * Fallback clipboard copy method using execCommand for older browser compatibility
+   * 
+   * This method is used when the modern Clipboard API fails or is unavailable.
+   * It creates a temporary textarea, selects the content, and uses the deprecated
+   * but widely-supported execCommand('copy') to copy text to clipboard.
+   * 
+   * @param {string} text - Text to copy to clipboard
    */
   fallbackCopy(text) {
+    // Create temporary textarea element for text selection
+    // Using textarea instead of input to handle multi-line text properly
     const textarea = document.createElement('textarea');
     textarea.value = text;
+    
+    // Position element off-screen to avoid visual disruption
+    // Using fixed positioning to avoid layout shifts
     textarea.style.position = 'fixed';
     textarea.style.left = '-9999px';
+    textarea.style.top = '0'; // Add top positioning for better accessibility
+    textarea.setAttribute('readonly', ''); // Prevent mobile keyboard popup
+    
+    // Add to DOM temporarily - required for selection to work
     document.body.appendChild(textarea);
-    textarea.select();
     
-    const success = document.execCommand('copy');
-    document.body.removeChild(textarea);
-    
-    this.showNotification(
-      success ? 'Copied to clipboard' : 'Copy failed - please try manually',
-      success ? 'info' : 'error'
-    );
+    try {
+      // Select all text in the textarea
+      textarea.select();
+      
+      // For mobile Safari compatibility, ensure the selection is proper
+      textarea.setSelectionRange(0, 99999);
+      
+      // Attempt to copy using the legacy API
+      const success = document.execCommand('copy');
+      
+      // Provide user feedback based on operation success
+      this.showNotification(
+        success ? 'Copied to clipboard' : 'Copy failed - please try manually selecting and copying',
+        success ? 'info' : 'error'
+      );
+      
+      return success;
+      
+    } catch (error) {
+      console.error('Fallback copy failed:', error);
+      this.showNotification('Copy failed - please try manually', 'error');
+      return false;
+    } finally {
+      // Always clean up the temporary element, even if copy failed
+      document.body.removeChild(textarea);
+    }
   }
 
   /**
@@ -353,6 +393,9 @@ class CompyApp {
 
     // Handle add button
     $('#addBtn').addEventListener('click', () => this.openItemModal());
+    
+    // Handle floating action button (FAB) for mobile
+    $('#fabAdd')?.addEventListener('click', () => this.openItemModal());
   }
 
   /**
@@ -851,74 +894,152 @@ class CompyApp {
   }
 
   /**
-   * Import items from a CSV payload.
-   * Supports an optional two-line metadata block with a single 'profileName' column.
-   * Robustly parses quoted fields and BOM.
-   * @param {string} csvText - Raw CSV string
+   * Import items from a CSV payload with comprehensive parsing and validation
+   * 
+   * This function handles the complex task of parsing CSV data with support for:
+   * - Optional metadata header (profile information)
+   * - Robust quote handling and field parsing
+   * - BOM (Byte Order Mark) removal for international files
+   * - Flexible column mapping and validation
+   * 
+   * CSV Format Support:
+   * 1. Optional metadata block: profileName header followed by value
+   * 2. Main data: text, desc, sensitive, tags columns
+   * 3. Tags are pipe-separated (|) within the tags column
+   * 4. Sensitive values: '1' or 'true' (case-insensitive)
+   * 
+   * @param {string} csvText - Raw CSV string from uploaded file
    */
   importCSV(csvText) {
     try {
+      // Split into lines and filter out empty lines
+      // Handle both Windows (\r\n) and Unix (\n) line endings
       const lines = csvText.split(/\r?\n/).filter(line => line.trim());
       if (!lines.length) {
         throw new Error('Empty CSV file');
       }
 
-      // Parse first line (could be profile metadata or headers)
-      const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, '')); // Remove BOM
-      let headerIndex = 0;
+      // Parse the first line to detect format
+      // Remove BOM (Byte Order Mark) that may be present in UTF-8 files from Excel
+      const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, ''));
+      let headerIndex = 0; // Track where the actual data headers start
       
-      // Check for profile metadata
+      // PHASE 1: Check for optional profile metadata block
+      // Format: single column 'profileName' followed by data line
       if (firstLine.length === 1 && firstLine[0].toLowerCase() === 'profilename') {
+        console.log('Detected profile metadata in CSV');
+        
+        // Extract profile name from the next line
         const profileLine = lines[1];
         if (profileLine) {
           const profileData = parseCSVLine(profileLine);
           const profileName = (profileData[0] || '').trim();
+          
+          // Update profile if valid name provided
           if (profileName) {
+            console.log('Importing profile name:', profileName);
             updateProfile(profileName);
           }
         }
-        headerIndex = 2; // Skip to actual headers
+        
+        // Skip metadata block - actual headers start at line 3 (index 2)
+        headerIndex = 2;
       }
 
-      // Parse headers
+      // PHASE 2: Parse column headers and create mapping
       const headerLine = lines[headerIndex];
-      if (!headerLine) throw new Error('No headers found');
-      
-      const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
-      const textIndex = headers.indexOf('text');
-      const descIndex = headers.indexOf('desc');
-      const sensitiveIndex = headers.indexOf('sensitive');
-      const tagsIndex = headers.indexOf('tags');
-
-      if (textIndex === -1 || descIndex === -1) {
-        throw new Error('Required columns missing (text, desc)');
+      if (!headerLine) {
+        throw new Error('No headers found after metadata parsing');
       }
+      
+      // Normalize headers to lowercase for case-insensitive matching
+      const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
+      
+      // Create column index mapping for required and optional fields
+      const columnMapping = {
+        text: headers.indexOf('text'),
+        desc: headers.indexOf('desc'),
+        sensitive: headers.indexOf('sensitive'),
+        tags: headers.indexOf('tags')
+      };
 
+      // Validate required columns are present
+      if (columnMapping.text === -1 || columnMapping.desc === -1) {
+        throw new Error('Required columns missing: text and desc columns are mandatory');
+      }
+      
+      console.log('CSV column mapping:', columnMapping);
+
+      // PHASE 3: Process data rows
       let importCount = 0;
+      let skippedCount = 0;
+      
+      // Process each data line (starting after headers)
       for (let i = headerIndex + 1; i < lines.length; i++) {
         const line = lines[i].trim();
-        if (!line) continue;
+        
+        // Skip empty lines (common in CSV exports)
+        if (!line) {
+          continue;
+        }
 
-        const values = parseCSVLine(line);
-        const item = {
-          text: (values[textIndex] || '').trim(),
-          desc: (values[descIndex] || '').trim(),
-          sensitive: sensitiveIndex >= 0 ? 
-            ['1', 'true'].includes((values[sensitiveIndex] || '').toLowerCase()) : false,
-          tags: tagsIndex >= 0 ? 
-            (values[tagsIndex] || '').split('|').map(t => t.trim()).filter(Boolean) : []
-        };
+        try {
+          // Parse the line into field values
+          const values = parseCSVLine(line);
+          
+          // PHASE 3A: Extract and validate core fields
+          const itemData = {
+            text: (values[columnMapping.text] || '').trim(),
+            desc: (values[columnMapping.desc] || '').trim(),
+            
+            // PHASE 3B: Parse sensitive flag with flexible boolean handling
+            // Accepts: '1', 'true', 'TRUE', 'True' etc.
+            sensitive: columnMapping.sensitive >= 0 ? 
+              ['1', 'true'].includes((values[columnMapping.sensitive] || '').toLowerCase()) : false,
+            
+            // PHASE 3C: Parse tags with pipe separator
+            // Format: "tag1|tag2|tag3" -> ['tag1', 'tag2', 'tag3']
+            tags: columnMapping.tags >= 0 ? 
+              (values[columnMapping.tags] || '')
+                .split('|') // Split on pipe separator
+                .map(t => t.trim()) // Trim whitespace from each tag
+                .filter(Boolean) // Remove empty tags
+              : []
+          };
 
-        if (this.addImportedItem(item)) {
-          importCount++;
+          // PHASE 3D: Validate and import the item
+          if (this.addImportedItem(itemData)) {
+            importCount++;
+          } else {
+            skippedCount++;
+            console.warn(`Skipped invalid item on line ${i + 1}:`, itemData);
+          }
+          
+        } catch (lineError) {
+          // Handle parsing errors for individual lines gracefully
+          skippedCount++;
+          console.warn(`Failed to parse line ${i + 1}:`, lineError.message);
         }
       }
 
-      this.showNotification(`Imported ${importCount} items`);
+      // Provide detailed feedback to user
+      const message = skippedCount > 0 
+        ? `Imported ${importCount} items (${skippedCount} skipped due to validation errors)`
+        : `Imported ${importCount} items`;
+      
+      this.showNotification(message, importCount > 0 ? 'success' : 'info');
+      
+      if (importCount === 0 && skippedCount > 0) {
+        console.error('No valid items found in CSV. Check format and required fields.');
+      }
       
     } catch (error) {
+      // Handle critical parsing errors
       console.error('CSV import failed:', error);
-      this.showNotification('Invalid CSV file', 'error');
+      this.showNotification(
+        `CSV import failed: ${error.message}`, 
+        'error'
+      );
     }
   }
 
@@ -985,7 +1106,6 @@ class CompyApp {
     $('#filterBtn').addEventListener('click', () => this.openFilterModal());
 
     // Item form submission
-    $('#saveItemBtn').addEventListener('click', () => this.saveItem());
     $('#itemForm').addEventListener('submit', (e) => {
       e.preventDefault();
       this.saveItem();
@@ -1015,23 +1135,64 @@ class CompyApp {
   }
 
   /**
-   * Initialize tag entry behaviors (Enter to add, Backspace to remove last).
+   * Initialize tag entry behaviors with autocomplete support.
+   * Includes Enter to add, Backspace to remove last, and autocomplete suggestions.
    */
   initTagInput() {
     const tagEntry = $('#tagEntry');
     
+    // Initialize tag autocomplete
+    this.tagAutocomplete = createTagAutocomplete('#tagEntry', {
+      onTagSelect: (tag) => {
+        this.addTagChip(tag);
+        // Refresh autocomplete suggestions after adding tag
+        setTimeout(() => {
+          if (this.tagAutocomplete) {
+            this.tagAutocomplete.refresh();
+          }
+        }, 50);
+      },
+      getExistingTags: () => this.getTagsFromChips(),
+      maxSuggestions: 8,
+      minChars: 1,
+      debounceMs: 150
+    });
+    
     tagEntry.addEventListener('keydown', (e) => {
       const value = e.target.value.trim();
       
+      // Handle Enter key - only add tag if no autocomplete suggestion is selected
       if (e.key === 'Enter' && value) {
+        // Check if autocomplete dropdown is visible and has a selection
+        if (this.tagAutocomplete && this.tagAutocomplete.isDropdownVisible()) {
+          // Let autocomplete handle the Enter key
+          return;
+        }
+        
+        // No autocomplete suggestion selected, add the typed value
         e.preventDefault();
         this.addTagChip(value);
         e.target.value = '';
+        
+        // Refresh autocomplete after adding tag
+        setTimeout(() => {
+          if (this.tagAutocomplete) {
+            this.tagAutocomplete.refresh();
+          }
+        }, 50);
       } else if (e.key === 'Backspace' && !e.target.value) {
         // Remove last tag chip
         const chips = $$('#tagChips .chip');
         const lastChip = chips[chips.length - 1];
-        lastChip?.remove();
+        if (lastChip) {
+          lastChip.remove();
+          // Refresh autocomplete after removing tag
+          setTimeout(() => {
+            if (this.tagAutocomplete) {
+              this.tagAutocomplete.refresh();
+            }
+          }, 50);
+        }
       }
     });
   }
@@ -1320,6 +1481,99 @@ class CompyApp {
     adjustHeight();
     window.addEventListener('resize', adjustHeight);
     window.addEventListener('load', adjustHeight);
+  }
+
+  /**
+   * Initialize mobile navigation menu functionality.
+   * Sets up the hamburger menu button to toggle the navigation drawer.
+   */
+  setupMobileNavigation() {
+    const navToggle = $('#navToggle');
+    const navActions = $('#navActions');
+    const navBackdrop = $('#navBackdrop');
+    
+    if (!navToggle || !navActions) {
+      console.warn('Mobile navigation elements not found');
+      return;
+    }
+
+    // Toggle navigation drawer
+    const toggleNav = () => {
+      const isExpanded = navToggle.getAttribute('aria-expanded') === 'true';
+      const newState = !isExpanded;
+      
+      // Update toggle button state
+      navToggle.setAttribute('aria-expanded', newState.toString());
+      
+      // Update drawer visibility
+      navActions.setAttribute('aria-hidden', (!newState).toString());
+      
+      // Update backdrop visibility if it exists
+      if (navBackdrop) {
+        navBackdrop.setAttribute('aria-hidden', (!newState).toString());
+      }
+      
+      // Add/remove open class for CSS transitions
+      if (newState) {
+        navActions.classList.add('open');
+        if (navBackdrop) navBackdrop.classList.add('open');
+      } else {
+        navActions.classList.remove('open');
+        if (navBackdrop) navBackdrop.classList.remove('open');
+      }
+    };
+
+    // Close navigation drawer
+    const closeNav = () => {
+      navToggle.setAttribute('aria-expanded', 'false');
+      navActions.setAttribute('aria-hidden', 'true');
+      navActions.classList.remove('open');
+      
+      if (navBackdrop) {
+        navBackdrop.setAttribute('aria-hidden', 'true');
+        navBackdrop.classList.remove('open');
+      }
+    };
+
+    // Handle hamburger menu click
+    navToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleNav();
+    });
+
+    // Handle backdrop click to close drawer
+    if (navBackdrop) {
+      navBackdrop.addEventListener('click', () => {
+        closeNav();
+      });
+    }
+
+    // Close drawer when clicking outside or on navigation items
+    document.addEventListener('click', (e) => {
+      const isNavContent = e.target.closest('#navActions');
+      const isNavToggle = e.target.closest('#navToggle');
+      
+      if (!isNavContent && !isNavToggle && navToggle.getAttribute('aria-expanded') === 'true') {
+        closeNav();
+      }
+    });
+
+    // Close drawer when navigation items are clicked
+    navActions.addEventListener('click', (e) => {
+      const isButton = e.target.closest('button');
+      if (isButton && navToggle.getAttribute('aria-expanded') === 'true') {
+        // Add small delay to allow action to complete before closing
+        setTimeout(() => closeNav(), 100);
+      }
+    });
+
+    // Handle Escape key to close drawer
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && navToggle.getAttribute('aria-expanded') === 'true') {
+        closeNav();
+      }
+    });
   }
 
 }
