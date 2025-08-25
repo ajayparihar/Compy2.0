@@ -7,38 +7,20 @@
 
 import { jest, beforeEach, afterEach } from '@jest/globals';
 
-// Mock localStorage with proper implementation
-const localStorageMock = (() => {
+// Factory to create a fresh storage mock each test to avoid polluted mocks
+const createStorageMock = () => {
   let store = {};
   return {
-    getItem: jest.fn((key) => store[key] || null),
-    setItem: jest.fn((key, value) => { store[key] = value.toString(); }),
+    getItem: jest.fn((key) => (key in store ? store[key] : null)),
+    setItem: jest.fn((key, value) => { store[key] = String(value); }),
     removeItem: jest.fn((key) => { delete store[key]; }),
     clear: jest.fn(() => { store = {}; })
   };
-})();
+};
 
-// Mock sessionStorage with proper implementation
-const sessionStorageMock = (() => {
-  let store = {};
-  return {
-    getItem: jest.fn((key) => store[key] || null),
-    setItem: jest.fn((key, value) => { store[key] = value.toString(); }),
-    removeItem: jest.fn((key) => { delete store[key]; }),
-    clear: jest.fn(() => { store = {}; })
-  };
-})();
-
-// Properly assign to global with defineProperty to ensure Jest can spy
-Object.defineProperty(global, 'localStorage', {
-  value: localStorageMock,
-  writable: true
-});
-
-Object.defineProperty(global, 'sessionStorage', {
-  value: sessionStorageMock,
-  writable: true
-});
+// Initialize globals (will be reset in beforeEach)
+Object.defineProperty(global, 'localStorage', { value: createStorageMock(), writable: true });
+Object.defineProperty(global, 'sessionStorage', { value: createStorageMock(), writable: true });
 
 // Mock navigator.clipboard
 global.navigator.clipboard = {
@@ -81,21 +63,20 @@ beforeEach(() => {
   document.body.innerHTML = '';
   document.head.innerHTML = '';
   
-  // Clear localStorage mocks
-  localStorageMock.getItem.mockClear();
-  localStorageMock.setItem.mockClear();
-  localStorageMock.removeItem.mockClear();
-  localStorageMock.clear.mockClear();
+  // Fresh storage mocks to avoid polluted implementations from other tests
+  global.localStorage = createStorageMock();
+  global.sessionStorage = createStorageMock();
   
-  // Clear sessionStorage mocks
-  sessionStorageMock.getItem.mockClear();
-  sessionStorageMock.setItem.mockClear();
-  sessionStorageMock.removeItem.mockClear();
-  sessionStorageMock.clear.mockClear();
-  
-  // Clear clipboard mocks
-  global.navigator.clipboard.writeText.mockClear();
-  global.navigator.clipboard.readText.mockClear();
+  // Ensure clipboard mocks exist and are reset
+  if (!global.navigator.clipboard || typeof global.navigator.clipboard.writeText !== 'function') {
+    global.navigator.clipboard = {
+      writeText: jest.fn().mockResolvedValue(),
+      readText: jest.fn().mockResolvedValue('mocked text'),
+    };
+  } else {
+    global.navigator.clipboard.writeText.mockClear();
+    global.navigator.clipboard.readText.mockClear();
+  }
   
   // Reset execCommand mock
   document.execCommand.mockClear();

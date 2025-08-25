@@ -271,7 +271,15 @@ class CompyApp {
    * @param {'info'|'error'} [type='info'] - Visual style of the snackbar
    */
   showNotification(message, type = 'info') {
-    this.notifications.show(message, type);
+    try {
+      if (!this.notifications || typeof this.notifications.show !== 'function') {
+        console.warn('Notifications unavailable; skipping message', { message, type });
+        return;
+      }
+      this.notifications.show(message, type);
+    } catch (err) {
+      console.warn('Notification error; skipping message', err);
+    }
   }
 
   /**
