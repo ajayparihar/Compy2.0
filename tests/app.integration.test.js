@@ -53,6 +53,9 @@ class CompyApp {
       this.initImport();
       this.initEventHandlers();
       
+      // Subscribe to state changes before loading state so initial render happens
+      this.subscribe(this.handleStateChange);
+      
       // Load initial state
       this.loadState();
       
@@ -125,7 +128,16 @@ class CompyApp {
   }
 
   showNotification(message, type = 'info') {
-    this.notifications.show(message, type);
+    try {
+      if (!this.notifications || typeof this.notifications.show !== 'function') {
+        // Notifications not ready; log and continue
+        console.warn('Notifications unavailable in mock; skipping message', { message, type });
+        return;
+      }
+      this.notifications.show(message, type);
+    } catch (e) {
+      console.warn('Mock notification error; skipping', e);
+    }
   }
 
   initModals() {
@@ -160,6 +172,8 @@ class CompyApp {
         this.theme.apply(savedTheme);
       }
     };
+    // Load saved theme immediately during initialization
+    this.theme.load();
   }
 
   initSearch() {

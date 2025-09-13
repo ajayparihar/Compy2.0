@@ -124,7 +124,7 @@ export class ConfirmationManager {
    *   deleteItem();
    * }
    */
-  async show(options = {}) {
+  show(options = {}) {
     // Resolve any pending confirmation first
     if (this.currentResolver) {
       this.currentResolver(false);

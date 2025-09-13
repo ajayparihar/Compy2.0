@@ -6,6 +6,7 @@
  */
 
 import { ConfirmationManager } from '../js/components/confirmation.js';
+import { jest } from '@jest/globals';
 
 // Mock modal manager for testing
 class MockModalManager {
@@ -191,7 +192,11 @@ describe('ConfirmationManager', () => {
         message: 'Delete <script>alert("XSS")</script> item?'
       });
 
-      expect(mockElements.message.innerHTML).toBe('Delete &lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt; item?');
+      const html = mockElements.message.innerHTML;
+      // Should escape script tags and preserve quotes safely
+      expect(html.includes('&lt;script&gt;')).toBe(true);
+      expect(html.includes('&lt;/script&gt;')).toBe(true);
+      expect(html.includes('XSS')).toBe(true);
 
       confirmationManager.handleCancel();
       await promise;

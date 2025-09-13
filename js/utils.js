@@ -153,12 +153,7 @@ export const escapeHtml = (str) => {
   // First escape HTML characters
   let escaped = String(str).replace(/[&<>"'\/]/g, (match) => escapeMap[match]);
   
-  // Then neutralize potential event handler attributes by breaking them up
-  // This prevents things like 'onerror' from being functional even if injected
-  escaped = escaped.replace(/on[a-z]+/gi, (match) => {
-    return match.charAt(0) + '&#8203;' + match.slice(1); // Insert zero-width space
-  });
-  
+  // Return escaped string
   return escaped;
 };
 

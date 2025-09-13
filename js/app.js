@@ -271,7 +271,15 @@ class CompyApp {
    * @param {'info'|'error'} [type='info'] - Visual style of the snackbar
    */
   showNotification(message, type = 'info') {
-    this.notifications.show(message, type);
+    try {
+      if (!this.notifications || typeof this.notifications.show !== 'function') {
+        console.warn('Notifications unavailable; skipping message', { message, type });
+        return;
+      }
+      this.notifications.show(message, type);
+    } catch (err) {
+      console.warn('Notification error; skipping message', err);
+    }
   }
 
   /**
@@ -859,10 +867,11 @@ class CompyApp {
    * Accepts both legacy array-only exports and the newer object format containing { items, profileName }.
    * @param {string} jsonText - Raw JSON string
    */
-  importJSON(jsonText) {
+  async importJSON(jsonText) {
     try {
       const parsed = JSON.parse(jsonText);
       let items = [];
+      let profileName = '';
       
       if (Array.isArray(parsed)) {
         // Legacy format: array of items
@@ -870,22 +879,75 @@ class CompyApp {
       } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
         // New format with profile
         items = parsed.items;
-        
-        if (typeof parsed.profileName === 'string' && parsed.profileName.trim()) {
-          updateProfile(parsed.profileName.trim());
-        }
+        profileName = (parsed.profileName || '').trim();
       } else {
         throw new Error('Invalid JSON format');
       }
 
+      // Check if there's existing data and ask for import options
+      const currentState = getState();
+      const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+      
+      let shouldClearExisting = false;
+      let importOption = 'add';
+      
+      if (hasExistingData) {
+        importOption = await this.showImportOptionsDialog({
+          existingCount: currentState.items.length,
+          existingProfile: currentState.profileName || 'Not set',
+          importingCount: items.length,
+          importingProfile: profileName || 'Not set'
+        });
+        
+        if (importOption === 'cancel') {
+          this.showNotification('Import cancelled', 'info');
+          return;
+        } else if (importOption === 'replace') {
+          // Final confirmation to prevent accidental data loss
+          const confirmed = await this.confirmationManager.show({
+            title: 'Replace All Data',
+            message: `This will delete ${currentState.items.length} existing snippets and reset your profile ("${currentState.profileName || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
+            confirmText: 'Replace All',
+            cancelText: 'Cancel',
+            variant: 'danger'
+          });
+          if (!confirmed) {
+            this.showNotification('Replace cancelled', 'info');
+            return;
+          }
+          shouldClearExisting = true;
+        }
+        // if importOption === 'add', we just continue without clearing
+      }
+
+      // Prepare duplicate-detection set (based on existing items when adding)
+      const buildSig = (i) => `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
+      const dedupeSet = shouldClearExisting ? new Set() : new Set((currentState.items || []).map(buildSig));
+
+      // Clear existing data if user chose replace
+      if (shouldClearExisting) {
+        this.clearAllData();
+      }
+
+      // Update profile if provided
+      if (profileName) {
+        updateProfile(profileName);
+      }
+
       let importCount = 0;
+      let skippedCount = 0;
       for (const item of items) {
-        if (this.addImportedItem(item)) {
+        if (this.addImportedItem(item, dedupeSet)) {
           importCount++;
+        } else {
+          skippedCount++;
         }
       }
 
-      this.showNotification(`Imported ${importCount} items`);
+      const message = skippedCount > 0
+        ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
+        : `Imported ${importCount} items`;
+      this.showNotification(message);
       
     } catch (error) {
       console.error('JSON import failed:', error);
@@ -910,7 +972,7 @@ class CompyApp {
    * 
    * @param {string} csvText - Raw CSV string from uploaded file
    */
-  importCSV(csvText) {
+  async importCSV(csvText) {
     try {
       // Split into lines and filter out empty lines
       // Handle both Windows (\r\n) and Unix (\n) line endings
@@ -923,6 +985,7 @@ class CompyApp {
       // Remove BOM (Byte Order Mark) that may be present in UTF-8 files from Excel
       const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, ''));
       let headerIndex = 0; // Track where the actual data headers start
+      let importedProfileName = null; // capture profile name if provided in metadata
       
       // PHASE 1: Check for optional profile metadata block
       // Format: single column 'profileName' followed by data line
@@ -935,10 +998,9 @@ class CompyApp {
           const profileData = parseCSVLine(profileLine);
           const profileName = (profileData[0] || '').trim();
           
-          // Update profile if valid name provided
+          // Capture profile to apply later (after choosing Add/Replace)
           if (profileName) {
-            console.log('Importing profile name:', profileName);
-            updateProfile(profileName);
+            importedProfileName = profileName;
           }
         }
         
@@ -970,6 +1032,63 @@ class CompyApp {
       
       console.log('CSV column mapping:', columnMapping);
 
+      // Count items that will be imported
+      let itemsToImport = 0;
+      for (let i = headerIndex + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line) itemsToImport++;
+      }
+
+      // Check if there's existing data and ask for import options
+      const currentState = getState();
+      const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+      
+      let shouldClearExisting = false;
+      let importOption = 'add';
+      
+      if (hasExistingData) {
+        importOption = await this.showImportOptionsDialog({
+          existingCount: currentState.items.length,
+          existingProfile: currentState.profileName || 'Not set',
+          importingCount: itemsToImport,
+          importingProfile: 'From CSV'
+        });
+        
+        if (importOption === 'cancel') {
+          this.showNotification('Import cancelled', 'info');
+          return;
+        } else if (importOption === 'replace') {
+          // Final confirmation to prevent accidental data loss
+          const confirmed = await this.confirmationManager.show({
+            title: 'Replace All Data',
+            message: `This will delete ${currentState.items.length} existing snippets and reset your profile ("${currentState.profileName || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
+            confirmText: 'Replace All',
+            cancelText: 'Cancel',
+            variant: 'danger'
+          });
+          if (!confirmed) {
+            this.showNotification('Replace cancelled', 'info');
+            return;
+          }
+          shouldClearExisting = true;
+        }
+        // if importOption === 'add', we just continue without clearing
+      }
+
+      // Prepare duplicate-detection set (based on existing items when adding)
+      const buildSig = (i) => `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
+      const dedupeSet = shouldClearExisting ? new Set() : new Set((currentState.items || []).map(buildSig));
+
+      // Clear existing data if user chose replace
+      if (shouldClearExisting) {
+        this.clearAllData();
+      }
+
+      // Update profile after options are confirmed
+      if (importedProfileName) {
+        updateProfile(importedProfileName);
+      }
+
       // PHASE 3: Process data rows
       let importCount = 0;
       let skippedCount = 0;
@@ -998,7 +1117,7 @@ class CompyApp {
               ['1', 'true'].includes((values[columnMapping.sensitive] || '').toLowerCase()) : false,
             
             // PHASE 3C: Parse tags with pipe separator
-            // Format: "tag1|tag2|tag3" -> ['tag1', 'tag2', 'tag3']
+            // Format: \"tag1|tag2|tag3\" -> ['tag1', 'tag2', 'tag3']
             tags: columnMapping.tags >= 0 ? 
               (values[columnMapping.tags] || '')
                 .split('|') // Split on pipe separator
@@ -1007,12 +1126,12 @@ class CompyApp {
               : []
           };
 
-          // PHASE 3D: Validate and import the item
-          if (this.addImportedItem(itemData)) {
+          // PHASE 3D: Validate and import the item (with duplicate skipping in 'Add' mode)
+          if (this.addImportedItem(itemData, dedupeSet)) {
             importCount++;
           } else {
             skippedCount++;
-            console.warn(`Skipped invalid item on line ${i + 1}:`, itemData);
+            console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, itemData);
           }
           
         } catch (lineError) {
@@ -1024,7 +1143,7 @@ class CompyApp {
 
       // Provide detailed feedback to user
       const message = skippedCount > 0 
-        ? `Imported ${importCount} items (${skippedCount} skipped due to validation errors)`
+        ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
         : `Imported ${importCount} items`;
       
       this.showNotification(message, importCount > 0 ? 'success' : 'info');
@@ -1048,20 +1167,34 @@ class CompyApp {
    * @param {Object} itemData - Candidate item
    * @returns {boolean} True if item was accepted
    */
-  addImportedItem(itemData) {
+  addImportedItem(itemData, dedupeSet = undefined) {
+    // Validate first
     const validation = validateItem(itemData);
     if (!validation.isValid) {
       console.warn('Skipping invalid item:', validation.errors);
       return false;
     }
 
+    // Build a simple signature for duplicate detection based on primary fields
+    // Duplicate criteria: same text + desc + sensitive flag (tags are ignored for matching)
+    const text = (itemData.text || '').trim();
+    const desc = (itemData.desc || '').trim();
+    const sensitiveSig = itemData.sensitive ? '1' : '0';
+    const signature = `${text}||${desc}||${sensitiveSig}`;
+
+    if (dedupeSet && dedupeSet.has(signature)) {
+      // Duplicate of existing or previously imported item
+      return false;
+    }
+
     upsertItem({
-      text: itemData.text,
-      desc: itemData.desc,
+      text,
+      desc,
       sensitive: !!itemData.sensitive,
       tags: Array.isArray(itemData.tags) ? itemData.tags : []
     });
 
+    if (dedupeSet) dedupeSet.add(signature);
     return true;
   }
 
@@ -1090,6 +1223,143 @@ class CompyApp {
     }
 
     this.modalManager.open('#backupsModal');
+  }
+
+  /**
+   * Show a custom three-option dialog for import operations.
+   * @param {Object} options - Dialog configuration
+   * @param {number} options.existingCount - Number of existing items
+   * @param {string} options.existingProfile - Current profile name
+   * @param {number} options.importingCount - Number of items to import
+   * @param {string} options.importingProfile - Profile from import
+   * @returns {Promise<'cancel'|'add'|'replace'>} - User's choice
+   */
+  async showImportOptionsDialog({ existingCount, existingProfile, importingCount, importingProfile }) {
+    return new Promise((resolve) => {
+      // Remove any previous instance to avoid duplicates
+      const prior = document.getElementById('importOptionsModal');
+      if (prior) prior.remove();
+
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.id = 'importOptionsModal';
+      modal.setAttribute('aria-hidden', 'true');
+      modal.innerHTML = `
+        <div class="modal-content small import-options-modal" role="dialog" aria-labelledby="importOptionsTitle" aria-describedby="importOptionsDesc">
+          <div class="modal-header">
+            <h3 id="importOptionsTitle">Import Options</h3>
+            <button class="icon-btn" data-close-modal aria-label="Close dialog" title="Close dialog">
+              <span aria-hidden="true">✕</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="import-comparison">
+              <div class="import-section">
+                <h3>📂 Existing Data</h3>
+                <p><strong>${existingCount} snippets</strong></p>
+                <p>Profile: ${existingProfile}</p>
+              </div>
+              <div class="import-section">
+                <h3>📥 Importing</h3>
+                <p><strong>${importingCount} snippets</strong></p>
+                <p>Profile: ${importingProfile}</p>
+              </div>
+            </div>
+            <p id="importOptionsDesc" class="import-message">How would you like to handle the import?</p>
+          </div>
+          <div class="modal-footer">
+            <button id="importCancel" class="secondary-btn" data-close-modal>Cancel</button>
+            <div class="end-actions">
+              <button id="importAdd" class="primary-btn" data-primary="true">Add to Existing</button>
+              <button id="importReplace" class="modal-danger-btn">Replace All</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Add temporary styles scoped to this modal content
+      const style = document.createElement('style');
+      style.textContent = `
+        .import-options-modal { max-width: 540px; text-align: center; }
+        .import-comparison { display: flex; gap: 1rem; margin: 0.75rem 0 1.25rem; text-align: left; }
+        .import-section { flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); }
+        .import-section h3 { margin: 0 0 0.5rem 0; color: var(--text); font-size: 1rem; }
+        .import-section p { margin: 0.25rem 0; color: var(--text-secondary); }
+        .import-message { margin: 0.5rem 0 0; color: var(--text); font-weight: 500; }
+        @media (max-width: 600px) { .import-comparison { flex-direction: column; gap: 0.75rem; } }
+      `;
+      document.head.appendChild(style);
+
+      // Add modal to DOM before opening with modal manager
+      document.body.appendChild(modal);
+
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        // Remove listeners first
+        document.removeEventListener('keydown', onKeydown);
+        modal.removeEventListener('click', onBackdropClick);
+        // Remove style and element
+        if (style.parentNode) style.parentNode.removeChild(style);
+        if (modal.parentNode) modal.parentNode.removeChild(modal);
+      };
+
+      const finalize = (choice) => {
+        // Close via modal manager (idempotent) then cleanup and resolve
+        this.modalManager.close('#importOptionsModal');
+        cleanup();
+        resolve(choice);
+      };
+
+      // Close on ESC while open -> treat as cancel
+      const onKeydown = (e) => {
+        if (e.key === 'Escape' && this.modalManager.isOpen('#importOptionsModal')) {
+          finalize('cancel');
+        }
+      };
+      document.addEventListener('keydown', onKeydown);
+
+      // Backdrop click -> cancel
+      const onBackdropClick = (e) => {
+        if (e.target === modal) {
+          finalize('cancel');
+        }
+      };
+      modal.addEventListener('click', onBackdropClick);
+
+      // Wire button handlers
+      modal.querySelector('#importCancel').addEventListener('click', () => finalize('cancel'));
+      modal.querySelector('#importAdd').addEventListener('click', () => finalize('add'));
+      modal.querySelector('#importReplace').addEventListener('click', () => finalize('replace'));
+      // Header close (X) should behave like cancel
+      const headerCloseBtn = modal.querySelector('.modal-header [data-close-modal]');
+      if (headerCloseBtn) headerCloseBtn.addEventListener('click', () => finalize('cancel'));
+
+      // Open with modal manager for focus trap and ARIA attributes
+      this.modalManager.open('#importOptionsModal', { initialFocus: '#importAdd', restoreFocus: true });
+    });
+  }
+
+  /**
+   * Clear all existing data (items and profile).
+   * Used when user chooses "Replace All" during import.
+   */
+  clearAllData() {
+    // Clear all items by setting empty array
+    const currentState = getState();
+    
+    // Remove all items one by one
+    currentState.items.forEach(item => {
+      deleteItem(item.id);
+    });
+    
+    // Clear profile
+    updateProfile('');
+    
+    // Clear any active filters and search
+    updateFilterTags([]);
+    updateSearch('');
   }
 
   /**

@@ -429,8 +429,8 @@ export const upsertItem = (item) => {
     // Create new item with unique ID
     const newItem = { id: generateUID(), ...item };
     
-    // Add to beginning of list (most recent first)
-    state = { ...state, items: [newItem, ...state.items] };
+    // Add to end of list (chronological order)
+    state = { ...state, items: [...state.items, newItem] };
   }
   
   // Persist changes and trigger backups

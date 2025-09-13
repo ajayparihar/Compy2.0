@@ -63,6 +63,12 @@ ES modules variant (optional, modern browsers):
   - New format: { profileName: string, items: Item[] }
   - Backward‑compatible: plain array of items
 
+Import behavior when existing data is present:
+- If you already have snippets or a profile set, importing will prompt you with options:
+  - Add to Existing: Only new items are added. Exact duplicates (same text, desc, and sensitive flag) are skipped.
+  - Replace All: Clears all existing snippets and profile after a final confirmation, then imports everything from the file.
+- A final confirmation dialog protects against accidental data loss when choosing Replace All.
+
 Example (JSON, recommended):
 
 ```json

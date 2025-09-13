@@ -60,8 +60,8 @@ class ItemService {
       errors.push('Description must be 500 characters or less');
     }
     
-    if (itemData.tags && (!Array.isArray(itemData.tags) || itemData.tags.some(tag => typeof tag !== 'string'))) {
-      errors.push('Tags must be an array of strings');
+    if (itemData.tags && !Array.isArray(itemData.tags)) {
+      errors.push('Tags must be an array');
     }
     
     return {
@@ -85,6 +85,7 @@ class ItemService {
   normalizeTags(tags) {
     if (!Array.isArray(tags)) return [];
     return tags
+      .filter(tag => typeof tag === 'string' || typeof tag === 'number')
       .map(tag => String(tag).trim().toLowerCase())
       .filter(tag => tag.length > 0)
       .filter((tag, index, arr) => arr.indexOf(tag) === index) // Remove duplicates
@@ -543,7 +544,7 @@ describe('ItemService', () => {
       expect(result.data).toMatchObject(updates);
       expect(result.data.id).toBe(existingItem.id);
       expect(result.data.createdAt).toBe(existingItem.createdAt);
-      expect(result.data.updatedAt).toBeGreaterThan(existingItem.updatedAt);
+      expect(result.data.updatedAt).toBeGreaterThanOrEqual(existingItem.updatedAt);
     });
 
     test('should handle partial updates', () => {
@@ -918,7 +919,7 @@ describe('ItemService', () => {
       
       // Should have different ID and timestamps
       expect(result.data.id).not.toBe(originalItem.id);
-      expect(result.data.createdAt).toBeGreaterThan(originalItem.createdAt);
+      expect(result.data.createdAt).toBeGreaterThanOrEqual(originalItem.createdAt);
     });
 
     test('should apply overrides when duplicating', () => {

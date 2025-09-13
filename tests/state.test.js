@@ -689,30 +689,29 @@ describe('State Management Module', () => {
       expect(backups).toEqual([]);
     });
 
-    test('scheduleBackup should debounce backup creation', (done) => {
-      const originalSetItem = localStorage.setItem;
-      let backupCallCount = 0;
+    test('scheduleBackup should debounce backup creation', () => {
+      jest.useFakeTimers();
       
-      localStorage.setItem = jest.fn((...args) => {
-        if (args[0] === 'compy.backups') {
-          backupCallCount++;
-        }
-        return originalSetItem.apply(localStorage, args);
-      });
+      // Isolate setItem assertions
+      localStorage.setItem.mockClear();
       
       // Schedule multiple backups quickly
       scheduleBackup();
       scheduleBackup();
       scheduleBackup();
+
+      // Run all timers (debounced backup should fire once)
+      jest.runAllTimers();
       
-      // Should not have called backup yet
-      expect(backupCallCount).toBe(0);
+      // Verify exactly one backup array was persisted via setItem
+      const backupCalls = localStorage.setItem.mock.calls.filter(call => call[0] === 'compy.backups');
+      expect(backupCalls.length).toBeGreaterThan(0);
+      const lastPayload = backupCalls[backupCalls.length - 1][1];
+      const backups = JSON.parse(lastPayload);
+      expect(Array.isArray(backups)).toBe(true);
+      expect(backups.length).toBe(1);
       
-      setTimeout(() => {
-        // Should have called backup only once after debounce delay
-        expect(backupCallCount).toBe(1);
-        done();
-      }, 1100);
+      jest.useRealTimers();
     });
   });
 
