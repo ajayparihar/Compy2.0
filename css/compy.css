@@ -306,6 +306,10 @@ body {
   color: var(--text);
   background: var(--bg);
   padding-top: var(--nav-h);
+  /* Ensure consistent scroll behavior */
+  scroll-behavior: smooth;
+  /* Prevent layout shifts during dynamic height calculations */
+  min-height: 100vh;
 }
 
 /* Navbar */
@@ -769,6 +773,8 @@ select:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
   padding: 16px clamp(14px, (100vw - 1200px)/2, 32px);
+  /* Ensure minimum height to prevent layout shift */
+  min-height: calc(100vh - var(--nav-h) - 32px);
 }
 .card {
   background: var(--surface);

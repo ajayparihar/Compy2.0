@@ -99,6 +99,9 @@ class CompyApp {
     if (this.initialized) return;
 
     try {
+      // Setup responsive navbar FIRST to prevent layout shifts
+      this.setupResponsiveNavbar();
+      
       // Initialize components first
       this.initClipboard();
       this.initNotifications();
@@ -119,9 +122,6 @@ class CompyApp {
       
       // Setup keyboard shortcuts
       document.addEventListener('keydown', this.handleKeyboardShortcuts);
-      
-      // Setup responsive navbar
-      this.setupResponsiveNavbar();
       
       // Setup mobile navigation menu
       this.setupMobileNavigation();
@@ -452,6 +452,9 @@ class CompyApp {
     const container = $('#cards');
     const filteredItems = filterItems(state.items, state.search, state.filterTags);
     
+    // Preserve scroll position during re-render
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    
     // Use animation frame for smooth rendering
     requestAnimationFrame(() => {
       container.innerHTML = '';
@@ -476,6 +479,14 @@ class CompyApp {
       // Render cards
       filteredItems.forEach(item => {
         container.appendChild(this.createCardElement(item, state.search));
+      });
+      
+      // Restore scroll position if it shifted during render
+      requestAnimationFrame(() => {
+        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+        if (Math.abs(currentScrollTop - scrollTop) > 2) {
+          window.scrollTo(0, scrollTop);
+        }
       });
     });
   }
@@ -1799,12 +1810,40 @@ class CompyApp {
       if (!navbar) return;
       
       const height = navbar.getBoundingClientRect().height;
-      document.documentElement.style.setProperty('--nav-h', `${height}px`);
+      const currentNavHeight = document.documentElement.style.getPropertyValue('--nav-h');
+      const newNavHeight = `${height}px`;
+      
+      // Only update if there's a significant change to prevent micro-shifts
+      if (currentNavHeight !== newNavHeight) {
+        document.documentElement.style.setProperty('--nav-h', newNavHeight);
+        
+        // Preserve scroll position during layout adjustments
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        requestAnimationFrame(() => {
+          if (Math.abs(window.scrollY - scrollTop) < 5) {
+            window.scrollTo(0, scrollTop);
+          }
+        });
+      }
     };
 
-    // Adjust on load and resize
-    adjustHeight();
-    window.addEventListener('resize', adjustHeight);
+    // Set initial height immediately - use fallback if navbar not ready
+    const navbar = $('.navbar');
+    if (navbar) {
+      adjustHeight();
+    } else {
+      // Fallback height if navbar isn't ready yet
+      document.documentElement.style.setProperty('--nav-h', '64px');
+    }
+    
+    // Adjust on resize and load (but with debouncing)
+    let resizeTimeout;
+    const debouncedAdjust = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(adjustHeight, 16); // ~1 frame delay
+    };
+    
+    window.addEventListener('resize', debouncedAdjust);
     window.addEventListener('load', adjustHeight);
   }
 
