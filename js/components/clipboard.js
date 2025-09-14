@@ -59,6 +59,23 @@ export class ClipboardManager {
    * to the legacy execCommand approach if the modern API is unavailable or fails.
    * User feedback is provided through the notification system.
    * 
+   * Browser API Dependencies:
+   * Primary: Clipboard API (navigator.clipboard.writeText)
+   * - Chrome 66+, Firefox 63+, Safari 13.1+
+   * - Requires HTTPS or localhost context for security
+   * - Limited to user gesture events in most browsers
+   * - May show permission prompts for large text
+   * 
+   * Fallback: document.execCommand('copy')
+   * - Deprecated but widely supported in older browsers
+   * - Works in HTTP contexts unlike Clipboard API
+   * - Requires temporary DOM manipulation (textarea element)
+   * 
+   * Security Considerations:
+   * - Clipboard access is limited to active tabs for privacy
+   * - Cross-origin restrictions apply
+   * - Some browsers require user interaction for clipboard access
+   * 
    * @param {string} text - Text to copy to clipboard
    * @returns {Promise<boolean>} Promise resolving to true if successful
    * 

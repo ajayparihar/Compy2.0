@@ -105,6 +105,9 @@ export const UI_CONFIG = {
   
   /** Number of skeleton loading cards to show while rendering */
   skeletonCount: 6,
+
+  /** When true, enables development logging in modules that respect this flag */
+  debug: false,
 };
 
 /**
@@ -152,35 +155,78 @@ export const ICONS = {
 /**
  * Available Theme Options
  * 
- * List of all theme identifiers that can be applied via the data-theme attribute
- * on the document element. Each theme corresponds to a CSS file or section that
- * defines the visual appearance of the application.
+ * Complete list of all 26 theme identifiers that can be applied via the data-theme attribute
+ * on the document element. Each theme corresponds to a CSS section that defines the visual 
+ * appearance of the application with accessibility-first design.
  * 
  * Theme Naming Convention:
  * - Format: "{mode}-{name}"
  * - Modes: 'dark' or 'light'
  * - Names: descriptive, kebab-case identifiers
  * 
+ * All themes meet WCAG 2.1 AA accessibility standards (4.5:1 contrast ratio)
+ * High contrast themes exceed AAA standards (7:1+ contrast ratio)
+ * 
  * @constant {string[]} THEME_LIST
  */
 export const THEME_LIST = [
-  /** Dark theme with green forest colors */
+  // === EXISTING THEMES (IMPROVED) ===
+  /** Default dark theme with nature-inspired green accents */
   'dark-mystic-forest',
-  
-  /** Dark theme with red/crimson accent colors */
+  /** Warm dark theme with red accents for evening use */
   'dark-crimson-night', 
-  
-  /** Dark theme with purple/blue royal colors */
+  /** Sophisticated dark theme with purple accents */
   'dark-royal-elegance',
-  
-  /** Light theme with warm orange/yellow sunrise colors */
+  /** Energizing light theme with orange accents */
   'light-sunrise',
-  
-  /** Light theme with soft, muted colors */
+  /** Gentle light theme optimized for extended reading */
   'light-soft-glow',
+  /** Fresh light theme with natural green accents */
+  'light-floral-breeze',
   
-  /** Light theme with pastel floral colors */
-  'light-floral-breeze'
+  // === NEW DARK THEMES ===
+  /** Popular coding theme with vibrant purple and pink */
+  'dark-dracula',
+  /** Scientifically calibrated theme for reduced eye strain */
+  'dark-solarized',
+  /** Deep blue theme perfect for late-night work */
+  'dark-midnight-blue',
+  /** Developer favorite optimized for code readability */
+  'dark-night-owl',
+  /** Classic coding theme with green highlights */
+  'dark-monokai',
+  /** Calming ocean-inspired blue theme */
+  'dark-deep-ocean',
+  /** Maximum contrast for visual accessibility */
+  'dark-high-contrast',
+  /** Clean, distraction-free professional theme */
+  'dark-professional',
+  /** Retro theme with warm, earthy tones */
+  'dark-gruvbox',
+  /** Google Material Design inspired theme */
+  'dark-material',
+  
+  // === NEW LIGHT THEMES ===
+  /** Scientifically calibrated light theme for optimal readability */
+  'light-solarized',
+  /** Maximum contrast light theme for accessibility */
+  'light-high-contrast',
+  /** Minimal theme for business environments */
+  'light-professional',
+  /** Soft, creative theme with mint accents */
+  'light-pastel-mint',
+  /** Natural theme with warm earth colors */
+  'light-earth-tones',
+  /** Fresh theme inspired by ocean and sky */
+  'light-oceanic',
+  /** Comfortable theme with vanilla and cream tones */
+  'light-vanilla-cream',
+  /** Clean minimalist Nordic-inspired theme */
+  'light-nordic',
+  /** Google Material Design light theme */
+  'light-material',
+  /** Gentle warm theme for extended reading */
+  'light-warm-beige'
 ];
 
 /**

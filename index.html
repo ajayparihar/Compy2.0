@@ -11,6 +11,28 @@
   
   <title>Compy 2.0</title>
   
+  <!-- Set persisted theme ASAP to avoid flash of default theme -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('compy.theme');
+        var fallback = 'dark-mystic-forest';
+        var theme = saved && typeof saved === 'string' ? saved : fallback;
+        if (theme) document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        // If storage is unavailable (e.g., privacy mode), keep default attribute
+      }
+    })();
+  </script>
+  <!-- Disable browser auto scroll restore; we'll handle it manually to avoid jumps -->
+  <script>
+    try {
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+    } catch (e) {}
+  </script>
+  
   <link rel="stylesheet" href="css/compy.css" />
   <link rel="icon" href="favicon_io/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
@@ -70,21 +92,13 @@
         Filter 
         <span id="filterBadge" class="badge" hidden aria-label="Active filters count">0</span>
       </button>
-      <div class="select-wrap with-caret">
-        <label for="themeSelect" class="sr-only">Select theme</label>
-        <select id="themeSelect" class="select-reset" title="Select theme" aria-label="Select color theme">
-        <optgroup label="Dark themes">
-          <option value="dark-mystic-forest">Mystic Forest</option>
-          <option value="dark-crimson-night">Crimson Night</option>
-          <option value="dark-royal-elegance">Royal Elegance</option>
-        </optgroup>
-        <optgroup label="Light themes">
-          <option value="light-sunrise">Sunrise</option>
-          <option value="light-soft-glow">Soft Glow</option>
-          <option value="light-floral-breeze">Floral Breeze</option>
-        </optgroup>
-      </select>
-      </div>
+      <button 
+        id="themePickerBtn" 
+        class="icon-text-btn" 
+        title="Choose theme" 
+        aria-label="Open theme picker">
+        Theme
+      </button>
       <label class="file-btn" title="Import snippets from file">
         <input 
           id="importFile" 
@@ -437,6 +451,73 @@
           aria-label="Confirm action">
           Confirm
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme Picker Modal -->
+  <div 
+    id="themePickerModal" 
+    class="modal" 
+    role="dialog" 
+    aria-hidden="true" 
+    aria-labelledby="themePickerTitle" 
+    aria-describedby="themePickerDesc">
+    <div class="modal-content theme-picker-content">
+      <div class="modal-header">
+        <h3 id="themePickerTitle">Choose Theme</h3>
+        <button 
+          class="icon-btn" 
+          data-close-modal 
+          aria-label="Close theme picker" 
+          title="Close modal">
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="themePickerDesc" class="sr-only">Choose from 26 carefully crafted themes with accessibility focus</p>
+        
+        <!-- Theme Search and Filters -->
+        <div class="theme-controls">
+          <div class="theme-search-wrap">
+            <input 
+              id="themeSearch" 
+              type="search" 
+              placeholder="Search themes..." 
+              aria-label="Search themes"
+              autocomplete="off" />
+            <button 
+              id="themeSearchClear" 
+              class="clear-field" 
+              type="button"
+              aria-label="Clear theme search" 
+              tabindex="-1">
+              <span aria-hidden="true">✕</span>
+            </button>
+          </div>
+          
+          <div class="theme-filters">
+            <button class="theme-filter active" data-category="all" aria-pressed="true">All</button>
+            <button class="theme-filter" data-category="dark" aria-pressed="false">Dark</button>
+            <button class="theme-filter" data-category="light" aria-pressed="false">Light</button>
+            <button class="theme-filter" data-category="high-contrast" aria-pressed="false">High Contrast</button>
+            <button class="theme-filter" data-category="professional" aria-pressed="false">Professional</button>
+          </div>
+        </div>
+        
+        <!-- Current Theme Display -->
+        <div class="current-theme-display">
+          <h4>Current: <span id="currentThemeName">Mystic Forest</span></h4>
+          <div class="current-theme-preview" id="currentThemePreview"></div>
+        </div>
+        
+        <!-- Theme Grid -->
+        <div class="themes-grid" id="themesGrid" role="radiogroup" aria-label="Available themes">
+          <!-- Themes will be populated by JavaScript -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" type="button" data-close-modal>Close</button>
       </div>
     </div>
   </div>

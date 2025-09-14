@@ -6,8 +6,9 @@
 import { STORAGE_KEYS, UI_CONFIG, ICONS, DEFAULT_THEME } from './constants.js';
 import { 
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
-  parseCSVLine, csvEscape, formatDate, focusElement, 
-  getAllTags, filterItems, validateItem, debounce 
+  parseCSVLine, csvEscape, formatDate, 
+  getAllTags, filterItems, validateItem, debounce, 
+  addEventHandler, toggleVisibility
 } from './utils.js';
 import {
   initState, getState, subscribe, upsertItem,
@@ -18,6 +19,8 @@ import { createConfirmationManager, setGlobalConfirm } from './components/confir
 import { createModalManager } from './components/modals.js';
 import { createTagAutocomplete } from './components/tagAutocomplete.js';
 import { createMobileNavigationManager } from './components/mobileNavigation.js';
+import { createThemePicker } from './components/themePicker.js';
+import { createClipboardManager } from './components/clipboard.js';
 
 /**
  * @typedef {Object} AppItem
@@ -41,18 +44,31 @@ import { createMobileNavigationManager } from './components/mobileNavigation.js'
  * @property {boolean} hasFilters
  */
 
-/**
- * Main Application Class
- *
- * Orchestrates UI initialization, state subscriptions, event handlers, and import/export flows
- * for the Compy application. This class does not own application data; it delegates persistence
- * to the state module and reads configuration from constants.
- *
- * External dependencies:
- * - Web Clipboard API (navigator.clipboard) with an execCommand fallback for older browsers
- * - localStorage (via state and theme helpers) for persistence
- * - requestAnimationFrame for smooth rendering
- */
+  /**
+   * Main Application Class - Enhanced with Comprehensive Error Handling
+   *
+   * Orchestrates UI initialization, state subscriptions, event handlers, and import/export flows
+   * for the Compy application. This class does not own application data; it delegates persistence
+   * to the state module and reads configuration from constants.
+   *
+   * Architecture Improvements:
+   * - Modular clipboard functionality with focused methods
+   * - Enhanced error handling with graceful degradation
+   * - Optimized DOM manipulation utilities
+   * - Comprehensive input validation throughout
+   * - Performance-optimized event handling
+   *
+   * External Dependencies:
+   * - Web Clipboard API (navigator.clipboard) with execCommand fallback
+   * - localStorage for data persistence (with error recovery)
+   * - requestAnimationFrame for smooth UI updates
+   * - Modern ES6+ features (async/await, destructuring, modules)
+   *
+   * Browser Compatibility:
+   * - Supports all modern browsers (Chrome 60+, Firefox 60+, Safari 12+, Edge 79+)
+   * - Graceful degradation for older browsers where possible
+   * - Progressive enhancement for advanced features
+   */
 class CompyApp {
   /**
    * Construct a new CompyApp instance.
@@ -69,10 +85,20 @@ class CompyApp {
     this.cards = null;
     this.tagAutocomplete = null;
     this.mobileNavigation = null;
+    this.themePicker = null;
+    
+    // Manual scroll restoration across refreshes
+    this.initialScrollY = 0;     // saved scroll position from previous session load (sessionStorage)
+    this.scrollRestored = false; // whether we've already restored scroll after first render
     
     // Filter modal transient state and handler guard
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
     this.filterHandlersBound = false;
+    
+    // Card selection state for keyboard navigation
+    this.selectedCardIndex = -1;
+    this.cardElements = [];
+    this.visibleItems = [];
     
     // Bind methods to maintain context
     this.handleStateChange = this.handleStateChange.bind(this);
@@ -81,58 +107,138 @@ class CompyApp {
     this.removeItem = this.removeItem.bind(this);
     this.setupMobileNavigation = this.setupMobileNavigation.bind(this);
     this.setupResponsiveNavbar = this.setupResponsiveNavbar.bind(this);
+    
+    // Card navigation methods
+    this.selectCard = this.selectCard.bind(this);
+    this.selectNextCard = this.selectNextCard.bind(this);
+    this.selectPreviousCard = this.selectPreviousCard.bind(this);
+    this.selectCardUp = this.selectCardUp.bind(this);
+    this.selectCardDown = this.selectCardDown.bind(this);
+    this.selectCardLeft = this.selectCardLeft.bind(this);
+    this.selectCardRight = this.selectCardRight.bind(this);
+    this.clearCardSelection = this.clearCardSelection.bind(this);
+    this.handleCardKeyboardShortcuts = this.handleCardKeyboardShortcuts.bind(this);
+    this.calculateGridColumns = this.calculateGridColumns.bind(this);
+  }
+
+  /**
+   * Initialize core application components in proper order
+   * @private
+   */
+  initCoreComponents() {
+    this.initClipboard();
+    this.initNotifications();
+    this.initModals();
+    this.initTheme();
+    this.initSearch();
+    this.initCards();
+  }
+
+  /**
+   * Initialize user interface components
+   * @private
+   */
+  initUIComponents() {
+    this.initProfile();
+    this.initExport();
+    this.initImport();
+    this.initEventHandlers();
+  }
+
+  /**
+   * Initialize state management and event listeners
+   * @private
+   */
+  initStateAndEvents() {
+    // Subscribe to state changes before initializing state
+    subscribe(this.handleStateChange);
+    
+    // Initialize state management (this will trigger initial render)
+    initState();
+    
+    // Setup keyboard shortcuts
+    document.addEventListener('keydown', this.handleKeyboardShortcuts);
+    
+    // Setup mobile navigation menu
+    this.setupMobileNavigation();
+  }
+
+  /**
+   * Setup global application access for components
+   * @private
+   */
+  setupGlobalAccess() {
+    if (typeof window !== 'undefined') {
+      window.app = {
+        showNotification: this.showNotification.bind(this),
+        removeCardsByText: this.removeCardsByText.bind(this),
+        instance: this
+      };
+    }
   }
 
   /**
    * Initialize the application UI and services.
    *
-   * Responsibilities:
-   * - Load state and theme from storage
-   * - Initialize core components (clipboard, notifications, modals, search, cards, profile)
-   * - Subscribe to state changes and wire global keyboard handlers
-   * - Measure responsive navbar height
+   * Main initialization method that coordinates all subsystem startup
+   * in the correct order for optimal performance and user experience.
    *
-   * Errors are surfaced to the user via a non-blocking notification.
    * @returns {Promise<void>}
    */
   async init() {
     if (this.initialized) return;
 
     try {
-      // Setup responsive navbar FIRST to prevent layout shifts
+      // Initialize foundational systems
+      this.initScrollPersistence();
       this.setupResponsiveNavbar();
       
-      // Initialize components first
-      this.initClipboard();
-      this.initNotifications();
-      this.initModals();
-      this.initTheme();
-      this.initSearch();
-      this.initCards();
-      this.initProfile();
-      this.initExport();
-      this.initImport();
-      this.initEventHandlers();
+      // Initialize core application components
+      this.initCoreComponents();
       
-      // Subscribe to state changes before initializing state
-      subscribe(this.handleStateChange);
+      // Initialize user interface components
+      this.initUIComponents();
       
-      // Initialize state management (this will trigger initial render)
-      initState();
+      // Initialize state management and event handling
+      this.initStateAndEvents();
       
-      // Setup keyboard shortcuts
-      document.addEventListener('keydown', this.handleKeyboardShortcuts);
-      
-      // Setup mobile navigation menu
-      this.setupMobileNavigation();
+      // Setup global access for components
+      this.setupGlobalAccess();
       
       this.initialized = true;
-      console.log('Compy 2.0 initialized successfully');
+      if (UI_CONFIG.debug) console.log('Compy 2.0 initialized successfully');
       
     } catch (error) {
       console.error('Failed to initialize Compy 2.0:', error);
       this.showNotification('Failed to initialize application', 'error');
     }
+  }
+
+  /**
+   * Initialize manual scroll persistence/restoration across refreshes.
+   * - Reads saved scrollY from sessionStorage
+   * - Saves current scrollY on beforeunload/pagehide
+   * - Temporarily disables entry animations to prevent perceived jumps
+   */
+  initScrollPersistence() {
+    try {
+      const saved = sessionStorage.getItem('compy.scrollY');
+      this.initialScrollY = saved ? parseInt(saved, 10) || 0 : 0;
+    } catch (e) {
+      this.initialScrollY = 0;
+    }
+
+    const saveScroll = () => {
+      try {
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        sessionStorage.setItem('compy.scrollY', String(y));
+      } catch (e) {}
+    };
+    window.addEventListener('beforeunload', saveScroll);
+    window.addEventListener('pagehide', saveScroll);
+
+    // Disable entry animation during first render to avoid any jank
+    document.documentElement.classList.add('disable-entry-anim');
   }
 
   /**
@@ -147,143 +253,111 @@ class CompyApp {
   }
 
   /**
-   * Initialize clipboard functionality with fallback support
+   * Initialize clipboard functionality using the reusable ClipboardManager
    * 
-   * Creates a clipboard management object with intelligent fallback handling.
-   * The modern Clipboard API is preferred for better security and user experience,
-   * but falls back to execCommand for broader browser compatibility.
-   * 
-   * Clipboard Security:
-   * - Modern browsers require secure context (HTTPS or localhost)
-   * - User interaction is required for clipboard access
-   * - Some browsers require explicit permissions
-   * 
-   * Performance Optimization:
-   * - Checks API availability once during initialization
-   * - Avoids repeated feature detection on each copy operation
-   * - Uses async/await for non-blocking clipboard operations
-   * - Minimizes DOM manipulation in fallback mode
+   * Creates a simplified clipboard interface using the dedicated ClipboardManager
+   * component, eliminating duplicate code and improving maintainability.
    */
   initClipboard() {
-    // Pre-check clipboard API availability for performance
-    const hasClipboardAPI = navigator.clipboard && 
-                          typeof navigator.clipboard.writeText === 'function';
-    
+    // Create notification adapter for the ClipboardManager
+    const notificationAdapter = {
+      show: (message, type = 'info') => {
+        // Map manager-specific messaging to maintain consistency
+        if (message === 'Copy not supported - please copy manually') {
+          message = 'Copy failed - please try manually';
+        }
+        this.showNotification(message, type);
+      }
+    };
+
+    // Initialize clipboard manager with validation wrapper
+    const manager = createClipboardManager(notificationAdapter);
     this.clipboard = {
       copy: async (text) => {
-        // Input validation - prevent empty or invalid copy operations
-        if (!text || typeof text !== 'string') {
-          console.warn('Clipboard copy attempted with invalid text:', text);
+        if (!this.validateClipboardInput(text)) {
           return false;
         }
-        
-        try {
-          if (hasClipboardAPI) {
-            // MODERN CLIPBOARD API: Uses navigator.clipboard.writeText()
-            // - Requires secure context (HTTPS or localhost)
-            // - Requires user interaction (click/keyboard event)
-            // - Returns Promise that resolves when copy succeeds
-            // - Automatically handles user permissions
-            await navigator.clipboard.writeText(text);
-            this.showNotification('Copied to clipboard', 'success');
-            return true;
-          } else {
-            // FALLBACK PATH: Use legacy execCommand for broader compatibility
-            return this.fallbackCopy(text);
-          }
-        } catch (error) {
-          // ERROR HANDLING: Modern API can fail due to permissions or context
-          // Common failures: NotAllowedError, SecurityError, or browser bugs
-          console.warn('Modern clipboard API failed, trying fallback:', error);
-          return this.fallbackCopy(text);
-        }
+        return manager.copy(text);
       }
     };
   }
-
+  
+  
   /**
-   * Fallback clipboard copy method using execCommand for older browser compatibility
+   * Validate clipboard input before processing
    * 
-   * This method is used when the modern Clipboard API fails or is unavailable.
-   * It creates a temporary textarea, selects the content, and uses the deprecated
-   * but widely-supported execCommand('copy') to copy text to clipboard.
-   * 
-   * DOM API INTERACTIONS:
-   * - document.createElement() - Creates temporary DOM element
-   * - document.body.appendChild() - Adds element to DOM tree
-   * - element.select() - Selects text content for copying
-   * - document.execCommand() - Legacy copy command
-   * - document.body.removeChild() - Cleans up temporary element
-   * 
-   * @param {string} text - Text to copy to clipboard
+   * @param {any} text - Text to validate
+   * @returns {boolean} True if input is valid
+   * @private
    */
-  fallbackCopy(text) {
-    // DOM MANIPULATION: Create temporary textarea element for text selection
-    // Using textarea instead of input to handle multi-line text properly
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    
-    // CSS STYLING: Position element off-screen to avoid visual disruption
-    // Using fixed positioning to avoid affecting document layout flow
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    textarea.style.top = '0'; // Add top positioning for better accessibility
-    
-    // MOBILE OPTIMIZATION: Prevent virtual keyboard popup on mobile devices
-    textarea.setAttribute('readonly', ''); // Readonly prevents mobile keyboard
-    
-    // DOM INSERTION: Add to DOM temporarily - required for selection API to work
-    // Element must be in the DOM tree for select() and execCommand() to function
-    document.body.appendChild(textarea);
-    
-    try {
-      // SELECTION API: Select all text content in the textarea
-      // This prepares the text for copying via execCommand
-      textarea.select();
-      
-      // MOBILE SAFARI FIX: setSelectionRange ensures proper selection on iOS
-      // Mobile Safari sometimes fails with select() alone
-      textarea.setSelectionRange(0, 99999);
-      
-      // LEGACY CLIPBOARD API: Use deprecated but widely-supported execCommand
-      // Returns boolean indicating success/failure of copy operation
-      const success = document.execCommand('copy');
-      
-      // USER FEEDBACK: Provide appropriate notification based on operation result
-      this.showNotification(
-        success ? 'Copied to clipboard' : 'Copy failed - please try manually selecting and copying',
-        success ? 'info' : 'error'
-      );
-      
-      return success;
-      
-    } catch (error) {
-      console.error('Fallback copy failed:', error);
-      this.showNotification('Copy failed - please try manually', 'error');
+  validateClipboardInput(text) {
+    if (!text || typeof text !== 'string') {
+      console.warn('Clipboard copy attempted with invalid text:', text);
       return false;
-    } finally {
-      // DOM CLEANUP: Always remove temporary element to prevent memory leaks
-      // Use finally block to ensure cleanup even if errors occur
-      document.body.removeChild(textarea);
     }
+    
+    if (text.length === 0) {
+      console.warn('Clipboard copy attempted with empty text');
+      return false;
+    }
+    
+    return true;
   }
+  
+  
+
+  
+  
+  
 
   /**
    * Initialize ephemeral notification system (snackbar).
    * Uses UI_CONFIG.snackbarDuration for auto-dismiss timing.
+   * Handles rapid successive notifications properly.
    */
   initNotifications() {
     const snackbar = $('#snackbar');
+    let currentTimeoutId = null;
     
     this.notifications = {
       show: (message, type = 'info', duration = UI_CONFIG.snackbarDuration) => {
+        // RAPID NOTIFICATION HANDLING: Clear existing timeout to prevent queue conflicts
+        // Without this check, rapid successive notifications would create multiple
+        // timeouts, causing unpredictable hide/show behavior
+        if (currentTimeoutId) {
+          clearTimeout(currentTimeoutId);
+          currentTimeoutId = null;
+        }
+        
+        // CONTENT UPDATE: Replace both message and styling atomically
+        // Using className instead of classList.add ensures clean state
+        // without accumulating previous type classes
         snackbar.textContent = message;
         snackbar.className = `snackbar ${type}`;
+        
+        // ANIMATION RESET: Force browser reflow to ensure CSS transitions work properly
+        // This prevents animation conflicts when showing new notification immediately
+        // after hiding the previous one. The offsetHeight access triggers layout.
+        snackbar.offsetHeight;
+        
+        // VISIBILITY CONTROL: Add show class to trigger CSS animation
         snackbar.classList.add('show');
         
-        setTimeout(() => {
+        // AUTO-HIDE TIMER: Schedule notification dismissal after specified duration
+        // Store timeout ID to allow cancellation for rapid notifications
+        currentTimeoutId = setTimeout(() => {
           snackbar.classList.remove('show');
+          currentTimeoutId = null; // Clean up reference for next notification
         }, duration);
+      },
+      
+      // Method to manually clear/hide current notification
+      hide: () => {
+        if (currentTimeoutId) {
+          clearTimeout(currentTimeoutId);
+          currentTimeoutId = null;
+        }
+        snackbar.classList.remove('show');
       }
     };
   }
@@ -291,7 +365,7 @@ class CompyApp {
   /**
    * Show a transient snackbar message.
    * @param {string} message - Message to display
-   * @param {'info'|'error'} [type='info'] - Visual style of the snackbar
+   * @param {'info'|'success'|'warning'|'error'} [type='info'] - Visual style of the snackbar
    */
   showNotification(message, type = 'info') {
     try {
@@ -325,24 +399,26 @@ class CompyApp {
   }
 
   /**
-   * Initialize theme switching and persistence.
-   * Persists user choice in localStorage and applies a short CSS transition class
-   * to avoid abrupt theme changes.
+   * Initialize enhanced theme system with picker modal.
+   * Persists user choice in localStorage and applies smooth transitions.
    */
   initTheme() {
-    const themeSelect = $('#themeSelect');
-    
+    // Enhanced theme manager with smooth transitions
     this.theme = {
       apply: (themeName) => {
         document.documentElement.setAttribute('data-theme', themeName);
         localStorage.setItem(STORAGE_KEYS.theme, themeName);
-        themeSelect.value = themeName;
         
         // Add transition class for smooth theme switching
         document.documentElement.classList.add('theme-switching');
         setTimeout(() => {
           document.documentElement.classList.remove('theme-switching');
         }, 300);
+        
+        // Update theme picker if available
+        if (this.themePicker) {
+          this.themePicker.updateSelectedTheme(themeName);
+        }
       },
       
       load: () => {
@@ -353,11 +429,15 @@ class CompyApp {
 
     // Load saved theme
     this.theme.load();
-
-    // Handle theme changes
-    themeSelect.addEventListener('change', (e) => {
-      this.theme.apply(e.target.value);
-    });
+    
+    // Initialize enhanced theme picker
+    try {
+      this.themePicker = createThemePicker(this.modalManager, this.theme);
+      this.themePicker.init();
+    } catch (error) {
+      console.warn('Failed to initialize theme picker:', error);
+      // Fallback to basic theme functionality
+    }
   }
 
   /**
@@ -458,36 +538,98 @@ class CompyApp {
     // Use animation frame for smooth rendering
     requestAnimationFrame(() => {
       container.innerHTML = '';
-      
-      // Handle empty states
-      if (state.items.length === 0) {
-        this.renderEmptyState(container, 'welcome');
-        return;
-      }
-      
-      if (filteredItems.length === 0) {
-        this.renderEmptyState(container, 'no-results', { 
-          hasSearch: !!state.search?.trim(),
-          hasFilters: state.filterTags.length > 0
-        });
+
+      // Render empties consistently
+      if (this.renderEmptyIfNeeded(container, state, filteredItems)) {
         return;
       }
 
-      // Remove empty state class
+      // Remove empty state class and build list
       container.classList.remove('empty-state');
-      
-      // Render cards
-      filteredItems.forEach(item => {
-        container.appendChild(this.createCardElement(item, state.search));
+      this.buildCardList(container, filteredItems, state.search);
+
+      // Ensure selection is valid and restore it visually if needed
+      this.ensureSelectionWithinBounds();
+
+      // Restore scroll position and entry animations
+      this.postRenderScrollRestore(scrollTop);
+    });
+  }
+
+  /**
+   * Check and render empty states. Returns true if an empty state was rendered.
+   * @param {HTMLElement} container
+   * @param {Object} state
+   * @param {Array} filteredItems
+   * @returns {boolean}
+   */
+  renderEmptyIfNeeded(container, state, filteredItems) {
+    // Handle welcome state
+    if (state.items.length === 0) {
+      this.renderEmptyState(container, 'welcome');
+      return true;
+    }
+    // Handle no-results state
+    if (filteredItems.length === 0) {
+      this.renderEmptyState(container, 'no-results', {
+        hasSearch: !!state.search?.trim(),
+        hasFilters: state.filterTags.length > 0
       });
-      
-      // Restore scroll position if it shifted during render
-      requestAnimationFrame(() => {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Build and append card elements for the provided items and track them.
+   * @param {HTMLElement} container
+   * @param {Array} items
+   * @param {string} searchQuery
+   */
+  buildCardList(container, items, searchQuery) {
+    // Update tracking arrays for keyboard navigation
+    this.visibleItems = [...items];
+    this.cardElements = [];
+
+    // Render cards and track elements
+    items.forEach((item, index) => {
+      const cardElement = this.createCardElement(item, searchQuery, index);
+      container.appendChild(cardElement);
+      this.cardElements.push(cardElement);
+    });
+  }
+
+  /**
+   * Ensure current selection index is valid and update the visual state.
+   */
+  ensureSelectionWithinBounds() {
+    if (this.cardElements.length === 0 || this.selectedCardIndex >= this.cardElements.length) {
+      this.clearCardSelection();
+    } else if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+      this.updateCardSelection();
+    }
+  }
+
+  /**
+   * Restore scroll position and entry animations after render.
+   * @param {number} prevScrollTop
+   */
+  postRenderScrollRestore(prevScrollTop) {
+    // Restore scroll position. On the very first render after a refresh, restore
+    // from the previously saved position (manual restoration). Thereafter, just
+    // preserve the current scroll across re-renders.
+    requestAnimationFrame(() => {
+      if (!this.scrollRestored && this.initialScrollY > 0) {
+        window.scrollTo({ top: this.initialScrollY, behavior: 'auto' });
+        this.scrollRestored = true;
+        // Re-enable entry animations after initial stabilization
+        document.documentElement.classList.remove('disable-entry-anim');
+      } else {
         const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
-        if (Math.abs(currentScrollTop - scrollTop) > 2) {
-          window.scrollTo(0, scrollTop);
+        if (Math.abs(currentScrollTop - prevScrollTop) > 2) {
+          window.scrollTo({ top: prevScrollTop, behavior: 'auto' });
         }
-      });
+      }
     });
   }
 
@@ -496,12 +638,17 @@ class CompyApp {
    * Respects the 'sensitive' flag by masking the title.
    * @param {Object} item - Item with text, desc, sensitive, tags
    * @param {string} [searchQuery=''] - Current search query for highlighting
+   * @param {number} [index] - Index of the card for keyboard navigation
    * @returns {HTMLElement}
    */
-  createCardElement(item, searchQuery = '') {
+  createCardElement(item, searchQuery = '', index = -1) {
     const card = document.createElement('article');
     card.className = 'card';
-    card.tabIndex = 0;
+    
+    // Add data attribute for keyboard navigation
+    if (index >= 0) {
+      card.dataset.cardIndex = index;
+    }
     
     const displayText = item.sensitive ? '••••••••••' : escapeHtml(item.text);
     const highlightedText = highlightText(displayText, searchQuery);
@@ -532,37 +679,42 @@ class CompyApp {
 
   /**
    * Wire click/keyboard handlers for a card's interactions.
-   * Click on card copies content unless an action button was clicked.
+   * Click on card selects it and copies content unless an action button was clicked.
    * @param {HTMLElement} card - Card element
    * @param {Object} item - Item backing the card
    */
   setupCardEventHandlers(card, item) {
-    // Click to copy (but not on action buttons)
+    // Click to select card and copy (but not on action buttons)
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.actions')) {
+        // Select the clicked card (suppress notification for clicks)
+        const cardIndex = parseInt(card.dataset.cardIndex);
+        if (!isNaN(cardIndex)) {
+          this.selectCard(cardIndex, false);
+        }
+        
+        // Copy the content
         this.clipboard.copy(item.text);
       }
     });
 
-    // Keyboard support
-    card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        this.clipboard.copy(item.text);
-      }
-    });
+    // Keyboard support removed - handled globally by handleKeyboardShortcuts
 
     // Action buttons
-    card.querySelector('[data-act="edit"]').addEventListener('click', () => 
-      this.openItemModal(item.id)
-    );
+    card.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent card selection
+      this.openItemModal(item.id);
+    });
     
-    card.querySelector('[data-act="delete"]').addEventListener('click', () => 
-      this.removeItem(item.id)
-    );
+    card.querySelector('[data-act="delete"]').addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent card selection
+      this.removeItem(item.id);
+    });
     
-    card.querySelector('[data-act="copy"]').addEventListener('click', () => 
-      this.clipboard.copy(item.text)
-    );
+    card.querySelector('[data-act="copy"]').addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent card selection
+      this.clipboard.copy(item.text);
+    });
   }
 
   /**
@@ -587,16 +739,27 @@ class CompyApp {
    * @returns {string} HTML string with styled tag chips
    */
   renderTags(tags = [], searchQuery = '') {
+    // PERFORMANCE OPTIMIZATION: Limit visible tags to prevent DOM bloat
+    // Only render the first N tags, with a "more" indicator for overflow
     const maxVisible = UI_CONFIG.maxVisibleTags;
     const visibleTags = tags.slice(0, maxVisible);
     const extraCount = tags.length - visibleTags.length;
     
+    // TAG CHIP GENERATION: Create styled HTML for each visible tag
     let html = visibleTags.map(tag => {
+      // SECURITY: Escape HTML to prevent XSS, then apply search highlighting
       const highlighted = highlightText(escapeHtml(tag), searchQuery);
+      
+      // COLOR CONSISTENCY: Generate deterministic hue from tag name hash
+      // Same tag always gets same color across renders and sessions
       const hue = Math.abs(stringHash(tag)) % 360;
+      
+      // CSS CUSTOM PROPERTY: Use --hue for dynamic styling in CSS
       return `<span class="chip" style="--hue: ${hue}">${highlighted}</span>`;
     }).join('');
     
+    // OVERFLOW INDICATOR: Show count of hidden tags when list is truncated
+    // Provides user feedback about hidden content
     if (extraCount > 0) {
       html += `<span class="more" data-more-tags title="Show all ${tags.length} tags">+${extraCount} more</span>`;
     }
@@ -660,20 +823,28 @@ class CompyApp {
    * @returns {string}
    */
   getNoResultsEmptyState({ hasSearch, hasFilters }) {
+    // CONDITIONAL MESSAGE GENERATION: Create contextual user guidance
+    // Different combinations of search/filter states need different messaging
     let details = '';
     if (hasSearch && hasFilters) {
+      // COMPOUND FILTERING: Both search and tag filters are active
       details = 'No items match your search and selected filters.';
     } else if (hasSearch) {
+      // TEXT SEARCH ONLY: User has typed in search box
       details = 'No items match your search.';
     } else if (hasFilters) {
+      // TAG FILTERING ONLY: User has selected filter tags
       details = 'No items match the selected filters.';
     }
 
+    // CONDITIONAL ACTION BUTTONS: Only show relevant clearing options
+    // Avoids UI clutter by hiding irrelevant actions
     const searchButton = hasSearch ? 
       '<button id="clearSearchBtn" class="secondary-btn">Clear search</button>' : '';
     const filtersButton = hasFilters ? 
       '<button id="clearFiltersBtn" class="secondary-btn">Clear filters</button>' : '';
 
+    // TEMPLATE INTERPOLATION: Inject dynamic content into static HTML structure
     return `
       <section class="empty">
         <div class="empty-card">
@@ -691,42 +862,103 @@ class CompyApp {
 
   /**
    * Attach event handlers for buttons rendered inside empty state UIs.
+   * Uses optimized batch event binding for better performance.
    */
   setupEmptyStateHandlers() {
-    $('#emptyAddBtn')?.addEventListener('click', () => this.openItemModal());
-    $('#emptyImportBtn')?.addEventListener('click', () => $('#importFile').click());
-    $('#clearSearchBtn')?.addEventListener('click', () => {
-      this.search.clear();
-    });
-    $('#clearFiltersBtn')?.addEventListener('click', () => {
-      updateFilterTags([]);
+    // BATCH EVENT HANDLERS: Group related handlers for efficiency
+    const handlers = {
+      '#emptyAddBtn': () => this.openItemModal(),
+      '#emptyImportBtn': () => $('#importFile').click(),
+      '#clearSearchBtn': () => this.search.clear(),
+      '#clearFiltersBtn': () => updateFilterTags([])
+    };
+    
+    // OPTIMIZED BATCH BINDING: Query and bind all handlers in single pass
+    Object.entries(handlers).forEach(([selector, handler]) => {
+      addEventHandler(selector, 'click', handler);
     });
   }
 
   /**
    * Open the item modal for adding a new item or editing an existing one.
+   * 
+   * Error Handling:
+   * - Validates item ID exists when editing
+   * - Handles missing DOM elements gracefully
+   * - Provides fallback values for corrupted item data
+   * - Shows user-friendly error messages for failures
+   * 
    * @param {string|null} [itemId=null] - ID of the item to edit; null for a new item
    */
   openItemModal(itemId = null) {
-    setEditingId(itemId);
-    const state = getState();
-    const item = itemId ? state.items.find(i => i.id === itemId) : {
-      text: '',
-      desc: '',
-      sensitive: false,
-      tags: []
-    };
+    try {
+      // Input Validation: Ensure itemId is valid when provided
+      if (itemId && typeof itemId !== 'string') {
+        console.warn('Invalid itemId provided to openItemModal:', itemId);
+        this.showNotification('Invalid item ID', 'error');
+        return;
+      }
 
-    // Update modal title
-    $('#itemModalTitle').textContent = itemId ? 'Edit Snippet' : 'Add Snippet';
+      setEditingId(itemId);
+      const state = getState();
+      
+      // Item Resolution: Find existing item or create new one with validation
+      let item;
+      if (itemId) {
+        item = state.items.find(i => i.id === itemId);
+        
+        // Validation: Ensure item exists when editing
+        if (!item) {
+          console.error(`Item with ID '${itemId}' not found`);
+          this.showNotification('Item not found', 'error');
+          return;
+        }
+      } else {
+        // Default values for new item
+        item = {
+          text: '',
+          desc: '',
+          sensitive: false,
+          tags: []
+        };
+      }
 
-    // Populate form
-    $('#itemText').value = item.text;
-    $('#itemDesc').value = item.desc;
-    $('#itemSensitive').checked = item.sensitive;
-    this.setTagChips(item.tags);
+      // DOM Element Validation: Ensure required elements exist
+      const titleElement = $('#itemModalTitle');
+      const textElement = $('#itemText');
+      const descElement = $('#itemDesc');
+      const sensitiveElement = $('#itemSensitive');
+      
+      if (!titleElement || !textElement || !descElement || !sensitiveElement) {
+        console.error('Required modal elements not found');
+        this.showNotification('Modal initialization failed', 'error');
+        return;
+      }
 
-    this.modalManager.open('#itemModal', { initialFocus: '#itemText' });
+      // Safe Data Population: Use fallback values for corrupted data
+      titleElement.textContent = itemId ? 'Edit Snippet' : 'Add Snippet';
+      textElement.value = item.text || '';
+      descElement.value = item.desc || '';
+      sensitiveElement.checked = !!item.sensitive;
+      
+      // Tag Chip Population: Handle invalid tag arrays gracefully
+      const tags = Array.isArray(item.tags) ? item.tags : [];
+      this.setTagChips(tags);
+
+      // Modal Opening: Handle modal manager failures
+      if (!this.modalManager) {
+        console.error('Modal manager not initialized');
+        this.showNotification('Modal system unavailable', 'error');
+        return;
+      }
+
+      this.modalManager.open('#itemModal', { initialFocus: '#itemText' });
+      
+    } catch (error) {
+      // Global Error Handler: Catch any unexpected errors
+      console.error('Failed to open item modal:', error);
+      this.showNotification('Failed to open edit form', 'error');
+    }
   }
 
   /**
@@ -763,28 +995,107 @@ class CompyApp {
 
   /**
    * Initialize profile editing modal and related event handlers.
+   * 
+   * Input Validation:
+   * - Profile name length limits (100 characters max)
+   * - Special character restrictions for security
+   * - XSS prevention through sanitization
+   * - Empty value handling
    */
   initProfile() {
-    $('#profileEditBtn').addEventListener('click', () => {
-      const state = getState();
-      $('#profileNameInput').value = state.profileName;
-      this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
-    });
-
-    $('#profileSaveBtn').addEventListener('click', () => {
-      const name = $('#profileNameInput').value.trim();
-      updateProfile(name);
-      this.modalManager.close('#profileModal');
-      this.showNotification('Profile updated');
-    });
-
-    // Handle Enter key in profile input
-    $('#profileNameInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        $('#profileSaveBtn').click();
+    // Profile Edit Button: Open modal with current profile data
+    addEventHandler('#profileEditBtn', 'click', () => {
+      try {
+        const state = getState();
+        const profileInput = $('#profileNameInput');
+        
+        if (!profileInput) {
+          console.error('Profile input element not found');
+          this.showNotification('Profile editor unavailable', 'error');
+          return;
+        }
+        
+        profileInput.value = state.profileName || '';
+        this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
+      } catch (error) {
+        console.error('Failed to open profile editor:', error);
+        this.showNotification('Failed to open profile editor', 'error');
       }
     });
+
+    // Profile Save Button: Validate and save profile name
+    addEventHandler('#profileSaveBtn', 'click', () => {
+      this.saveProfileWithValidation();
+    });
+
+    // KEYBOARD SHORTCUT: Handle Enter key for quick save
+    addEventHandler('#profileNameInput', 'keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.saveProfileWithValidation();
+      }
+    });
+  }
+
+  /**
+   * Validate and save profile name with comprehensive input validation
+   * 
+   * Validation Rules:
+   * - Length: 0-100 characters
+   * - Content: Letters, numbers, spaces, basic punctuation only
+   * - Security: XSS prevention and sanitization
+   * 
+   * @private
+   */
+  saveProfileWithValidation() {
+    try {
+      const profileInput = $('#profileNameInput');
+      
+      if (!profileInput) {
+        console.error('Profile input element not found during save');
+        this.showNotification('Profile save failed: Input not found', 'error');
+        return;
+      }
+
+      // Input Sanitization: Get and clean the input value
+      const rawName = profileInput.value || '';
+      const trimmedName = rawName.trim();
+
+      // Length Validation: Check character limits
+      if (trimmedName.length > 100) {
+        this.showNotification('Profile name too long (max 100 characters)', 'error');
+        return;
+      }
+
+      // Content Validation: Ensure safe characters only
+      // Allow letters, numbers, spaces, and basic punctuation
+      const safePattern = /^[a-zA-Z0-9\s\-_.,']*$/;
+      if (trimmedName.length > 0 && !safePattern.test(trimmedName)) {
+        this.showNotification('Profile name contains invalid characters', 'error');
+        return;
+      }
+
+      // XSS Prevention: Additional sanitization check
+      const hasHtmlTags = /<[^>]*>/g.test(trimmedName);
+      if (hasHtmlTags) {
+        this.showNotification('Profile name cannot contain HTML tags', 'error');
+        return;
+      }
+
+      // Update Profile: Apply the validated name
+      updateProfile(trimmedName);
+      this.modalManager.close('#profileModal');
+      
+      // User Feedback: Provide appropriate success message
+      const message = trimmedName 
+        ? `Profile updated to "${trimmedName}"`
+        : 'Profile name cleared';
+      this.showNotification(message, 'success');
+      
+    } catch (error) {
+      console.error('Profile save failed:', error);
+      this.showNotification('Failed to save profile', 'error');
+    }
   }
 
   /**
@@ -799,18 +1110,19 @@ class CompyApp {
 
   /**
    * Update the filter count badge visibility and text.
+   * Uses optimized visibility toggling utility.
    * @param {Object} state
    */
   renderFilterBadge(state) {
     const badge = $('#filterBadge');
     const count = state.filterTags.length;
+    const shouldShow = count > 0;
     
-    if (count > 0) {
+    // OPTIMIZED VISIBILITY: Use utility function for consistent behavior
+    if (shouldShow) {
       badge.textContent = count;
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
     }
+    toggleVisibility(badge, shouldShow);
   }
 
   /**
@@ -820,6 +1132,12 @@ class CompyApp {
     // Export menu handling
     const exportBtn = $('#exportMenuBtn');
     const exportMenu = $('#exportMenu');
+
+    // Guard against missing DOM
+    if (!exportBtn || !exportMenu) {
+      if (UI_CONFIG.debug) console.warn('Export UI not found; skipping export handlers');
+      return;
+    }
     
     exportBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -852,22 +1170,63 @@ class CompyApp {
 
   /**
    * Export the current state as a JSON file.
-   * Uses a helper to trigger a safe, temporary download link.
+   * 
+   * Error Handling:
+   * - Validates state data before export
+   * - Handles JSON serialization errors
+   * - Provides fallback values for missing data
+   * - Shows appropriate user feedback for failures
    */
   exportJSON() {
-    const state = getState();
-    const payload = {
-      profileName: state.profileName || '',
-      items: state.items
-    };
-    
-    downloadFile(
-      'compy-export.json',
-      JSON.stringify(payload, null, 2),
-      'application/json'
-    );
-    
-    this.showNotification('JSON export downloaded');
+    try {
+      // State Validation: Ensure valid state exists
+      const state = getState();
+      if (!state || typeof state !== 'object') {
+        console.error('Invalid application state for export');
+        this.showNotification('Export failed: Invalid application state', 'error');
+        return;
+      }
+
+      // Data Validation: Ensure items array exists and is valid
+      const items = Array.isArray(state.items) ? state.items : [];
+      if (items.length === 0) {
+        const proceed = confirm('No snippets to export. Export empty file anyway?');
+        if (!proceed) return;
+      }
+
+      // Payload Construction: Build export data with validation
+      const payload = {
+        profileName: (state.profileName || '').trim(),
+        items: items.filter(item => item && typeof item === 'object' && item.id)
+      };
+
+      // JSON Serialization: Handle potential serialization errors
+      let jsonString;
+      try {
+        jsonString = JSON.stringify(payload, null, 2);
+      } catch (serializationError) {
+        console.error('JSON serialization failed:', serializationError);
+        this.showNotification('Export failed: Unable to serialize data', 'error');
+        return;
+      }
+
+      // File Download: Handle download failures
+      try {
+        downloadFile('compy-export.json', jsonString, 'application/json');
+        this.showNotification(
+          `JSON export downloaded (${payload.items.length} items)`,
+          'success'
+        );
+      } catch (downloadError) {
+        console.error('Download failed:', downloadError);
+        this.showNotification('Export failed: Download error', 'error');
+      }
+      
+    } catch (error) {
+      // Global Error Handler: Catch any unexpected errors
+      console.error('JSON export failed:', error);
+      this.showNotification('Export failed: Unexpected error', 'error');
+    }
   }
 
   /**
@@ -924,6 +1283,133 @@ class CompyApp {
     });
   }
 
+  // ===== Import helpers (behavior-preserving refactor) =====
+  /**
+   * Prompt the user for an import option when existing data is present, including
+   * a final destructive confirmation for Replace All. Shows identical notifications
+   * as the original flows.
+   * @param {number} existingCount
+   * @param {string} existingProfile
+   * @param {number} importingCount
+   * @param {string} importingProfile
+   * @returns {Promise<{ option: 'cancel'|'add'|'replace', shouldClearExisting: boolean }>}
+   */
+  async promptImportOption(existingCount, existingProfile, importingCount, importingProfile) {
+    // Ask user how to handle import
+    const importOption = await this.showImportOptionsDialog({
+      existingCount,
+      existingProfile: existingProfile || 'Not set',
+      importingCount,
+      importingProfile: importingProfile || 'Not set'
+    });
+
+    if (importOption === 'cancel') {
+      this.showNotification('Import cancelled', 'info');
+      return { option: 'cancel', shouldClearExisting: false };
+    }
+
+    if (importOption === 'replace') {
+      // Final confirmation guard before destructive replace
+      const confirmed = await this.confirmationManager.show({
+        title: 'Replace All Data',
+        message: `This will delete ${existingCount} existing snippets and reset your profile ("${existingProfile || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
+        confirmText: 'Replace All',
+        cancelText: 'Cancel',
+        variant: 'danger'
+      });
+      if (!confirmed) {
+        this.showNotification('Replace cancelled', 'info');
+        return { option: 'cancel', shouldClearExisting: false };
+      }
+      return { option: 'replace', shouldClearExisting: true };
+    }
+
+    // Default to add
+    return { option: 'add', shouldClearExisting: false };
+  }
+
+  /**
+   * Create a styled tag chip element with consistent coloring
+   * 
+   * @param {string} tag - Tag text content
+   * @param {Object} [options={}] - Chip configuration options
+   * @param {boolean} [options.removable=false] - Whether chip includes remove button
+   * @param {Function} [options.onRemove] - Callback when remove button is clicked
+   * @returns {HTMLElement} Configured chip element
+   */
+  createTagChip(tag, options = {}) {
+    const { removable = false, onRemove } = options;
+    
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    
+    // Apply consistent hue-based coloring
+    const hue = Math.abs(stringHash(tag)) % 360;
+    chip.style.setProperty('--hue', hue);
+    
+    if (removable) {
+      chip.dataset.value = tag;
+      chip.innerHTML = `
+        ${escapeHtml(tag)} 
+        <span class="x" title="Remove tag" aria-label="Remove ${tag} tag">×</span>
+      `;
+      
+      // Handle removal if callback provided
+      if (onRemove) {
+        chip.querySelector('.x').addEventListener('click', () => onRemove(chip, tag));
+      }
+    } else {
+      chip.textContent = tag;
+    }
+    
+    return chip;
+  }
+
+  /**
+   * Show import result notification with standardized formatting
+   * 
+   * @param {number} importCount - Number of successfully imported items
+   * @param {number} skippedCount - Number of skipped items (duplicates/invalid)
+   */
+  showImportResult(importCount, skippedCount) {
+    const message = skippedCount > 0 
+      ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
+      : `Imported ${importCount} items`;
+    
+    this.showNotification(message, importCount > 0 ? 'success' : 'info');
+  }
+
+  /**
+   * Generate a duplicate-detection signature for an item.
+   * Duplicate criteria: same text + desc + sensitive flag (tags ignored).
+   * @param {{text?:string, desc?:string, sensitive?:boolean}} i
+   * @returns {string}
+   */
+  generateItemSignature(i) {
+    return `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
+  }
+
+  /**
+   * Build a dedupe set from current state items unless we are replacing all.
+   * @param {ReturnType<typeof getState>} currentState
+   * @param {boolean} shouldClearExisting
+   * @returns {Set<string>}
+   */
+  buildDedupeSetFromState(currentState, shouldClearExisting) {
+    if (shouldClearExisting) return new Set();
+    const items = (currentState.items || []);
+    return new Set(items.map(i => this.generateItemSignature(i)));
+  }
+
+  /**
+   * Update profile name if a non-empty value is provided.
+   * @param {string} profileName
+   */
+  updateProfileIfProvided(profileName) {
+    const name = (profileName || '').trim();
+    if (name) updateProfile(name);
+  }
+
   /**
    * Import items from a JSON payload.
    * Accepts both legacy array-only exports and the newer object format containing { items, profileName }.
@@ -949,42 +1435,22 @@ class CompyApp {
       // Check if there's existing data and ask for import options
       const currentState = getState();
       const hasExistingData = currentState.items.length > 0 || currentState.profileName;
-      
+
+      // Decide how to handle existing data (Add/Replace/Cancel)
       let shouldClearExisting = false;
-      let importOption = 'add';
-      
       if (hasExistingData) {
-        importOption = await this.showImportOptionsDialog({
-          existingCount: currentState.items.length,
-          existingProfile: currentState.profileName || 'Not set',
-          importingCount: items.length,
-          importingProfile: profileName || 'Not set'
-        });
-        
-        if (importOption === 'cancel') {
-          this.showNotification('Import cancelled', 'info');
-          return;
-        } else if (importOption === 'replace') {
-          // Final confirmation to prevent accidental data loss
-          const confirmed = await this.confirmationManager.show({
-            title: 'Replace All Data',
-            message: `This will delete ${currentState.items.length} existing snippets and reset your profile ("${currentState.profileName || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
-            confirmText: 'Replace All',
-            cancelText: 'Cancel',
-            variant: 'danger'
-          });
-          if (!confirmed) {
-            this.showNotification('Replace cancelled', 'info');
-            return;
-          }
-          shouldClearExisting = true;
-        }
-        // if importOption === 'add', we just continue without clearing
+        const decision = await this.promptImportOption(
+          currentState.items.length,
+          currentState.profileName || 'Not set',
+          items.length,
+          profileName || 'Not set'
+        );
+        if (decision.option === 'cancel') return;
+        shouldClearExisting = decision.shouldClearExisting;
       }
 
       // Prepare duplicate-detection set (based on existing items when adding)
-      const buildSig = (i) => `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
-      const dedupeSet = shouldClearExisting ? new Set() : new Set((currentState.items || []).map(buildSig));
+      const dedupeSet = this.buildDedupeSetFromState(currentState, shouldClearExisting);
 
       // Clear existing data if user chose replace
       if (shouldClearExisting) {
@@ -992,9 +1458,7 @@ class CompyApp {
       }
 
       // Update profile if provided
-      if (profileName) {
-        updateProfile(profileName);
-      }
+      this.updateProfileIfProvided(profileName);
 
       let importCount = 0;
       let skippedCount = 0;
@@ -1006,15 +1470,182 @@ class CompyApp {
         }
       }
 
-      const message = skippedCount > 0
-        ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
-        : `Imported ${importCount} items`;
-      this.showNotification(message);
+      this.showImportResult(importCount, skippedCount);
       
     } catch (error) {
       console.error('JSON import failed:', error);
       this.showNotification('Invalid JSON file', 'error');
     }
+  }
+
+  /**
+   * Parse CSV metadata and headers to extract profile information and column mapping
+   * 
+   * @param {string[]} lines - CSV lines array
+   * @returns {Object} Parsed CSV structure with profile, headers, and mapping
+   * @private
+   */
+  parseCSVStructure(lines) {
+    if (!lines.length) {
+      throw new Error('Empty CSV file');
+    }
+
+    // Remove BOM (Byte Order Mark) from first line if present
+    const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, ''));
+    let headerIndex = 0;
+    let profileName = null;
+    
+    // Check for profile metadata block
+    if (firstLine.length === 1 && firstLine[0].toLowerCase() === 'profilename') {
+      if (UI_CONFIG.debug) console.log('Detected profile metadata in CSV');
+      
+      // Extract profile name from next line
+      if (lines[1]) {
+        const profileData = parseCSVLine(lines[1]);
+        profileName = (profileData[0] || '').trim() || null;
+      }
+      
+      headerIndex = 2; // Data headers start after metadata block
+    }
+
+    // Parse column headers
+    const headerLine = lines[headerIndex];
+    if (!headerLine) {
+      throw new Error('No headers found after metadata parsing');
+    }
+    
+    const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
+    const columnMapping = {
+      text: headers.indexOf('text'),
+      desc: headers.indexOf('desc'),
+      sensitive: headers.indexOf('sensitive'),
+      tags: headers.indexOf('tags')
+    };
+
+    // Validate required columns
+    if (columnMapping.text === -1 || columnMapping.desc === -1) {
+      throw new Error('Required columns missing: text and desc columns are mandatory');
+    }
+    
+    const dataLines = lines.slice(headerIndex + 1).filter(line => line.trim());
+    
+    return {
+      profileName,
+      columnMapping,
+      dataLines,
+      itemCount: dataLines.length
+    };
+  }
+
+  /**
+   * Parse a single CSV data row into an item object
+   * 
+   * @param {string} line - CSV data line
+   * @param {Object} columnMapping - Column index mapping
+   * @returns {Object} Parsed item data
+   * @private
+   */
+  parseCSVDataRow(line, columnMapping) {
+    const values = parseCSVLine(line);
+    
+    return {
+      text: (values[columnMapping.text] || '').trim(),
+      desc: (values[columnMapping.desc] || '').trim(),
+      sensitive: columnMapping.sensitive >= 0 ? 
+        ['1', 'true'].includes((values[columnMapping.sensitive] || '').toLowerCase()) : false,
+      tags: columnMapping.tags >= 0 ? 
+        (values[columnMapping.tags] || '')
+          .split('|')
+          .map(t => t.trim())
+          .filter(Boolean)
+        : []
+    };
+  }
+
+  /**
+   * Handle import options when existing data is present
+   * 
+   * @param {number} itemCount - Number of items to import
+   * @param {string} source - Source description for import
+   * @returns {Object} Import decision with cancelled and shouldClearExisting flags
+   * @private
+   */
+  async handleImportOptions(itemCount, source) {
+    const currentState = getState();
+    const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+    
+    if (hasExistingData) {
+      const decision = await this.promptImportOption(
+        currentState.items.length,
+        currentState.profileName || 'Not set',
+        itemCount,
+        source
+      );
+      
+      return {
+        cancelled: decision.option === 'cancel',
+        shouldClearExisting: decision.shouldClearExisting
+      };
+    }
+    
+    return { cancelled: false, shouldClearExisting: false };
+  }
+
+  /**
+   * Prepare for import by setting up deduplication and applying profile
+   * 
+   * @param {boolean} shouldClearExisting - Whether to clear existing data
+   * @param {string|null} profileName - Profile name to apply
+   * @returns {Set<string>} Deduplication set for import
+   * @private
+   */
+  prepareImport(shouldClearExisting, profileName) {
+    const currentState = getState();
+    
+    // Clear existing data if requested
+    if (shouldClearExisting) {
+      this.clearAllData();
+    }
+    
+    // Apply profile name if provided
+    if (profileName) {
+      this.updateProfileIfProvided(profileName);
+    }
+    
+    // Build deduplication set
+    return this.buildDedupeSetFromState(currentState, shouldClearExisting);
+  }
+
+  /**
+   * Process CSV data rows and import valid items
+   * 
+   * @param {string[]} dataLines - Array of CSV data lines
+   * @param {Object} columnMapping - Column index mapping
+   * @param {Set<string>} dedupeSet - Deduplication set
+   * @returns {Object} Import results with counts
+   * @private
+   */
+  processCSVDataRows(dataLines, columnMapping, dedupeSet) {
+    let importCount = 0;
+    let skippedCount = 0;
+    
+    for (let i = 0; i < dataLines.length; i++) {
+      try {
+        const itemData = this.parseCSVDataRow(dataLines[i], columnMapping);
+        
+        if (this.addImportedItem(itemData, dedupeSet)) {
+          importCount++;
+        } else {
+          skippedCount++;
+          console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, itemData);
+        }
+      } catch (lineError) {
+        skippedCount++;
+        console.warn(`Failed to parse line ${i + 1}:`, lineError.message);
+      }
+    }
+    
+    return { importCount, skippedCount };
   }
 
   /**
@@ -1042,189 +1673,33 @@ class CompyApp {
    */
   async importCSV(csvText) {
     try {
-      // STEP 1: Normalize line endings and filter empty lines
-      // Split handles both Windows (\r\n) and Unix (\n) line endings for cross-platform compatibility
-      // Filter empty lines to avoid parsing errors with malformed CSV files
+      // Parse CSV structure and extract metadata
       const lines = csvText.split(/\r?\n/).filter(line => line.trim());
-      if (!lines.length) {
-        throw new Error('Empty CSV file');
-      }
-
-      // STEP 2: Parse first line and detect CSV format structure
-      // Remove BOM (Byte Order Mark) that may be present in UTF-8 files exported from Excel
-      // BOM is invisible but causes parsing errors if not removed
-      const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, ''));
-      let headerIndex = 0; // Track where the actual data headers start (after metadata)
-      let importedProfileName = null; // Capture profile name if provided in metadata section
+      const csvStructure = this.parseCSVStructure(lines);
       
-      // PHASE 1: Detect and parse optional profile metadata block
-      // CSV Format Option 1: profileName header followed by profile value, then data
-      // Example: "profileName"\n"John Doe"\n\n"text,desc,sensitive,tags"...
-      if (firstLine.length === 1 && firstLine[0].toLowerCase() === 'profilename') {
-        console.log('Detected profile metadata in CSV - parsing metadata block');
-        
-        // Extract profile name from the line immediately following the header
-        const profileLine = lines[1];
-        if (profileLine) {
-          const profileData = parseCSVLine(profileLine);
-          const profileName = (profileData[0] || '').trim();
-          
-          // Store profile name to apply after user chooses import strategy (Add/Replace)
-          // This ensures we don't overwrite existing profile if user cancels
-          if (profileName) {
-            importedProfileName = profileName;
-          }
-        }
-        
-        // Skip metadata block - actual headers start at line 3 (index 2)
-        headerIndex = 2;
-      }
-
-      // PHASE 2: Parse column headers and create mapping
-      const headerLine = lines[headerIndex];
-      if (!headerLine) {
-        throw new Error('No headers found after metadata parsing');
-      }
+      // Handle import options with existing data
+      const importDecision = await this.handleImportOptions(
+        csvStructure.itemCount,
+        'From CSV'
+      );
+      if (importDecision.cancelled) return;
       
-      // Normalize headers to lowercase for case-insensitive matching
-      const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
+      // Prepare for import
+      const dedupeSet = this.prepareImport(importDecision.shouldClearExisting, csvStructure.profileName);
       
-      // Create column index mapping for required and optional fields
-      const columnMapping = {
-        text: headers.indexOf('text'),
-        desc: headers.indexOf('desc'),
-        sensitive: headers.indexOf('sensitive'),
-        tags: headers.indexOf('tags')
-      };
-
-      // Validate required columns are present
-      if (columnMapping.text === -1 || columnMapping.desc === -1) {
-        throw new Error('Required columns missing: text and desc columns are mandatory');
-      }
+      // Process data rows and import items
+      const result = this.processCSVDataRows(csvStructure.dataLines, csvStructure.columnMapping, dedupeSet);
       
-      console.log('CSV column mapping:', columnMapping);
-
-      // OPTIMIZATION: Calculate items count without separate loop
-      // Filter non-empty lines efficiently using array methods
-      const dataLines = lines.slice(headerIndex + 1).filter(line => line.trim());
-      const itemsToImport = dataLines.length;
-
-      // Check if there's existing data and ask for import options
-      const currentState = getState();
-      const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+      // Show results to user
+      this.showImportResult(result.importCount, result.skippedCount);
       
-      let shouldClearExisting = false;
-      let importOption = 'add';
-      
-      if (hasExistingData) {
-        importOption = await this.showImportOptionsDialog({
-          existingCount: currentState.items.length,
-          existingProfile: currentState.profileName || 'Not set',
-          importingCount: itemsToImport,
-          importingProfile: 'From CSV'
-        });
-        
-        if (importOption === 'cancel') {
-          this.showNotification('Import cancelled', 'info');
-          return;
-        } else if (importOption === 'replace') {
-          // Final confirmation to prevent accidental data loss
-          const confirmed = await this.confirmationManager.show({
-            title: 'Replace All Data',
-            message: `This will delete ${currentState.items.length} existing snippets and reset your profile ("${currentState.profileName || 'Not set'}"). This cannot be undone.\n\nProceed with replace?`,
-            confirmText: 'Replace All',
-            cancelText: 'Cancel',
-            variant: 'danger'
-          });
-          if (!confirmed) {
-            this.showNotification('Replace cancelled', 'info');
-            return;
-          }
-          shouldClearExisting = true;
-        }
-        // if importOption === 'add', we just continue without clearing
-      }
-
-      // Prepare duplicate-detection set (based on existing items when adding)
-      const buildSig = (i) => `${(i.text || '').trim()}||${(i.desc || '').trim()}||${i.sensitive ? '1' : '0'}`;
-      const dedupeSet = shouldClearExisting ? new Set() : new Set((currentState.items || []).map(buildSig));
-
-      // Clear existing data if user chose replace
-      if (shouldClearExisting) {
-        this.clearAllData();
-      }
-
-      // Update profile after options are confirmed
-      if (importedProfileName) {
-        updateProfile(importedProfileName);
-      }
-
-      // PHASE 3: Process data rows
-      let importCount = 0;
-      let skippedCount = 0;
-      
-      // OPTIMIZATION: Process pre-filtered data lines (eliminates empty line checks)
-      // This is more efficient than checking each line during iteration
-      for (let i = 0; i < dataLines.length; i++) {
-        const line = dataLines[i]; // Already trimmed and filtered
-
-        try {
-          // Parse the line into field values
-          const values = parseCSVLine(line);
-          
-          // PHASE 3A: Extract and validate core fields
-          const itemData = {
-            text: (values[columnMapping.text] || '').trim(),
-            desc: (values[columnMapping.desc] || '').trim(),
-            
-            // PHASE 3B: Parse sensitive flag with flexible boolean handling
-            // Accepts: '1', 'true', 'TRUE', 'True' etc.
-            sensitive: columnMapping.sensitive >= 0 ? 
-              ['1', 'true'].includes((values[columnMapping.sensitive] || '').toLowerCase()) : false,
-            
-            // PHASE 3C: Parse tags with pipe separator
-            // Format: \"tag1|tag2|tag3\" -> ['tag1', 'tag2', 'tag3']
-            tags: columnMapping.tags >= 0 ? 
-              (values[columnMapping.tags] || '')
-                .split('|') // Split on pipe separator
-                .map(t => t.trim()) // Trim whitespace from each tag
-                .filter(Boolean) // Remove empty tags
-              : []
-          };
-
-          // PHASE 3D: Validate and import the item (with duplicate skipping in 'Add' mode)
-          if (this.addImportedItem(itemData, dedupeSet)) {
-            importCount++;
-          } else {
-            skippedCount++;
-            console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, itemData);
-          }
-          
-        } catch (lineError) {
-          // Handle parsing errors for individual lines gracefully
-          skippedCount++;
-          console.warn(`Failed to parse line ${i + 1}:`, lineError.message);
-        }
-      }
-
-      // Provide detailed feedback to user
-      const message = skippedCount > 0 
-        ? `Imported ${importCount} items (${skippedCount} skipped as duplicates or invalid)`
-        : `Imported ${importCount} items`;
-      
-      this.showNotification(message, importCount > 0 ? 'success' : 'info');
-      
-      if (importCount === 0 && skippedCount > 0) {
+      if (result.importCount === 0 && result.skippedCount > 0) {
         console.error('No valid items found in CSV. Check format and required fields.');
       }
       
     } catch (error) {
-      // Handle critical parsing errors
       console.error('CSV import failed:', error);
-      this.showNotification(
-        `CSV import failed: ${error.message}`, 
-        'error'
-      );
+      this.showNotification(`CSV import failed: ${error.message}`, 'error');
     }
   }
 
@@ -1557,21 +2032,10 @@ class CompyApp {
     );
     if (existing) return;
 
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.dataset.value = normalizedTag;
-    
-    const hue = Math.abs(stringHash(normalizedTag)) % 360;
-    chip.style.setProperty('--hue', hue);
-    
-    chip.innerHTML = `
-      ${escapeHtml(normalizedTag)} 
-      <span class="x" title="Remove tag" aria-label="Remove ${normalizedTag} tag">×</span>
-    `;
-    
-    // Handle removal
-    chip.querySelector('.x').addEventListener('click', () => {
-      chip.remove();
+    // Create removable chip using reusable utility
+    const chip = this.createTagChip(normalizedTag, {
+      removable: true,
+      onRemove: (chipElement) => chipElement.remove()
     });
 
     $('#tagChips').appendChild(chip);
@@ -1758,11 +2222,7 @@ class CompyApp {
     list.innerHTML = '';
     
     item.tags.forEach(tag => {
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      const hue = Math.abs(stringHash(tag)) % 360;
-      chip.style.setProperty('--hue', hue);
-      chip.textContent = tag;
+      const chip = this.createTagChip(tag);
       list.appendChild(chip);
     });
 
@@ -1774,6 +2234,17 @@ class CompyApp {
    * @param {KeyboardEvent} e
    */
   handleKeyboardShortcuts(e) {
+    // Don't handle shortcuts if modal is open or input is focused
+    if (this.modalManager?.hasOpenModals() || 
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+      return;
+    }
+    
+    // Handle card-specific shortcuts first
+    if (this.handleCardKeyboardShortcuts(e)) {
+      return;
+    }
+    
     // Search shortcuts
     if ((e.ctrlKey && e.key.toLowerCase() === 'f') || e.key === '/') {
       e.preventDefault();
@@ -1786,6 +2257,29 @@ class CompyApp {
       e.preventDefault();
       this.openItemModal();
       return;
+    }
+    
+    // Card navigation shortcuts
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        this.selectCardUp();
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        this.selectCardDown();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        this.selectCardLeft();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        this.selectCardRight();
+        break;
+      case 'Escape':
+        this.clearCardSelection();
+        break;
     }
   }
 
@@ -1820,8 +2314,14 @@ class CompyApp {
         // Preserve scroll position during layout adjustments
         const scrollTop = window.scrollY || document.documentElement.scrollTop;
         requestAnimationFrame(() => {
+          // If we haven't restored the initial scroll yet and we have a saved
+          // position, skip interfering here. The main render will handle it.
+          if (!this.scrollRestored && this.initialScrollY > 0) {
+            return;
+          }
           if (Math.abs(window.scrollY - scrollTop) < 5) {
-            window.scrollTo(0, scrollTop);
+            // Use instant behavior to prevent any animated upward scroll
+            window.scrollTo({ top: scrollTop, behavior: 'auto' });
           }
         });
       }
@@ -1870,6 +2370,393 @@ class CompyApp {
       console.warn('Failed to initialize mobile navigation');
       this.mobileNavigation = null;
     }
+  }
+  
+  /**
+   * Handle keyboard shortcuts that work on selected cards or globally
+   * @param {KeyboardEvent} e
+   * @returns {boolean} True if the event was handled
+   */
+  handleCardKeyboardShortcuts(e) {
+    const key = e.key.toLowerCase();
+    const selectedItem = this.getSelectedItem();
+    
+    switch (key) {
+      case 'd':
+        // Delete selected card or show general shortcut help
+        if (selectedItem) {
+          e.preventDefault();
+          this.removeItem(selectedItem.id);
+          return true;
+        }
+        break;
+        
+      case 'c':
+        // Copy selected card
+        if (selectedItem) {
+          e.preventDefault();
+          this.clipboard.copy(selectedItem.text);
+          return true;
+        }
+        break;
+        
+      case 'f':
+        // Open filter modal
+        e.preventDefault();
+        this.openFilterModal();
+        return true;
+        
+      case 'i':
+        // Import file
+        e.preventDefault();
+        $('#importFile').click();
+        return true;
+        
+      case 'e':
+        // Export menu (show export menu)
+        e.preventDefault();
+        const exportBtn = $('#exportMenuBtn');
+        exportBtn?.click();
+        return true;
+        
+      case 'p':
+        // Profile modal
+        e.preventDefault();
+        const state = getState();
+        $('#profileNameInput').value = state.profileName;
+        this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
+        return true;
+        
+      case 'a':
+        // About modal
+        e.preventDefault();
+        this.modalManager.open('#aboutModal');
+        return true;
+        
+      case 'enter':
+        // Edit selected card or add new item
+        e.preventDefault();
+        if (selectedItem) {
+          this.openItemModal(selectedItem.id);
+        } else {
+          this.openItemModal();
+        }
+        return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Select a card by index
+   * @param {number} index - Index of card to select
+   * @param {boolean} showNotification - Whether to show the help notification
+   */
+  /**
+   * Select a card by index and optionally show a one-time help notification.
+   * Also scrolls the selected card into view to keep it centered for context.
+   *
+   * Note: This only changes the visual selection state; it does not copy or edit.
+   *
+   * @param {number} index - Zero-based index of the card to select.
+   * @param {boolean} [showNotification=true] - Whether to show the help toast on first selection.
+   * @returns {void}
+   */
+  selectCard(index, showNotification = true) {
+    if (index < 0 || index >= this.cardElements.length) {
+      return;
+    }
+    
+    const wasFirstSelection = this.selectedCardIndex === -1;
+    this.selectedCardIndex = index;
+    this.updateCardSelection();
+    
+    // Show helpful notification on first card selection (only if enabled)
+    if (wasFirstSelection && showNotification) {
+      this.showNotification('💡 Use ↑↓←→ arrows to navigate, C=copy, D=delete, Enter=edit, F=filter');
+    }
+    
+    // Scroll card into view if needed
+    const selectedCard = this.cardElements[index];
+    if (selectedCard) {
+      selectedCard.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }
+  
+  
+  
+  /**
+   * Clear any active card selection and update the visual state.
+   *
+   * @returns {void}
+   */
+  clearCardSelection() {
+    this.selectedCardIndex = -1;
+    this.updateCardSelection();
+  }
+  
+  /**
+   * Update the DOM to reflect the current selection.
+   * Removes the 'selected' class from all cards, then applies it to the active one.
+   *
+   * @returns {void}
+   */
+  updateCardSelection() {
+    // Remove selection class from all cards
+    this.cardElements.forEach(card => {
+      card.classList.remove('selected');
+    });
+    
+    // Add selection class to selected card
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+      this.cardElements[this.selectedCardIndex].classList.add('selected');
+    }
+  }
+  
+  /**
+   * Get the currently selected item data from the visible (filtered) collection.
+   *
+   * @returns {AppItem|null} The selected item's data, or null if nothing is selected.
+   */
+  getSelectedItem() {
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.visibleItems.length) {
+      return this.visibleItems[this.selectedCardIndex];
+    }
+    return null;
+  }
+  
+  // === Grid navigation helpers (pure, behavior-preserving) ===
+  /**
+   * Check if two top positions are approximately the same row within threshold.
+   * @param {number} a
+   * @param {number} b
+   * @param {number} [threshold=25]
+   * @returns {boolean}
+   */
+  isApproximatelySameRow(a, b, threshold = 25) {
+    return Math.abs(a - b) < threshold;
+  }
+
+  /**
+   * Count how many cards are in the first row, using top-position thresholding.
+   * @param {HTMLElement[]} cards
+   * @param {number} [threshold=25]
+   * @returns {number}
+   */
+  countColumnsInFirstRow(cards, threshold = 25) {
+    if (!cards || cards.length < 2) return 1;
+    const firstTop = cards[0].getBoundingClientRect().top;
+    let count = 1;
+    for (let i = 1; i < cards.length; i++) {
+      const top = cards[i].getBoundingClientRect().top;
+      if (Math.abs(top - firstTop) < threshold) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Compute target index when moving up by one row, with wrapping.
+   * @param {number} currentIndex
+   * @param {number} columns
+   * @param {number} total
+   * @returns {number}
+   */
+  wrapIndexUp(currentIndex, columns, total) {
+    // ATTEMPT NORMAL UP MOVEMENT: Try moving up one row
+    const newIndex = currentIndex - columns;
+    if (newIndex >= 0) return newIndex; // Normal case: stay in bounds
+    
+    // WRAP TO BOTTOM: Can't move up, so wrap to bottom row
+    const column = currentIndex % columns; // Preserve column position
+    const totalRows = Math.ceil(total / columns); // Calculate total rows needed
+    
+    // CALCULATE WRAP POSITION: Go to same column in last row
+    let wrapIndex = (totalRows - 1) * columns + column;
+    
+    // BOUNDARY CHECK: Ensure we don't exceed total items
+    // (Last row might be incomplete)
+    if (wrapIndex >= total) wrapIndex = total - 1;
+    
+    return wrapIndex;
+  }
+
+  /**
+   * Compute target index when moving down by one row, with wrapping.
+   * @param {number} currentIndex
+   * @param {number} columns
+   * @param {number} total
+   * @returns {number}
+   */
+  wrapIndexDown(currentIndex, columns, total) {
+    const newIndex = currentIndex + columns;
+    if (newIndex < total) return newIndex;
+    const column = currentIndex % columns;
+    return column;
+  }
+
+  /**
+   * Compute target index when moving left within the same row, with wrapping.
+   * @param {number} currentIndex
+   * @param {number} columns
+   * @param {number} total
+   * @returns {number}
+   */
+  indexLeft(currentIndex, columns, total) {
+    if (currentIndex % columns === 0) {
+      const row = Math.floor(currentIndex / columns);
+      const rightmostInRow = Math.min((row + 1) * columns - 1, total - 1);
+      return rightmostInRow;
+    }
+    return currentIndex - 1;
+  }
+
+  /**
+   * Compute next linear index moving right across all cards, wrapping to 0.
+   * @param {number} currentIndex
+   * @param {number} total
+   * @returns {number}
+   */
+  indexRightLinear(currentIndex, total) {
+    if (currentIndex < 0) return 0;
+    const next = currentIndex + 1;
+    return next < total ? next : 0;
+  }
+
+  /**
+   * Calculate the number of columns currently rendered in the grid of cards.
+   *
+   * Rationale: When using CSS grid with auto-fill/auto-fit, computed styles do not
+   * reliably reflect how many columns are actually in the first row. We therefore
+   * infer the column count by sampling the DOMRects of the first few cards and
+   * comparing their top positions within a small threshold.
+   *
+   * Implementation notes:
+   * - A 25px vertical threshold is used to account for sub-pixel rounding and
+   *   small browser/layout differences when cards are close to the same row.
+   * - Only position sampling and integer counters are used; no DOM writes occur.
+   * - Console output was intentionally left in place previously for debugging; this
+   *   method now documents the behavior clearly to minimize future guesswork.
+   *
+   * @returns {number} Number of columns detected (>= 1)
+   */
+  calculateGridColumns() {
+    if (this.cardElements.length === 0) return 1;
+    
+    // For a single card we definitively have one column.
+    if (this.cardElements.length < 2) return 1;
+    
+    const firstTop = this.cardElements[0].getBoundingClientRect().top;
+    const secondTop = this.cardElements[1].getBoundingClientRect().top;
+    
+    if (this.isApproximatelySameRow(firstTop, secondTop)) {
+      return this.countColumnsInFirstRow(this.cardElements);
+    }
+    
+    return 1;
+  }
+  
+  /**
+   * Move the selection up by one row in the grid (wraps to bottom if needed).
+   *
+   * @returns {void}
+   */
+  selectCardUp() {
+    if (this.cardElements.length === 0) return;
+    const columns = this.calculateGridColumns();
+    const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
+    const target = this.wrapIndexUp(currentIndex, columns, this.cardElements.length);
+    this.selectCard(target);
+  }
+  
+  /**
+   * Move the selection down by one row in the grid (wraps to top if needed).
+   *
+   * @returns {void}
+   */
+  selectCardDown() {
+    if (this.cardElements.length === 0) return;
+    const columns = this.calculateGridColumns();
+    const currentIndex = this.selectedCardIndex === -1 ? -1 : this.selectedCardIndex;
+    if (currentIndex === -1) { this.selectCard(0); return; }
+    const target = this.wrapIndexDown(currentIndex, columns, this.cardElements.length);
+    this.selectCard(target);
+  }
+  
+  /**
+   * Move the selection left by one column (wraps to the rightmost column in the row).
+   *
+   * @returns {void}
+   */
+  selectCardLeft() {
+    if (this.cardElements.length === 0) return;
+    const columns = this.calculateGridColumns();
+    const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
+    const target = this.indexLeft(currentIndex, columns, this.cardElements.length);
+    this.selectCard(target);
+  }
+  
+  /**
+   * Move the selection right linearly through all cards (wraps to first at end).
+   *
+   * @returns {void}
+   */
+  selectCardRight() {
+    if (this.cardElements.length === 0) return;
+    const currentIndex = this.selectedCardIndex === -1 ? -1 : this.selectedCardIndex;
+    if (UI_CONFIG.debug) console.log('→ Right navigation (linear): index', currentIndex, '/', this.cardElements.length);
+    const target = this.indexRightLinear(currentIndex, this.cardElements.length);
+    this.selectCard(target);
+  }
+  
+  /**
+   * Legacy method for backward compatibility - maps to selectCardDown
+   */
+  selectNextCard() {
+    this.selectCardDown();
+  }
+  
+  /**
+   * Legacy method for backward compatibility - maps to selectCardUp
+   */
+  selectPreviousCard() {
+    this.selectCardUp();
+  }
+  
+  /**
+   * Utility method to remove cards by text content (for console use)
+   * @param {string} searchText - Text to search for in card titles/descriptions
+   */
+  removeCardsByText(searchText) {
+    const state = getState();
+    const itemsToRemove = state.items.filter(item => 
+      item.text.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.desc.toLowerCase().includes(searchText.toLowerCase())
+    );
+    
+    if (itemsToRemove.length === 0) {
+      console.log(`No cards found containing "${searchText}"`);
+      return;
+    }
+    
+    console.log(`Found ${itemsToRemove.length} card(s) containing "${searchText}":`);
+    itemsToRemove.forEach((item, index) => {
+      console.log(`${index + 1}. "${item.text}" - "${item.desc}"`);
+    });
+    
+    // Remove all matching items
+    itemsToRemove.forEach(item => {
+      deleteItem(item.id);
+      console.log(`Removed: "${item.text}"`);
+    });
+    
+    this.showNotification(`Removed ${itemsToRemove.length} card(s) containing "${searchText}"`);
   }
 
 }

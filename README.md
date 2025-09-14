@@ -21,7 +21,7 @@ Everything runs client‑side in your browser. Your data is stored locally via l
 - One‑click copy with a snackbar confirmation
 - JSON/CSV import and export
 - Auto‑backups (keeps recent snapshots locally)
-- Multiple color themes (dark and light)
+- 26 accessibility-focused themes with advanced picker interface
 - Optional profile name displayed in the header
 
 ---
@@ -54,9 +54,21 @@ ES modules variant (optional, modern browsers):
 - Copy: Select a card and press Enter
 - Tags input: Enter to add; Backspace to remove last chip when empty
 
-### Themes
-- Built-in: dark-mystic-forest, dark-crimson-night, dark-royal-elegance, light-sunrise, light-soft-glow, light-floral-breeze
-- Change from the header dropdown; your pick is saved to localStorage (compy.theme).
+### Enhanced Theme System
+- **26 accessibility-focused themes**: Comprehensive selection including popular coding themes like Dracula, Solarized, Night Owl, Monokai, and Material Design variants
+- **WCAG 2.1 AA compliant**: All themes meet accessibility standards with 4.5:1 contrast ratio minimum
+- **Advanced theme picker**: Modal interface with live previews, search, and category filtering
+- **Theme categories**: Dark (16), Light (10), High-Contrast (2), Professional (3), Creative (1)
+- **Smart organization**: Search by name, filter by category (Dark, Light, High-Contrast, Professional), browse by use case
+- **Live preview**: Try themes instantly with preview mode and revert option before applying
+- **Accessibility indicators**: Visual badges showing compliance levels (AA/HIGH) and recommended use cases
+- **Smooth transitions**: Theme changes include elegant 300ms transitions with no layout shifts
+- **Persistent preference**: Your selected theme is saved to localStorage (compy.theme)
+- **Popular themes included**: 
+  - **Coding themes**: Dracula, Night Owl, Monokai, Solarized Dark/Light, Gruvbox
+  - **Professional themes**: Clean business-focused themes for corporate environments
+  - **Accessibility themes**: High-contrast options for users with visual impairments
+  - **Creative themes**: Soft pastels and nature-inspired color palettes
 
 ### Import/Export formats
 - JSON

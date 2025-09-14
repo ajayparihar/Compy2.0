@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mystic-forest">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toast Notification Test - Compy 2.0</title>
+  <link rel="stylesheet" href="css/compy.css">
+  <style>
+    body {
+      padding: 2rem;
+      font-family: var(--font-sans);
+      background: var(--background);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    .test-container {
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    
+    .test-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    
+    .test-btn {
+      padding: 12px 24px;
+      border: 1px solid var(--border-interactive);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 500;
+      transition: var(--transition-colors);
+    }
+    
+    .test-btn:hover {
+      background: var(--surface-hover);
+    }
+    
+    .theme-switcher {
+      margin: 2rem 0;
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .theme-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border-interactive);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      transition: var(--transition-colors);
+    }
+    
+    .theme-btn:hover,
+    .theme-btn.active {
+      background: var(--primary);
+      color: var(--primary-contrast);
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>🍞 Toast Notification Test</h1>
+    <p>Test the improved toast notifications with all four types and various themes.</p>
+    
+    <div class="theme-switcher">
+      <button class="theme-btn active" onclick="switchTheme('dark-mystic-forest')">Dark Forest</button>
+      <button class="theme-btn" onclick="switchTheme('light-sunrise')">Light Sunrise</button>
+      <button class="theme-btn" onclick="switchTheme('dark-high-contrast')">High Contrast</button>
+      <button class="theme-btn" onclick="switchTheme('dark-professional')">Professional</button>
+    </div>
+    
+    <div class="test-buttons">
+      <button class="test-btn" onclick="showToast('This is an info message with some longer content to test text wrapping', 'info')">
+        📘 Test Info Toast
+      </button>
+      
+      <button class="test-btn" onclick="showToast('Success! Your data has been saved successfully.', 'success')">
+        ✅ Test Success Toast
+      </button>
+      
+      <button class="test-btn" onclick="showToast('Warning: This action cannot be undone. Please proceed with caution.', 'warning')">
+        ⚠️ Test Warning Toast
+      </button>
+      
+      <button class="test-btn" onclick="showToast('Error: Failed to connect to server. Please try again.', 'error')">
+        ❌ Test Error Toast
+      </button>
+      
+      <button class="test-btn" onclick="showMultipleToasts()">
+        🔄 Test Multiple Toasts
+      </button>
+      
+      <button class="test-btn" onclick="showToast('This is a very long message that demonstrates how the toast notification handles longer content with proper text wrapping and maintains good readability while staying within the maximum width constraints defined in the CSS styling system.', 'info')">
+        📏 Test Long Message
+      </button>
+      
+      <button class="test-btn" onclick="testRapidClicks()">
+        ⚡ Test Rapid Clicks (Issue Fix)
+      </button>
+      
+      <button class="test-btn" onclick="testConflictingNotifications()">
+        🔄 Test Conflicting Notifications
+      </button>
+    </div>
+    
+    <h2>What's Improved:</h2>
+    <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
+      <li>✨ <strong>Complete variant support:</strong> All 4 types (info, success, warning, error) now have proper styling</li>
+      <li>🎨 <strong>Modern design:</strong> Improved shadows, blur effects, and rounded corners</li>
+      <li>🎯 <strong>Better animations:</strong> Smooth slide-up transitions with cubic-bezier easing</li>
+      <li>🔥 <strong>Icon support:</strong> Each toast type now displays a contextual icon</li>
+      <li>🌈 <strong>Theme-aware:</strong> Proper styling for light, dark, and high-contrast themes</li>
+      <li>📱 <strong>Responsive:</strong> Better sizing and spacing for various screen sizes</li>
+      <li>♿ <strong>Accessibility:</strong> Enhanced contrast and readability in high-contrast themes</li>
+    </ul>
+  </div>
+
+  <!-- Toast notifications -->
+  <div 
+    id="snackbar" 
+    class="snackbar" 
+    role="status" 
+    aria-live="polite" 
+    aria-atomic="true"></div>
+
+  <script type="module">
+    import { NotificationManager } from './js/components/notifications.js';
+    
+    // Initialize notification manager
+    const notificationManager = new NotificationManager();
+    
+    // Make functions available globally for button onclick handlers
+    window.showToast = (message, type = 'info') => {
+      notificationManager.show(message, type);
+    };
+    
+    window.showMultipleToasts = () => {
+      notificationManager.show('First notification...', 'info', 2000);
+      setTimeout(() => notificationManager.show('Second notification!', 'success', 2000), 500);
+      setTimeout(() => notificationManager.show('Third notification.', 'warning', 2000), 1000);
+      setTimeout(() => notificationManager.show('Final notification.', 'error', 2000), 1500);
+    };
+    
+    window.switchTheme = (theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      
+      // Update active theme button
+      document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
+      // Show theme change notification
+      notificationManager.show(`Switched to ${theme.replace('-', ' ')} theme`, 'info');
+    };
+    
+    // Test rapid successive clicks (simulates the original issue)
+    window.testRapidClicks = () => {
+      // Simulate rapid card clicks that were causing the timing issue
+      const messages = [
+        'Copy 1: Quick succession test',
+        'Copy 2: Should not interfere',
+        'Copy 3: Each should display properly',
+        'Copy 4: Final rapid click test'
+      ];
+      
+      messages.forEach((message, index) => {
+        setTimeout(() => {
+          notificationManager.show(message, 'success', 1500);
+        }, index * 100); // 100ms apart - very rapid
+      });
+    };
+    
+    // Test conflicting notification types
+    window.testConflictingNotifications = () => {
+      // Test what happens when different notification types are called rapidly
+      notificationManager.show('Starting process...', 'info', 2000);
+      
+      setTimeout(() => {
+        notificationManager.show('Warning: Something needs attention!', 'warning', 2000);
+      }, 200);
+      
+      setTimeout(() => {
+        notificationManager.show('Error occurred!', 'error', 2000);
+      }, 400);
+      
+      setTimeout(() => {
+        notificationManager.show('Successfully recovered!', 'success', 2000);
+      }, 600);
+    };
+  </script>
+</body>
+</html>
