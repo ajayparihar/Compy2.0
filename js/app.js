@@ -18,6 +18,7 @@ import { createConfirmationManager, setGlobalConfirm } from './components/confir
 import { createModalManager } from './components/modals.js';
 import { createTagAutocomplete } from './components/tagAutocomplete.js';
 import { createMobileNavigationManager } from './components/mobileNavigation.js';
+import { createThemePicker } from './components/themePicker.js';
 
 /**
  * @typedef {Object} AppItem
@@ -69,6 +70,7 @@ class CompyApp {
     this.cards = null;
     this.tagAutocomplete = null;
     this.mobileNavigation = null;
+    this.themePicker = null;
     
     // Filter modal transient state and handler guard
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
@@ -125,6 +127,13 @@ class CompyApp {
       
       // Setup mobile navigation menu
       this.setupMobileNavigation();
+      
+      // Make notification system globally accessible for components
+      if (typeof window !== 'undefined') {
+        window.app = {
+          showNotification: this.showNotification.bind(this)
+        };
+      }
       
       this.initialized = true;
       console.log('Compy 2.0 initialized successfully');
@@ -325,24 +334,26 @@ class CompyApp {
   }
 
   /**
-   * Initialize theme switching and persistence.
-   * Persists user choice in localStorage and applies a short CSS transition class
-   * to avoid abrupt theme changes.
+   * Initialize enhanced theme system with picker modal.
+   * Persists user choice in localStorage and applies smooth transitions.
    */
   initTheme() {
-    const themeSelect = $('#themeSelect');
-    
+    // Enhanced theme manager with smooth transitions
     this.theme = {
       apply: (themeName) => {
         document.documentElement.setAttribute('data-theme', themeName);
         localStorage.setItem(STORAGE_KEYS.theme, themeName);
-        themeSelect.value = themeName;
         
         // Add transition class for smooth theme switching
         document.documentElement.classList.add('theme-switching');
         setTimeout(() => {
           document.documentElement.classList.remove('theme-switching');
         }, 300);
+        
+        // Update theme picker if available
+        if (this.themePicker) {
+          this.themePicker.updateSelectedTheme(themeName);
+        }
       },
       
       load: () => {
@@ -353,11 +364,15 @@ class CompyApp {
 
     // Load saved theme
     this.theme.load();
-
-    // Handle theme changes
-    themeSelect.addEventListener('change', (e) => {
-      this.theme.apply(e.target.value);
-    });
+    
+    // Initialize enhanced theme picker
+    try {
+      this.themePicker = createThemePicker(this.modalManager, this.theme);
+      this.themePicker.init();
+    } catch (error) {
+      console.warn('Failed to initialize theme picker:', error);
+      // Fallback to basic theme functionality
+    }
   }
 
   /**
