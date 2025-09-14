@@ -183,10 +183,12 @@ const notifyListeners = () => {
  */
 export const loadState = () => {
   try {
-    // Attempt to parse stored data with fallbacks and validation
-    const rawItems = localStorage.getItem(STORAGE_KEYS.items);
-    const rawFilters = localStorage.getItem(STORAGE_KEYS.filters);
-    const rawProfile = localStorage.getItem(STORAGE_KEYS.profile);
+    // LOCALSTORAGE API INTERACTION: Retrieve stored application data
+    // getItem() returns string value or null if key doesn't exist
+    // This is a synchronous operation that can throw SecurityError in private mode
+    const rawItems = localStorage.getItem(STORAGE_KEYS.items);        // Main snippet data
+    const rawFilters = localStorage.getItem(STORAGE_KEYS.filters);    // Active filter preferences
+    const rawProfile = localStorage.getItem(STORAGE_KEYS.profile);    // User profile information
     
     // Parse and validate items with structure checking
     let items = [];
@@ -268,13 +270,18 @@ export const loadState = () => {
  */
 export const saveState = () => {
   try {
-    // Persist core application data
-    localStorage.setItem(STORAGE_KEYS.items, JSON.stringify(state.items));
-    localStorage.setItem(STORAGE_KEYS.filters, JSON.stringify(state.filterTags));
+    // LOCALSTORAGE API INTERACTION: Persist application state to browser storage
+    // setItem() stores key-value pairs as strings (automatic JSON.stringify needed for objects)
+    // This is synchronous and can throw QuotaExceededError if storage is full
     
-    // Only store profile name if it's not empty (keeps storage clean)
+    // CORE DATA PERSISTENCE: Store items and filters as JSON strings
+    localStorage.setItem(STORAGE_KEYS.items, JSON.stringify(state.items));       // All snippet items
+    localStorage.setItem(STORAGE_KEYS.filters, JSON.stringify(state.filterTags)); // Active filter state
+    
+    // CONDITIONAL STORAGE: Only store profile name if it exists (reduces storage waste)
+    // Empty strings would be stored as 'compy.profile': '', which is unnecessary
     if (state.profileName) {
-      localStorage.setItem(STORAGE_KEYS.profile, state.profileName);
+      localStorage.setItem(STORAGE_KEYS.profile, state.profileName);  // User's display name
     }
     
     // Schedule backup creation (debounced for performance)
@@ -325,27 +332,37 @@ const scheduleBackup = debounce(() => {
  * doBackup();
  */
 export const doBackup = () => {
+  // ALGORITHM: Automatic Backup with Rotation
+  // 1. Create timestamped snapshot of current state
+  // 2. Load existing backup array from localStorage
+  // 3. Add new backup to front (LIFO ordering)
+  // 4. Limit array size to prevent storage overflow
+  // 5. Save rotated array back to storage
+  
   const now = new Date();
   const backup = { 
-    ts: now.toISOString(),  // Sortable timestamp
-    items: state.items      // Complete data snapshot
+    ts: now.toISOString(),  // ISO timestamp ensures sortable chronological order
+    items: state.items      // Full state snapshot for complete recovery
   };
   
   try {
-    // Load existing backups with fallback to empty array
+    // Load existing backup array - fallback to empty array for first run
     let backups = JSON.parse(localStorage.getItem(STORAGE_KEYS.backups) || '[]');
     
-    // Add new backup at the beginning (most recent first)
+    // ROTATION STRATEGY: Add new backup to front (most recent first)
+    // This LIFO approach ensures latest backups are always accessible
     backups.unshift(backup);
     
-    // Limit backup count to prevent storage bloat
+    // STORAGE MANAGEMENT: Limit backup count to prevent localStorage bloat
+    // slice(0, max) keeps only the most recent backups, discarding oldest
     backups = backups.slice(0, UI_CONFIG.maxBackups);
     
-    // Persist updated backup list
+    // Persist the rotated backup array back to localStorage
     localStorage.setItem(STORAGE_KEYS.backups, JSON.stringify(backups));
   } catch (error) {
+    // ERROR RESILIENCE: Backup failure is non-critical, don't crash the app
     console.error('Failed to save backup:', error);
-    // Backup failure shouldn't crash the app
+    // User can still continue working even if backups fail
   }
 };
 

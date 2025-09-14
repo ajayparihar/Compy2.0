@@ -553,6 +553,109 @@ export const focusElement = (elementOrSelector, delay = 50) => {
   }, delay);
 };
 
+/**
+ * Create a DOM element with attributes, classes, and content in one call
+ * 
+ * This utility function reduces boilerplate code when creating DOM elements
+ * by allowing all common properties to be set in a single function call.
+ * This promotes code reuse and reduces the chance of errors.
+ * 
+ * @param {string} tagName - HTML tag name (e.g., 'div', 'button', 'span')
+ * @param {Object} [options={}] - Configuration options
+ * @param {string} [options.className] - CSS class names to add
+ * @param {string} [options.id] - Element ID
+ * @param {string} [options.textContent] - Text content for the element
+ * @param {string} [options.innerHTML] - HTML content for the element
+ * @param {Object} [options.attributes={}] - Object with attribute name-value pairs
+ * @param {Object} [options.styles={}] - Object with CSS style property-value pairs
+ * @param {Object} [options.dataset={}] - Object with data-* attributes
+ * @returns {HTMLElement} Created and configured DOM element
+ * 
+ * @example
+ * // Create a button with multiple attributes
+ * const saveBtn = createElement('button', {
+ *   className: 'btn btn-primary',
+ *   textContent: 'Save',
+ *   attributes: { type: 'button', disabled: true },
+ *   dataset: { action: 'save', target: 'form1' }
+ * });
+ * 
+ * // Create a div with styling
+ * const container = createElement('div', {
+ *   className: 'container',
+ *   styles: { display: 'flex', gap: '1rem' }
+ * });
+ */
+export const createElement = (tagName, options = {}) => {
+  // INPUT VALIDATION: Ensure tagName is a valid string
+  if (typeof tagName !== 'string' || !tagName.trim()) {
+    throw new Error('createElement: tagName must be a non-empty string');
+  }
+  
+  // ERROR HANDLING: Wrap element creation in try-catch for invalid tag names
+  let element;
+  try {
+    element = document.createElement(tagName);
+  } catch (error) {
+    throw new Error(`createElement: Failed to create element '${tagName}': ${error.message}`);
+  }
+  
+  // SAFE PROPERTY APPLICATION: Apply CSS classes with validation
+  if (options.className && typeof options.className === 'string') {
+    element.className = options.className;
+  }
+  
+  // Set element ID
+  if (options.id) {
+    element.id = options.id;
+  }
+  
+  // Set text content (safer than innerHTML for plain text)
+  if (options.textContent) {
+    element.textContent = options.textContent;
+  }
+  
+  // Set HTML content (use with caution - ensure content is trusted)
+  if (options.innerHTML) {
+    element.innerHTML = options.innerHTML;
+  }
+  
+  // SET HTML ATTRIBUTES: With validation and error handling
+  if (options.attributes && typeof options.attributes === 'object') {
+    try {
+      Object.entries(options.attributes).forEach(([key, value]) => {
+        // VALIDATION: Ensure attribute key is a valid string
+        if (typeof key !== 'string' || !key.trim()) {
+          console.warn(`createElement: Invalid attribute key '${key}', skipping`);
+          return;
+        }
+        
+        // SAFE ATTRIBUTE SETTING: Convert value to string for safety
+        element.setAttribute(key, String(value));
+      });
+    } catch (error) {
+      console.error('createElement: Error setting attributes:', error);
+    }
+  }
+  
+  // APPLY INLINE STYLES: With error handling and validation
+  if (options.styles && typeof options.styles === 'object') {
+    try {
+      // SAFE STYLE APPLICATION: Use Object.assign with error handling
+      Object.assign(element.style, options.styles);
+    } catch (error) {
+      console.error('createElement: Error applying styles:', error);
+    }
+  }
+  
+  // Set data-* attributes
+  if (options.dataset) {
+    Object.assign(element.dataset, options.dataset);
+  }
+  
+  return element;
+};
+
 // =============================================================================
 // DATA ANALYSIS AND FILTERING UTILITIES
 // =============================================================================
@@ -654,47 +757,53 @@ export const getAllTags = (items) => {
  * filterItems(items, 'python', ['js']); // Returns []
  */
 export const filterItems = (items, searchQuery = '', filterTags = []) => {
-  // Early return for empty inputs to avoid unnecessary processing
+  // PERFORMANCE OPTIMIZATION: Early return for empty inputs to avoid unnecessary processing
   if (!Array.isArray(items) || items.length === 0) {
     return [];
   }
   
-  // Normalize search query once for performance
+  // ALGORITHM SETUP: Pre-process search query once for efficiency
+  // Normalize to lowercase for case-insensitive matching
+  // Trim whitespace to handle user input variations
   const normalizedQuery = searchQuery.toLowerCase().trim();
   const hasSearchQuery = normalizedQuery.length > 0;
   const hasTagFilters = Array.isArray(filterTags) && filterTags.length > 0;
   
-  // If no filtering criteria, return original array
+  // OPTIMIZATION: Skip filtering entirely if no criteria provided
   if (!hasSearchQuery && !hasTagFilters) {
     return items;
   }
   
+  // MAIN FILTERING ALGORITHM: Combined text search + tag filtering
   return items.filter(item => {
-    // Text search across multiple fields
+    // PHASE 1: Text search across multiple fields with early termination
     if (hasSearchQuery) {
+      // SEARCHABLE CONTENT: Combine text, description, and tags into single string
+      // This allows cross-field searching (e.g., search finds tags in description)
       const searchableText = [
-        item.text || '',
-        item.desc || '',
-        ...(Array.isArray(item.tags) ? item.tags : [])
-      ].join(' ').toLowerCase();
+        item.text || '',        // Main snippet content
+        item.desc || '',        // Description field
+        ...(Array.isArray(item.tags) ? item.tags : [])  // All tags as searchable text
+      ].join(' ').toLowerCase();  // Single string for efficient substring search
       
-      // Early return if search doesn't match
+      // EARLY TERMINATION: Fail fast if text doesn't match to avoid tag processing
       if (!searchableText.includes(normalizedQuery)) {
         return false;
       }
     }
     
-    // Tag filtering with AND logic (must have ALL selected tags)
+    // PHASE 2: Tag filtering with AND logic (must have ALL selected tags)
     if (hasTagFilters) {
       const itemTags = Array.isArray(item.tags) ? item.tags : [];
       
-      // Item must contain ALL filter tags
+      // AND LOGIC: Item must contain ALL filter tags to pass
+      // Uses every() for early termination - stops at first missing tag
       if (!filterTags.every(filterTag => itemTags.includes(filterTag))) {
         return false;
       }
     }
     
-    // Item passes all filtering criteria
+    // SUCCESS: Item passes all filtering criteria
     return true;
   });
 };

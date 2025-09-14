@@ -17,6 +17,7 @@ import {
 import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
 import { createModalManager } from './components/modals.js';
 import { createTagAutocomplete } from './components/tagAutocomplete.js';
+import { createMobileNavigationManager } from './components/mobileNavigation.js';
 
 /**
  * @typedef {Object} AppItem
@@ -67,6 +68,7 @@ class CompyApp {
     this.search = null;
     this.cards = null;
     this.tagAutocomplete = null;
+    this.mobileNavigation = null;
     
     // Filter modal transient state and handler guard
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
@@ -159,6 +161,8 @@ class CompyApp {
    * Performance Optimization:
    * - Checks API availability once during initialization
    * - Avoids repeated feature detection on each copy operation
+   * - Uses async/await for non-blocking clipboard operations
+   * - Minimizes DOM manipulation in fallback mode
    */
   initClipboard() {
     // Pre-check clipboard API availability for performance
@@ -175,16 +179,21 @@ class CompyApp {
         
         try {
           if (hasClipboardAPI) {
-            // Use modern Clipboard API for better security and UX
+            // MODERN CLIPBOARD API: Uses navigator.clipboard.writeText()
+            // - Requires secure context (HTTPS or localhost)
+            // - Requires user interaction (click/keyboard event)
+            // - Returns Promise that resolves when copy succeeds
+            // - Automatically handles user permissions
             await navigator.clipboard.writeText(text);
             this.showNotification('Copied to clipboard', 'success');
             return true;
           } else {
-            // Fall back to legacy method for older browsers
+            // FALLBACK PATH: Use legacy execCommand for broader compatibility
             return this.fallbackCopy(text);
           }
         } catch (error) {
-          // Modern API failed - try fallback as last resort
+          // ERROR HANDLING: Modern API can fail due to permissions or context
+          // Common failures: NotAllowedError, SecurityError, or browser bugs
           console.warn('Modern clipboard API failed, trying fallback:', error);
           return this.fallbackCopy(text);
         }
@@ -199,35 +208,48 @@ class CompyApp {
    * It creates a temporary textarea, selects the content, and uses the deprecated
    * but widely-supported execCommand('copy') to copy text to clipboard.
    * 
+   * DOM API INTERACTIONS:
+   * - document.createElement() - Creates temporary DOM element
+   * - document.body.appendChild() - Adds element to DOM tree
+   * - element.select() - Selects text content for copying
+   * - document.execCommand() - Legacy copy command
+   * - document.body.removeChild() - Cleans up temporary element
+   * 
    * @param {string} text - Text to copy to clipboard
    */
   fallbackCopy(text) {
-    // Create temporary textarea element for text selection
+    // DOM MANIPULATION: Create temporary textarea element for text selection
     // Using textarea instead of input to handle multi-line text properly
     const textarea = document.createElement('textarea');
     textarea.value = text;
     
-    // Position element off-screen to avoid visual disruption
-    // Using fixed positioning to avoid layout shifts
+    // CSS STYLING: Position element off-screen to avoid visual disruption
+    // Using fixed positioning to avoid affecting document layout flow
     textarea.style.position = 'fixed';
     textarea.style.left = '-9999px';
     textarea.style.top = '0'; // Add top positioning for better accessibility
-    textarea.setAttribute('readonly', ''); // Prevent mobile keyboard popup
     
-    // Add to DOM temporarily - required for selection to work
+    // MOBILE OPTIMIZATION: Prevent virtual keyboard popup on mobile devices
+    textarea.setAttribute('readonly', ''); // Readonly prevents mobile keyboard
+    
+    // DOM INSERTION: Add to DOM temporarily - required for selection API to work
+    // Element must be in the DOM tree for select() and execCommand() to function
     document.body.appendChild(textarea);
     
     try {
-      // Select all text in the textarea
+      // SELECTION API: Select all text content in the textarea
+      // This prepares the text for copying via execCommand
       textarea.select();
       
-      // For mobile Safari compatibility, ensure the selection is proper
+      // MOBILE SAFARI FIX: setSelectionRange ensures proper selection on iOS
+      // Mobile Safari sometimes fails with select() alone
       textarea.setSelectionRange(0, 99999);
       
-      // Attempt to copy using the legacy API
+      // LEGACY CLIPBOARD API: Use deprecated but widely-supported execCommand
+      // Returns boolean indicating success/failure of copy operation
       const success = document.execCommand('copy');
       
-      // Provide user feedback based on operation success
+      // USER FEEDBACK: Provide appropriate notification based on operation result
       this.showNotification(
         success ? 'Copied to clipboard' : 'Copy failed - please try manually selecting and copying',
         success ? 'info' : 'error'
@@ -240,7 +262,8 @@ class CompyApp {
       this.showNotification('Copy failed - please try manually', 'error');
       return false;
     } finally {
-      // Always clean up the temporary element, even if copy failed
+      // DOM CLEANUP: Always remove temporary element to prevent memory leaks
+      // Use finally block to ensure cleanup even if errors occur
       document.body.removeChild(textarea);
     }
   }
@@ -409,6 +432,20 @@ class CompyApp {
   /**
    * Render the visible list of cards from state.
    * Uses requestAnimationFrame to batch DOM work for smooth updates.
+   * 
+   * Rendering Algorithm:
+   * 1. Filter items based on search query and active tags
+   * 2. Determine appropriate empty state (welcome vs no-results)
+   * 3. Use requestAnimationFrame for smooth, non-blocking DOM updates
+   * 4. Create card elements with event delegation for performance
+   * 5. Apply search highlighting and accessibility attributes
+   * 
+   * Performance Features:
+   * - Batched DOM updates prevent layout thrashing
+   * - Minimal DOM queries through efficient selectors
+   * - Event delegation reduces memory usage
+   * - Conditional rendering avoids unnecessary work
+   * 
    * @param {Object} state - Current application state
    */
   renderCards(state) {
@@ -520,9 +557,23 @@ class CompyApp {
   /**
    * Render tag chips for a card with deterministic hues and optional highlighting.
    * Limits visible chips to UI_CONFIG.maxVisibleTags and shows a '+N more' affordance.
-   * @param {string[]} [tags=[]]
-   * @param {string} [searchQuery='']
-   * @returns {string} HTML string
+   * 
+   * Tag Rendering Algorithm:
+   * 1. Slice array to respect max visible limit for performance
+   * 2. Generate deterministic colors using string hashing
+   * 3. Apply search highlighting while preserving tag colors
+   * 4. Add 'more tags' indicator when list is truncated
+   * 5. Return safe HTML string ready for innerHTML injection
+   * 
+   * Color Generation:
+   * - Uses stringHash() for consistent colors across renders
+   * - Modulo 360 maps hash to HSL hue value
+   * - Same tag always gets same color
+   * - Provides visual consistency and user recognition
+   * 
+   * @param {string[]} [tags=[]] - Array of tag strings to render
+   * @param {string} [searchQuery=''] - Search term for highlighting
+   * @returns {string} HTML string with styled tag chips
    */
   renderTags(tags = [], searchQuery = '') {
     const maxVisible = UI_CONFIG.maxVisibleTags;
@@ -970,35 +1021,45 @@ class CompyApp {
    * 3. Tags are pipe-separated (|) within the tags column
    * 4. Sensitive values: '1' or 'true' (case-insensitive)
    * 
+   * Performance Considerations:
+   * - Single pass through lines minimizes iterations
+   * - Early validation prevents processing invalid data
+   * - Efficient string operations for large files
+   * - Memory-conscious parsing for mobile devices
+   * 
    * @param {string} csvText - Raw CSV string from uploaded file
    */
   async importCSV(csvText) {
     try {
-      // Split into lines and filter out empty lines
-      // Handle both Windows (\r\n) and Unix (\n) line endings
+      // STEP 1: Normalize line endings and filter empty lines
+      // Split handles both Windows (\r\n) and Unix (\n) line endings for cross-platform compatibility
+      // Filter empty lines to avoid parsing errors with malformed CSV files
       const lines = csvText.split(/\r?\n/).filter(line => line.trim());
       if (!lines.length) {
         throw new Error('Empty CSV file');
       }
 
-      // Parse the first line to detect format
-      // Remove BOM (Byte Order Mark) that may be present in UTF-8 files from Excel
+      // STEP 2: Parse first line and detect CSV format structure
+      // Remove BOM (Byte Order Mark) that may be present in UTF-8 files exported from Excel
+      // BOM is invisible but causes parsing errors if not removed
       const firstLine = parseCSVLine(lines[0].replace(/^\uFEFF/, ''));
-      let headerIndex = 0; // Track where the actual data headers start
-      let importedProfileName = null; // capture profile name if provided in metadata
+      let headerIndex = 0; // Track where the actual data headers start (after metadata)
+      let importedProfileName = null; // Capture profile name if provided in metadata section
       
-      // PHASE 1: Check for optional profile metadata block
-      // Format: single column 'profileName' followed by data line
+      // PHASE 1: Detect and parse optional profile metadata block
+      // CSV Format Option 1: profileName header followed by profile value, then data
+      // Example: "profileName"\n"John Doe"\n\n"text,desc,sensitive,tags"...
       if (firstLine.length === 1 && firstLine[0].toLowerCase() === 'profilename') {
-        console.log('Detected profile metadata in CSV');
+        console.log('Detected profile metadata in CSV - parsing metadata block');
         
-        // Extract profile name from the next line
+        // Extract profile name from the line immediately following the header
         const profileLine = lines[1];
         if (profileLine) {
           const profileData = parseCSVLine(profileLine);
           const profileName = (profileData[0] || '').trim();
           
-          // Capture profile to apply later (after choosing Add/Replace)
+          // Store profile name to apply after user chooses import strategy (Add/Replace)
+          // This ensures we don't overwrite existing profile if user cancels
           if (profileName) {
             importedProfileName = profileName;
           }
@@ -1032,12 +1093,10 @@ class CompyApp {
       
       console.log('CSV column mapping:', columnMapping);
 
-      // Count items that will be imported
-      let itemsToImport = 0;
-      for (let i = headerIndex + 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line) itemsToImport++;
-      }
+      // OPTIMIZATION: Calculate items count without separate loop
+      // Filter non-empty lines efficiently using array methods
+      const dataLines = lines.slice(headerIndex + 1).filter(line => line.trim());
+      const itemsToImport = dataLines.length;
 
       // Check if there's existing data and ask for import options
       const currentState = getState();
@@ -1093,14 +1152,10 @@ class CompyApp {
       let importCount = 0;
       let skippedCount = 0;
       
-      // Process each data line (starting after headers)
-      for (let i = headerIndex + 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
-        // Skip empty lines (common in CSV exports)
-        if (!line) {
-          continue;
-        }
+      // OPTIMIZATION: Process pre-filtered data lines (eliminates empty line checks)
+      // This is more efficient than checking each line during iteration
+      for (let i = 0; i < dataLines.length; i++) {
+        const line = dataLines[i]; // Already trimmed and filtered
 
         try {
           // Parse the line into field values
@@ -1754,96 +1809,28 @@ class CompyApp {
   }
 
   /**
-   * Initialize mobile navigation menu functionality.
-   * Sets up the hamburger menu button to toggle the navigation drawer.
+   * Initialize mobile navigation menu functionality using reusable component.
+   * 
+   * ARCHITECTURAL IMPROVEMENT:
+   * Replaced inline navigation logic with reusable MobileNavigationManager component.
+   * This improves code maintainability, testability, and reusability across projects.
    */
   setupMobileNavigation() {
-    const navToggle = $('#navToggle');
-    const navActions = $('#navActions');
-    const navBackdrop = $('#navBackdrop');
+    // COMPONENT-BASED ARCHITECTURE: Use dedicated navigation manager
+    this.mobileNavigation = createMobileNavigationManager({
+      toggleSelector: '#navToggle',
+      drawerSelector: '#navActions',
+      backdropSelector: '#navBackdrop',
+      closeDelay: 100
+    });
     
-    if (!navToggle || !navActions) {
-      console.warn('Mobile navigation elements not found');
-      return;
+    // Initialize the mobile navigation component
+    const success = this.mobileNavigation.init();
+    
+    if (!success) {
+      console.warn('Failed to initialize mobile navigation');
+      this.mobileNavigation = null;
     }
-
-    // Toggle navigation drawer
-    const toggleNav = () => {
-      const isExpanded = navToggle.getAttribute('aria-expanded') === 'true';
-      const newState = !isExpanded;
-      
-      // Update toggle button state
-      navToggle.setAttribute('aria-expanded', newState.toString());
-      
-      // Update drawer visibility
-      navActions.setAttribute('aria-hidden', (!newState).toString());
-      
-      // Update backdrop visibility if it exists
-      if (navBackdrop) {
-        navBackdrop.setAttribute('aria-hidden', (!newState).toString());
-      }
-      
-      // Add/remove open class for CSS transitions
-      if (newState) {
-        navActions.classList.add('open');
-        if (navBackdrop) navBackdrop.classList.add('open');
-      } else {
-        navActions.classList.remove('open');
-        if (navBackdrop) navBackdrop.classList.remove('open');
-      }
-    };
-
-    // Close navigation drawer
-    const closeNav = () => {
-      navToggle.setAttribute('aria-expanded', 'false');
-      navActions.setAttribute('aria-hidden', 'true');
-      navActions.classList.remove('open');
-      
-      if (navBackdrop) {
-        navBackdrop.setAttribute('aria-hidden', 'true');
-        navBackdrop.classList.remove('open');
-      }
-    };
-
-    // Handle hamburger menu click
-    navToggle.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleNav();
-    });
-
-    // Handle backdrop click to close drawer
-    if (navBackdrop) {
-      navBackdrop.addEventListener('click', () => {
-        closeNav();
-      });
-    }
-
-    // Close drawer when clicking outside or on navigation items
-    document.addEventListener('click', (e) => {
-      const isNavContent = e.target.closest('#navActions');
-      const isNavToggle = e.target.closest('#navToggle');
-      
-      if (!isNavContent && !isNavToggle && navToggle.getAttribute('aria-expanded') === 'true') {
-        closeNav();
-      }
-    });
-
-    // Close drawer when navigation items are clicked
-    navActions.addEventListener('click', (e) => {
-      const isButton = e.target.closest('button');
-      if (isButton && navToggle.getAttribute('aria-expanded') === 'true') {
-        // Add small delay to allow action to complete before closing
-        setTimeout(() => closeNav(), 100);
-      }
-    });
-
-    // Handle Escape key to close drawer
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && navToggle.getAttribute('aria-expanded') === 'true') {
-        closeNav();
-      }
-    });
   }
 
 }

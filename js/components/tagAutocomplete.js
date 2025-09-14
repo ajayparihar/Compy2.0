@@ -95,18 +95,36 @@ export class TagAutocomplete {
 
   /**
    * Create the dropdown element for suggestions
+   * 
+   * DOM ARCHITECTURE:
+   * - Creates dropdown as sibling to input element
+   * - Uses relative positioning on parent for absolute dropdown positioning
+   * - Implements ARIA listbox pattern for accessibility
+   * - Initially hidden to prevent layout shift
+   * 
    * @private
    */
   createDropdown() {
+    // CREATE DROPDOWN: Standard div element with accessibility attributes
     this.dropdownElement = document.createElement('div');
     this.dropdownElement.className = 'tag-autocomplete-dropdown';
+    
+    // ACCESSIBILITY: Implement ARIA listbox pattern
+    // role="listbox" indicates this is a selectable list for screen readers
     this.dropdownElement.setAttribute('role', 'listbox');
     this.dropdownElement.setAttribute('aria-label', 'Tag suggestions');
+    
+    // INITIAL STATE: Hide dropdown to prevent layout shift and visual flash
     this.dropdownElement.style.display = 'none';
 
-    // Position dropdown relative to input
+    // DOM POSITIONING: Setup relative positioning context for absolute dropdown
+    // Find the closest tags-input container or fall back to direct parent
     const inputContainer = this.inputElement.closest('.tags-input') || this.inputElement.parentElement;
+    
+    // LAYOUT SETUP: Enable relative positioning for absolute dropdown positioning
     inputContainer.style.position = 'relative';
+    
+    // DOM INJECTION: Add dropdown to the DOM tree as child of input container
     inputContainer.appendChild(this.dropdownElement);
   }
 

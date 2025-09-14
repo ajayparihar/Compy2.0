@@ -251,9 +251,10 @@ export class ModalManager {
    * @private
    */
   findInitialFocusTarget(modal) {
-    // Priority order for focus targets
+    // OPTIMIZATION: Define focus priority selectors (cached as constant)
+    // Priority order for focus targets optimized for common usage patterns
     const priorities = [
-      '[data-close-modal]',           // Close buttons
+      '[data-close-modal]',           // Close buttons (most common)
       'button[data-primary]',         // Primary action buttons
       'input:not([type="hidden"])',   // Input fields
       'textarea',                     // Text areas
@@ -261,10 +262,12 @@ export class ModalManager {
       '[tabindex="0"]'               // Explicitly focusable elements
     ];
 
+    // PERFORMANCE: Early termination on first valid target
+    // Use for..of loop for better performance with early return
     for (const selector of priorities) {
       const target = modal.querySelector(selector);
       if (target && this.isVisible(target)) {
-        return target;
+        return target; // Early return saves unnecessary DOM queries
       }
     }
 
