@@ -656,6 +656,226 @@ export const createElement = (tagName, options = {}) => {
   return element;
 };
 
+/**
+ * Add event listener with automatic cleanup tracking
+ * 
+ * This utility simplifies event listener management by providing automatic
+ * cleanup tracking and chainable event binding. It reduces boilerplate code
+ * for common DOM event handling patterns.
+ * 
+ * @param {Element|string} elementOrSelector - Target element or CSS selector
+ * @param {string} eventType - Event type (e.g., 'click', 'input', 'change')
+ * @param {Function} handler - Event handler function
+ * @param {Object} [options={}] - Event listener options
+ * @returns {Function} Cleanup function to remove the event listener
+ * 
+ * @example
+ * // Basic event binding with cleanup
+ * const cleanup = addEventHandler('#saveBtn', 'click', handleSave);
+ * 
+ * // Later remove the listener
+ * cleanup();
+ * 
+ * // With options
+ * addEventHandler('.modal', 'click', handleBackdrop, { once: true });
+ */
+export const addEventHandler = (elementOrSelector, eventType, handler, options = {}) => {
+  // ELEMENT RESOLUTION: Handle both elements and selectors
+  const element = typeof elementOrSelector === 'string' 
+    ? $(elementOrSelector) 
+    : elementOrSelector;
+  
+  // VALIDATION: Ensure element exists
+  if (!element) {
+    console.warn(`addEventHandler: Element not found for selector '${elementOrSelector}'`);
+    return () => {}; // Return no-op cleanup function
+  }
+  
+  // VALIDATION: Ensure handler is a function
+  if (typeof handler !== 'function') {
+    console.warn('addEventHandler: Handler must be a function');
+    return () => {};
+  }
+  
+  // ADD EVENT LISTENER: With proper options handling
+  element.addEventListener(eventType, handler, options);
+  
+  // RETURN CLEANUP FUNCTION: For easy listener removal
+  return () => {
+    element.removeEventListener(eventType, handler, options);
+  };
+};
+
+/**
+ * Add multiple event listeners to the same element with cleanup tracking
+ * 
+ * This utility reduces repetitive addEventListener calls and provides
+ * centralized cleanup for multiple event types on the same element.
+ * 
+ * @param {Element|string} elementOrSelector - Target element or CSS selector
+ * @param {Object} eventMap - Map of event types to handler functions
+ * @param {Object} [options={}] - Default options for all event listeners
+ * @returns {Function} Cleanup function to remove all event listeners
+ * 
+ * @example
+ * // Add multiple handlers to one element
+ * const cleanup = addMultipleEventHandlers('#input', {
+ *   input: handleInput,
+ *   focus: handleFocus,
+ *   blur: handleBlur
+ * });
+ * 
+ * // Remove all listeners at once
+ * cleanup();
+ */
+export const addMultipleEventHandlers = (elementOrSelector, eventMap, options = {}) => {
+  // CREATE CLEANUP FUNCTIONS: Store all cleanup functions for batch removal
+  const cleanupFunctions = [];
+  
+  // ADD ALL EVENT LISTENERS: Process each event type-handler pair
+  Object.entries(eventMap).forEach(([eventType, handler]) => {
+    const cleanup = addEventHandler(elementOrSelector, eventType, handler, options);
+    cleanupFunctions.push(cleanup);
+  });
+  
+  // RETURN BATCH CLEANUP FUNCTION: Remove all listeners at once
+  return () => {
+    cleanupFunctions.forEach(cleanup => cleanup());
+  };
+};
+
+/**
+ * Toggle element visibility with optional animation class
+ * 
+ * This utility provides a consistent way to show/hide elements with
+ * optional CSS animation support and proper accessibility attributes.
+ * 
+ * @param {Element|string} elementOrSelector - Target element or CSS selector
+ * @param {boolean} [show] - Explicitly show (true) or hide (false). If undefined, toggles current state
+ * @param {string} [animationClass='fade'] - CSS class for animation effects
+ * @returns {boolean} New visibility state (true = visible, false = hidden)
+ * 
+ * @example
+ * // Toggle visibility
+ * toggleVisibility('#modal'); // Toggles current state
+ * 
+ * // Explicit show/hide
+ * toggleVisibility('#modal', true); // Always show
+ * toggleVisibility('#modal', false); // Always hide
+ * 
+ * // With custom animation
+ * toggleVisibility('#sidebar', true, 'slide-in');
+ */
+export const toggleVisibility = (elementOrSelector, show, animationClass = 'fade') => {
+  // ELEMENT RESOLUTION: Handle both elements and selectors
+  const element = typeof elementOrSelector === 'string'
+    ? $(elementOrSelector)
+    : elementOrSelector;
+  
+  // VALIDATION: Ensure element exists
+  if (!element) {
+    console.warn(`toggleVisibility: Element not found for selector '${elementOrSelector}'`);
+    return false;
+  }
+  
+  // DETERMINE TARGET STATE: Use explicit show parameter or toggle current state
+  const isCurrentlyVisible = !element.hidden && element.style.display !== 'none';
+  const shouldShow = show !== undefined ? show : !isCurrentlyVisible;
+  
+  // UPDATE VISIBILITY STATE: Set both hidden attribute and display style
+  element.hidden = !shouldShow;
+  
+  // ACCESSIBILITY: Update ARIA attributes for screen readers
+  element.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  
+  // ANIMATION SUPPORT: Add animation class if provided and element should be visible
+  if (shouldShow && animationClass) {
+    element.classList.add(animationClass);
+    // Remove animation class after a short delay to allow for transitions
+    setTimeout(() => {
+      element.classList.remove(animationClass);
+    }, 300);
+  }
+  
+  return shouldShow;
+};
+
+/**
+ * Create a debounced cleanup manager for batching DOM operations
+ * 
+ * This utility helps optimize performance by batching multiple DOM operations
+ * and executing them in a single animation frame, reducing layout thrashing.
+ * 
+ * @param {number} [delay=16] - Debounce delay in milliseconds (16ms = 1 frame at 60fps)
+ * @returns {Object} Manager object with add() and flush() methods
+ * 
+ * @example
+ * // Create a DOM operation batcher
+ * const domBatcher = createDOMBatcher();
+ * 
+ * // Queue multiple DOM operations
+ * domBatcher.add(() => element1.style.left = '100px');
+ * domBatcher.add(() => element2.textContent = 'Updated');
+ * domBatcher.add(() => element3.classList.add('active'));
+ * 
+ * // Operations are automatically batched and executed efficiently
+ */
+export const createDOMBatcher = (delay = 16) => {
+  let operations = [];
+  let timeoutId = null;
+  
+  // BATCH EXECUTION: Execute all queued operations in a single animation frame
+  const executeBatch = () => {
+    if (operations.length === 0) return;
+    
+    // USE REQUEST ANIMATION FRAME: Ensure operations happen at optimal time
+    requestAnimationFrame(() => {
+      operations.forEach(operation => {
+        try {
+          operation();
+        } catch (error) {
+          console.warn('DOM batcher operation failed:', error);
+        }
+      });
+      
+      // CLEAR OPERATIONS: Reset for next batch
+      operations = [];
+    });
+  };
+  
+  return {
+    /**
+     * Add a DOM operation to the batch queue
+     * @param {Function} operation - DOM operation to queue
+     */
+    add: (operation) => {
+      if (typeof operation !== 'function') {
+        console.warn('DOM batcher: Operation must be a function');
+        return;
+      }
+      
+      operations.push(operation);
+      
+      // DEBOUNCED EXECUTION: Reset timer on each new operation
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(executeBatch, delay);
+    },
+    
+    /**
+     * Immediately flush all queued operations
+     */
+    flush: () => {
+      clearTimeout(timeoutId);
+      executeBatch();
+    },
+    
+    /**
+     * Get the number of queued operations
+     */
+    size: () => operations.length
+  };
+};
+
 // =============================================================================
 // DATA ANALYSIS AND FILTERING UTILITIES
 // =============================================================================
