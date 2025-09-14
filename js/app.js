@@ -90,6 +90,11 @@ class CompyApp {
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
     this.filterHandlersBound = false;
     
+    // Card selection state for keyboard navigation
+    this.selectedCardIndex = -1;
+    this.cardElements = [];
+    this.visibleItems = [];
+    
     // Bind methods to maintain context
     this.handleStateChange = this.handleStateChange.bind(this);
     this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
@@ -97,6 +102,18 @@ class CompyApp {
     this.removeItem = this.removeItem.bind(this);
     this.setupMobileNavigation = this.setupMobileNavigation.bind(this);
     this.setupResponsiveNavbar = this.setupResponsiveNavbar.bind(this);
+    
+    // Card navigation methods
+    this.selectCard = this.selectCard.bind(this);
+    this.selectNextCard = this.selectNextCard.bind(this);
+    this.selectPreviousCard = this.selectPreviousCard.bind(this);
+    this.selectCardUp = this.selectCardUp.bind(this);
+    this.selectCardDown = this.selectCardDown.bind(this);
+    this.selectCardLeft = this.selectCardLeft.bind(this);
+    this.selectCardRight = this.selectCardRight.bind(this);
+    this.clearCardSelection = this.clearCardSelection.bind(this);
+    this.handleCardKeyboardShortcuts = this.handleCardKeyboardShortcuts.bind(this);
+    this.calculateGridColumns = this.calculateGridColumns.bind(this);
   }
 
   /**
@@ -145,7 +162,9 @@ class CompyApp {
       // Make notification system globally accessible for components
       if (typeof window !== 'undefined') {
         window.app = {
-          showNotification: this.showNotification.bind(this)
+          showNotification: this.showNotification.bind(this),
+          removeCardsByText: this.removeCardsByText.bind(this),
+          instance: this
         };
       }
       
@@ -362,7 +381,7 @@ class CompyApp {
     // USER FEEDBACK: Provide appropriate notification based on operation result
     this.showNotification(
       success ? 'Copied to clipboard' : 'Copy failed - please try manually selecting and copying',
-      success ? 'info' : 'error'
+      success ? 'success' : 'error'
     );
   }
   
@@ -390,19 +409,44 @@ class CompyApp {
   /**
    * Initialize ephemeral notification system (snackbar).
    * Uses UI_CONFIG.snackbarDuration for auto-dismiss timing.
+   * Handles rapid successive notifications properly.
    */
   initNotifications() {
     const snackbar = $('#snackbar');
+    let currentTimeoutId = null;
     
     this.notifications = {
       show: (message, type = 'info', duration = UI_CONFIG.snackbarDuration) => {
+        // Clear any existing timeout to prevent conflicts
+        if (currentTimeoutId) {
+          clearTimeout(currentTimeoutId);
+          currentTimeoutId = null;
+        }
+        
+        // Update notification content and styling
         snackbar.textContent = message;
         snackbar.className = `snackbar ${type}`;
+        
+        // Force a reflow to ensure clean animation states
+        snackbar.offsetHeight;
+        
+        // Show the notification
         snackbar.classList.add('show');
         
-        setTimeout(() => {
+        // Set new timeout for hiding
+        currentTimeoutId = setTimeout(() => {
           snackbar.classList.remove('show');
+          currentTimeoutId = null;
         }, duration);
+      },
+      
+      // Method to manually clear/hide current notification
+      hide: () => {
+        if (currentTimeoutId) {
+          clearTimeout(currentTimeoutId);
+          currentTimeoutId = null;
+        }
+        snackbar.classList.remove('show');
       }
     };
   }
@@ -410,7 +454,7 @@ class CompyApp {
   /**
    * Show a transient snackbar message.
    * @param {string} message - Message to display
-   * @param {'info'|'error'} [type='info'] - Visual style of the snackbar
+   * @param {'info'|'success'|'warning'|'error'} [type='info'] - Visual style of the snackbar
    */
   showNotification(message, type = 'info') {
     try {
@@ -601,10 +645,24 @@ class CompyApp {
       // Remove empty state class
       container.classList.remove('empty-state');
       
-      // Render cards
-      filteredItems.forEach(item => {
-        container.appendChild(this.createCardElement(item, state.search));
+      // Update tracking arrays for keyboard navigation
+      this.visibleItems = [...filteredItems];
+      this.cardElements = [];
+      
+      // Render cards and track elements
+      filteredItems.forEach((item, index) => {
+        const cardElement = this.createCardElement(item, state.search, index);
+        container.appendChild(cardElement);
+        this.cardElements.push(cardElement);
       });
+      
+      // Reset selection if no cards or selection is out of bounds
+      if (this.cardElements.length === 0 || this.selectedCardIndex >= this.cardElements.length) {
+        this.clearCardSelection();
+      } else if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+        // Restore selection visual state
+        this.updateCardSelection();
+      }
       
       // Restore scroll position if it shifted during render
       requestAnimationFrame(() => {
@@ -621,12 +679,17 @@ class CompyApp {
    * Respects the 'sensitive' flag by masking the title.
    * @param {Object} item - Item with text, desc, sensitive, tags
    * @param {string} [searchQuery=''] - Current search query for highlighting
+   * @param {number} [index] - Index of the card for keyboard navigation
    * @returns {HTMLElement}
    */
-  createCardElement(item, searchQuery = '') {
+  createCardElement(item, searchQuery = '', index = -1) {
     const card = document.createElement('article');
     card.className = 'card';
-    card.tabIndex = 0;
+    
+    // Add data attribute for keyboard navigation
+    if (index >= 0) {
+      card.dataset.cardIndex = index;
+    }
     
     const displayText = item.sensitive ? '••••••••••' : escapeHtml(item.text);
     const highlightedText = highlightText(displayText, searchQuery);
@@ -657,37 +720,42 @@ class CompyApp {
 
   /**
    * Wire click/keyboard handlers for a card's interactions.
-   * Click on card copies content unless an action button was clicked.
+   * Click on card selects it and copies content unless an action button was clicked.
    * @param {HTMLElement} card - Card element
    * @param {Object} item - Item backing the card
    */
   setupCardEventHandlers(card, item) {
-    // Click to copy (but not on action buttons)
+    // Click to select card and copy (but not on action buttons)
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.actions')) {
+        // Select the clicked card (suppress notification for clicks)
+        const cardIndex = parseInt(card.dataset.cardIndex);
+        if (!isNaN(cardIndex)) {
+          this.selectCard(cardIndex, false);
+        }
+        
+        // Copy the content
         this.clipboard.copy(item.text);
       }
     });
 
-    // Keyboard support
-    card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        this.clipboard.copy(item.text);
-      }
-    });
+    // Keyboard support removed - handled globally by handleKeyboardShortcuts
 
     // Action buttons
-    card.querySelector('[data-act="edit"]').addEventListener('click', () => 
-      this.openItemModal(item.id)
-    );
+    card.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent card selection
+      this.openItemModal(item.id);
+    });
     
-    card.querySelector('[data-act="delete"]').addEventListener('click', () => 
-      this.removeItem(item.id)
-    );
+    card.querySelector('[data-act="delete"]').addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent card selection
+      this.removeItem(item.id);
+    });
     
-    card.querySelector('[data-act="copy"]').addEventListener('click', () => 
-      this.clipboard.copy(item.text)
-    );
+    card.querySelector('[data-act="copy"]').addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent card selection
+      this.clipboard.copy(item.text);
+    });
   }
 
   /**
@@ -1910,6 +1978,17 @@ class CompyApp {
    * @param {KeyboardEvent} e
    */
   handleKeyboardShortcuts(e) {
+    // Don't handle shortcuts if modal is open or input is focused
+    if (this.modalManager?.hasOpenModals() || 
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+      return;
+    }
+    
+    // Handle card-specific shortcuts first
+    if (this.handleCardKeyboardShortcuts(e)) {
+      return;
+    }
+    
     // Search shortcuts
     if ((e.ctrlKey && e.key.toLowerCase() === 'f') || e.key === '/') {
       e.preventDefault();
@@ -1922,6 +2001,29 @@ class CompyApp {
       e.preventDefault();
       this.openItemModal();
       return;
+    }
+    
+    // Card navigation shortcuts
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        this.selectCardUp();
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        this.selectCardDown();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        this.selectCardLeft();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        this.selectCardRight();
+        break;
+      case 'Escape':
+        this.clearCardSelection();
+        break;
     }
   }
 
@@ -2006,6 +2108,363 @@ class CompyApp {
       console.warn('Failed to initialize mobile navigation');
       this.mobileNavigation = null;
     }
+  }
+  
+  /**
+   * Handle keyboard shortcuts that work on selected cards or globally
+   * @param {KeyboardEvent} e
+   * @returns {boolean} True if the event was handled
+   */
+  handleCardKeyboardShortcuts(e) {
+    const key = e.key.toLowerCase();
+    const selectedItem = this.getSelectedItem();
+    
+    switch (key) {
+      case 'd':
+        // Delete selected card or show general shortcut help
+        if (selectedItem) {
+          e.preventDefault();
+          this.removeItem(selectedItem.id);
+          return true;
+        }
+        break;
+        
+      case 'c':
+        // Copy selected card
+        if (selectedItem) {
+          e.preventDefault();
+          this.clipboard.copy(selectedItem.text);
+          return true;
+        }
+        break;
+        
+      case 'f':
+        // Open filter modal
+        e.preventDefault();
+        this.openFilterModal();
+        return true;
+        
+      case 'i':
+        // Import file
+        e.preventDefault();
+        $('#importFile').click();
+        return true;
+        
+      case 'e':
+        // Export menu (show export menu)
+        e.preventDefault();
+        const exportBtn = $('#exportMenuBtn');
+        exportBtn?.click();
+        return true;
+        
+      case 'p':
+        // Profile modal
+        e.preventDefault();
+        const state = getState();
+        $('#profileNameInput').value = state.profileName;
+        this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
+        return true;
+        
+      case 'a':
+        // About modal
+        e.preventDefault();
+        this.modalManager.open('#aboutModal');
+        return true;
+        
+      case 'enter':
+        // Edit selected card or add new item
+        e.preventDefault();
+        if (selectedItem) {
+          this.openItemModal(selectedItem.id);
+        } else {
+          this.openItemModal();
+        }
+        return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Select a card by index
+   * @param {number} index - Index of card to select
+   * @param {boolean} showNotification - Whether to show the help notification
+   */
+  selectCard(index, showNotification = true) {
+    if (index < 0 || index >= this.cardElements.length) {
+      return;
+    }
+    
+    const wasFirstSelection = this.selectedCardIndex === -1;
+    this.selectedCardIndex = index;
+    this.updateCardSelection();
+    
+    // Show helpful notification on first card selection (only if enabled)
+    if (wasFirstSelection && showNotification) {
+      this.showNotification('💡 Use ↑↓←→ arrows to navigate, C=copy, D=delete, Enter=edit, F=filter');
+    }
+    
+    // Scroll card into view if needed
+    const selectedCard = this.cardElements[index];
+    if (selectedCard) {
+      selectedCard.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }
+  
+  /**
+   * Select the next card
+   */
+  selectNextCard() {
+    if (this.cardElements.length === 0) return;
+    
+    let nextIndex = this.selectedCardIndex + 1;
+    if (nextIndex >= this.cardElements.length) {
+      nextIndex = 0; // Wrap to first
+    }
+    
+    this.selectCard(nextIndex);
+  }
+  
+  /**
+   * Select the previous card
+   */
+  selectPreviousCard() {
+    if (this.cardElements.length === 0) return;
+    
+    let prevIndex = this.selectedCardIndex - 1;
+    if (prevIndex < 0) {
+      prevIndex = this.cardElements.length - 1; // Wrap to last
+    }
+    
+    this.selectCard(prevIndex);
+  }
+  
+  /**
+   * Clear card selection
+   */
+  clearCardSelection() {
+    this.selectedCardIndex = -1;
+    this.updateCardSelection();
+  }
+  
+  /**
+   * Update visual selection state of cards
+   */
+  updateCardSelection() {
+    // Remove selection class from all cards
+    this.cardElements.forEach(card => {
+      card.classList.remove('selected');
+    });
+    
+    // Add selection class to selected card
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+      this.cardElements[this.selectedCardIndex].classList.add('selected');
+    }
+  }
+  
+  /**
+   * Get the currently selected item data
+   * @returns {Object|null} Selected item or null
+   */
+  getSelectedItem() {
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.visibleItems.length) {
+      return this.visibleItems[this.selectedCardIndex];
+    }
+    return null;
+  }
+  
+  /**
+   * Calculate the number of columns in the cards grid
+   * @returns {number} Number of columns
+   */
+  calculateGridColumns() {
+    if (this.cardElements.length === 0) return 1;
+    
+    // Always use position-based calculation for auto-fill grids
+    // CSS grid-template-columns doesn't reflect actual auto-fill behavior
+    if (this.cardElements.length < 2) return 1;
+    
+    const firstCard = this.cardElements[0];
+    const secondCard = this.cardElements[1];
+    
+    const firstRect = firstCard.getBoundingClientRect();
+    const secondRect = secondCard.getBoundingClientRect();
+    
+    console.log('calculateGridColumns - position-based: first card top:', firstRect.top, 'second card top:', secondRect.top);
+    
+    // If the second card is on the same row (approximately), count cards in first row
+    if (Math.abs(firstRect.top - secondRect.top) < 25) {
+      let columnsCount = 1;
+      const firstRowTop = firstRect.top;
+      
+      // Debug: log all card positions
+      console.log('Card positions:');
+      for (let i = 0; i < Math.min(10, this.cardElements.length); i++) {
+        const rect = this.cardElements[i].getBoundingClientRect();
+        console.log(`Card ${i}: top=${rect.top}, diff=${Math.abs(rect.top - firstRowTop)}`);
+      }
+      
+      for (let i = 1; i < this.cardElements.length; i++) {
+        const cardRect = this.cardElements[i].getBoundingClientRect();
+        const topDiff = Math.abs(cardRect.top - firstRowTop);
+        if (topDiff < 25) {
+          columnsCount++;
+        } else {
+          console.log(`Card ${i} is on different row: top=${cardRect.top}, diff=${topDiff}`);
+          break;
+        }
+      }
+      
+      console.log('calculateGridColumns - detected columns:', columnsCount);
+      return columnsCount;
+    }
+    
+    console.log('calculateGridColumns - single column fallback');
+    return 1; // Single column if cards are stacked vertically
+  }
+  
+  /**
+   * Navigate up in the grid
+   */
+  selectCardUp() {
+    if (this.cardElements.length === 0) return;
+    
+    const columns = this.calculateGridColumns();
+    const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
+    const newIndex = currentIndex - columns;
+    
+    if (newIndex >= 0) {
+      this.selectCard(newIndex);
+    } else {
+      // Wrap to bottom: find the card in the same column on the last row
+      const column = currentIndex % columns;
+      const totalRows = Math.ceil(this.cardElements.length / columns);
+      let wrapIndex = (totalRows - 1) * columns + column;
+      
+      // Make sure the wrap index exists
+      if (wrapIndex >= this.cardElements.length) {
+        wrapIndex = this.cardElements.length - 1;
+      }
+      
+      this.selectCard(wrapIndex);
+    }
+  }
+  
+  /**
+   * Navigate down in the grid
+   */
+  selectCardDown() {
+    if (this.cardElements.length === 0) return;
+    
+    const columns = this.calculateGridColumns();
+    const currentIndex = this.selectedCardIndex === -1 ? -1 : this.selectedCardIndex;
+    
+    // If no selection, select first card
+    if (currentIndex === -1) {
+      this.selectCard(0);
+      return;
+    }
+    
+    const newIndex = currentIndex + columns;
+    
+    if (newIndex < this.cardElements.length) {
+      this.selectCard(newIndex);
+    } else {
+      // Wrap to top: find the card in the same column on the first row
+      const column = currentIndex % columns;
+      this.selectCard(column);
+    }
+  }
+  
+  /**
+   * Navigate left in the grid
+   */
+  selectCardLeft() {
+    if (this.cardElements.length === 0) return;
+    
+    const columns = this.calculateGridColumns();
+    const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
+    
+    if (currentIndex % columns === 0) {
+      // At the leftmost position, wrap to the rightmost position in the same row
+      const row = Math.floor(currentIndex / columns);
+      const rightmostInRow = Math.min((row + 1) * columns - 1, this.cardElements.length - 1);
+      this.selectCard(rightmostInRow);
+    } else {
+      // Move one position to the left
+      this.selectCard(currentIndex - 1);
+    }
+  }
+  
+  /**
+   * Navigate right linearly through all cards (wrap at end)
+   */
+  selectCardRight() {
+    if (this.cardElements.length === 0) return;
+    
+    const currentIndex = this.selectedCardIndex === -1 ? -1 : this.selectedCardIndex;
+    console.log('→ Right navigation (linear): index', currentIndex, '/', this.cardElements.length);
+    
+    // If no selection, select first card
+    if (currentIndex === -1) {
+      this.selectCard(0);
+      return;
+    }
+    
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < this.cardElements.length) {
+      this.selectCard(nextIndex);
+    } else {
+      // Wrap to the first card when reaching the end
+      this.selectCard(0);
+    }
+  }
+  
+  /**
+   * Legacy method for backward compatibility - maps to selectCardDown
+   */
+  selectNextCard() {
+    this.selectCardDown();
+  }
+  
+  /**
+   * Legacy method for backward compatibility - maps to selectCardUp
+   */
+  selectPreviousCard() {
+    this.selectCardUp();
+  }
+  
+  /**
+   * Utility method to remove cards by text content (for console use)
+   * @param {string} searchText - Text to search for in card titles/descriptions
+   */
+  removeCardsByText(searchText) {
+    const state = getState();
+    const itemsToRemove = state.items.filter(item => 
+      item.text.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.desc.toLowerCase().includes(searchText.toLowerCase())
+    );
+    
+    if (itemsToRemove.length === 0) {
+      console.log(`No cards found containing "${searchText}"`);
+      return;
+    }
+    
+    console.log(`Found ${itemsToRemove.length} card(s) containing "${searchText}":`);
+    itemsToRemove.forEach((item, index) => {
+      console.log(`${index + 1}. "${item.text}" - "${item.desc}"`);
+    });
+    
+    // Remove all matching items
+    itemsToRemove.forEach(item => {
+      deleteItem(item.id);
+      console.log(`Removed: "${item.text}"`);
+    });
+    
+    this.showNotification(`Removed ${itemsToRemove.length} card(s) containing "${searchText}"`);
   }
 
 }
