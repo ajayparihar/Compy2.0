@@ -105,6 +105,9 @@ export const UI_CONFIG = {
   
   /** Number of skeleton loading cards to show while rendering */
   skeletonCount: 6,
+
+  /** When true, enables development logging in modules that respect this flag */
+  debug: false,
 };
 
 /**

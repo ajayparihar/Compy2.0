@@ -163,15 +163,25 @@ const notifyListeners = () => {
  * It gracefully handles missing or corrupted data by falling back to defaults.
  * Includes data validation to ensure loaded state meets expected structure.
  * 
+ * Browser API Dependencies:
+ * - Web Storage API (localStorage) - supported in all modern browsers
+ * - JSON.parse() for data deserialization
+ * - Storage events for cross-tab synchronization (not implemented yet)
+ * 
+ * Privacy Mode Handling:
+ * - Safari private browsing: localStorage throws SecurityError
+ * - Firefox private browsing: localStorage is available but cleared on close
+ * - Chrome incognito: localStorage works normally
+ * 
  * Storage Keys Used:
  * - STORAGE_KEYS.items: Array of snippet items
- * - STORAGE_KEYS.filters: Array of active filter tags
+ * - STORAGE_KEYS.filters: Array of active filter tags  
  * - STORAGE_KEYS.profile: User profile name string
  * 
  * Data Validation:
  * - Validates that items is an array with proper structure
  * - Ensures filterTags is an array of strings
- * - Sanitizes profile name for security
+ * - Sanitizes profile name for security (max 100 chars)
  * 
  * Error Handling:
  * If localStorage is unavailable or contains invalid JSON, the function
@@ -228,7 +238,7 @@ export const loadState = () => {
       profileName
     };
     
-    console.log(`State loaded successfully: ${items.length} items, ${filterTags.length} active filters`);
+    if (UI_CONFIG.debug) console.log(`State loaded successfully: ${items.length} items, ${filterTags.length} active filters`);
     
     // Notify subscribers of the loaded state
     notifyListeners();
@@ -427,30 +437,40 @@ export const getState = () => ({ ...state });
  * });
  */
 export const upsertItem = (item) => {
+  // CONDITIONAL OPERATION: Determine if this is an update or insert operation
+  // The presence of editingId indicates we're updating an existing item
+  // rather than creating a new one
   if (state.editingId) {
-    // Update existing item by ID
+    // UPDATE EXISTING ITEM: Find the item by ID and replace it
     const index = state.items.findIndex(i => i.id === state.editingId);
     
+    // VALIDATION: Ensure the item exists before attempting update
+    // This prevents errors if the item was deleted during editing
     if (index > -1) {
-      // Merge new properties with existing item
+      // IMMUTABLE MERGE: Combine existing item properties with new ones
+      // Object spread gives priority to new properties while preserving unchanged ones
       const updatedItem = { ...state.items[index], ...item };
       
-      // Create new items array with the updated item
+      // IMMUTABLE ARRAY UPDATE: Create new array with updated item at same position
+      // This preserves array order while updating content
       const updatedItems = [...state.items];
       updatedItems[index] = updatedItem;
       
-      // Update state and clear editing ID
+      // STATE UPDATE: Apply changes and clear editing mode
+      // Clearing editingId indicates we're done with this edit operation
       state = { ...state, items: updatedItems, editingId: null };
     }
   } else {
-    // Create new item with unique ID
+    // INSERT NEW ITEM: Create item with unique identifier and add to list
     const newItem = { id: generateUID(), ...item };
     
-    // Add to end of list (chronological order)
+    // CHRONOLOGICAL INSERTION: Add to end to maintain creation order
+    // New items appear at bottom, preserving user's mental model
     state = { ...state, items: [...state.items, newItem] };
   }
   
-  // Persist changes and trigger backups
+  // PERSISTENCE AND BACKUP: Save changes and schedule automatic backup
+  // This ensures data safety and allows for recovery if needed
   saveState();
 };
 

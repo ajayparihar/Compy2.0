@@ -43,6 +43,7 @@
  * - Loading user data from storage
  */
 import { initializeApp } from './app.js';
+import { UI_CONFIG } from './constants.js';
 
 // =============================================================================
 // APPLICATION BOOTSTRAP AND ERROR HANDLING
@@ -76,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     // INITIALIZATION PHASE: Application Startup
     // Log startup to provide visibility into application lifecycle
-    console.log('🚀 Starting Compy 2.0 application...');
+    if (UI_CONFIG.debug) console.log('🚀 Starting Compy 2.0 application...');
     
     // MAIN APPLICATION BOOTSTRAP: Initialize all systems
     // This async call sets up:
@@ -88,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initializeApp();
     
     // SUCCESS CONFIRMATION: Indicate successful startup
-    console.log('✅ Compy 2.0 started successfully!');
+    if (UI_CONFIG.debug) console.log('✅ Compy 2.0 started successfully!');
     
   } catch (error) {
     // ERROR RECOVERY: Comprehensive error handling and user guidance
@@ -133,7 +134,18 @@ document.addEventListener('DOMContentLoaded', async () => {
  * This handler catches any promises that reject without being handled,
  * preventing them from causing silent failures or browser console errors.
  * 
+ * Browser API Dependencies:
+ * - Window.unhandledrejection event (Chrome 49+, Firefox 69+, Safari 11+)
+ * - PromiseRejectionEvent interface for event details
+ * - Event.preventDefault() to suppress default browser error handling
+ * 
+ * Fallback Behavior:
+ * - Older browsers will still show console errors (graceful degradation)
+ * - Application functionality remains unaffected
+ * 
  * @param {PromiseRejectionEvent} event - Unhandled promise rejection event
+ * @param {Promise} event.promise - The promise that was rejected
+ * @param {any} event.reason - The rejection reason/error
  */
 window.addEventListener('unhandledrejection', (event) => {
   // LOG UNHANDLED REJECTIONS: Track async errors that escape normal handling

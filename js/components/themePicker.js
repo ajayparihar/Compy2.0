@@ -14,6 +14,7 @@
  */
 
 import { THEME_DEFINITIONS, THEME_CATEGORIES, ACCESSIBILITY_LEVELS } from '../themes.js';
+import { UI_CONFIG } from '../constants.js';
 
 /**
  * Create and manage the enhanced theme picker component
@@ -55,8 +56,8 @@ export function createThemePicker(modalManager, themeManager) {
     
     // Update current theme display
     updateCurrentThemeDisplay();
-
-    console.log('Theme picker initialized with', Object.keys(THEME_DEFINITIONS).length, 'themes');
+    
+    if (UI_CONFIG.debug) console.log('Theme picker initialized with', Object.keys(THEME_DEFINITIONS).length, 'themes');
   }
 
   /**
