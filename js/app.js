@@ -86,6 +86,10 @@ class CompyApp {
     this.mobileNavigation = null;
     this.themePicker = null;
     
+    // Manual scroll restoration across refreshes
+    this.initialScrollY = 0;     // saved scroll position from previous session load (sessionStorage)
+    this.scrollRestored = false; // whether we've already restored scroll after first render
+    
     // Filter modal transient state and handler guard
     this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
     this.filterHandlersBound = false;
@@ -132,6 +136,9 @@ class CompyApp {
     if (this.initialized) return;
 
     try {
+      // Initialize scroll persistence and temporarily disable entry animations
+      this.initScrollPersistence();
+      
       // Setup responsive navbar FIRST to prevent layout shifts
       this.setupResponsiveNavbar();
       
@@ -175,6 +182,33 @@ class CompyApp {
       console.error('Failed to initialize Compy 2.0:', error);
       this.showNotification('Failed to initialize application', 'error');
     }
+  }
+
+  /**
+   * Initialize manual scroll persistence/restoration across refreshes.
+   * - Reads saved scrollY from sessionStorage
+   * - Saves current scrollY on beforeunload/pagehide
+   * - Temporarily disables entry animations to prevent perceived jumps
+   */
+  initScrollPersistence() {
+    try {
+      const saved = sessionStorage.getItem('compy.scrollY');
+      this.initialScrollY = saved ? parseInt(saved, 10) || 0 : 0;
+    } catch (e) {
+      this.initialScrollY = 0;
+    }
+
+    const saveScroll = () => {
+      try {
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        sessionStorage.setItem('compy.scrollY', String(y));
+      } catch (e) {}
+    };
+    window.addEventListener('beforeunload', saveScroll);
+    window.addEventListener('pagehide', saveScroll);
+
+    // Disable entry animation during first render to avoid any jank
+    document.documentElement.classList.add('disable-entry-anim');
   }
 
   /**
@@ -664,11 +698,20 @@ class CompyApp {
         this.updateCardSelection();
       }
       
-      // Restore scroll position if it shifted during render
+      // Restore scroll position. On the very first render after a refresh, restore
+      // from the previously saved position (manual restoration). Thereafter, just
+      // preserve the current scroll across re-renders.
       requestAnimationFrame(() => {
-        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
-        if (Math.abs(currentScrollTop - scrollTop) > 2) {
-          window.scrollTo(0, scrollTop);
+        if (!this.scrollRestored && this.initialScrollY > 0) {
+          window.scrollTo({ top: this.initialScrollY, behavior: 'auto' });
+          this.scrollRestored = true;
+          // Re-enable entry animations after initial stabilization
+          document.documentElement.classList.remove('disable-entry-anim');
+        } else {
+          const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+          if (Math.abs(currentScrollTop - scrollTop) > 2) {
+            window.scrollTo({ top: scrollTop, behavior: 'auto' });
+          }
         }
       });
     });
@@ -2058,8 +2101,14 @@ class CompyApp {
         // Preserve scroll position during layout adjustments
         const scrollTop = window.scrollY || document.documentElement.scrollTop;
         requestAnimationFrame(() => {
+          // If we haven't restored the initial scroll yet and we have a saved
+          // position, skip interfering here. The main render will handle it.
+          if (!this.scrollRestored && this.initialScrollY > 0) {
+            return;
+          }
           if (Math.abs(window.scrollY - scrollTop) < 5) {
-            window.scrollTo(0, scrollTop);
+            // Use instant behavior to prevent any animated upward scroll
+            window.scrollTo({ top: scrollTop, behavior: 'auto' });
           }
         });
       }

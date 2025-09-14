@@ -11,6 +11,28 @@
   
   <title>Compy 2.0</title>
   
+  <!-- Set persisted theme ASAP to avoid flash of default theme -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('compy.theme');
+        var fallback = 'dark-mystic-forest';
+        var theme = saved && typeof saved === 'string' ? saved : fallback;
+        if (theme) document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        // If storage is unavailable (e.g., privacy mode), keep default attribute
+      }
+    })();
+  </script>
+  <!-- Disable browser auto scroll restore; we'll handle it manually to avoid jumps -->
+  <script>
+    try {
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+    } catch (e) {}
+  </script>
+  
   <link rel="stylesheet" href="css/compy.css" />
   <link rel="icon" href="favicon_io/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
