@@ -591,6 +591,13 @@ class CompyApp {
     this.visibleItems = [...items];
     this.cardElements = [];
 
+    // Apply few-cards class for compact layout when there are 6 or fewer cards
+    if (items.length <= 6) {
+      container.classList.add('few-cards');
+    } else {
+      container.classList.remove('few-cards');
+    }
+
     // Render cards and track elements
     items.forEach((item, index) => {
       const cardElement = this.createCardElement(item, searchQuery, index);

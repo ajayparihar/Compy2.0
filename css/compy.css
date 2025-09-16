@@ -120,7 +120,7 @@
   --ctrl-h-sm: clamp(28px, 4.5vw, 36px);
   --ctrl-h-lg: clamp(40px, 6.5vw, 52px);
   --nav-h: clamp(52px, 8vw, 64px);
-  --card-min-h: 96px;
+  --card-min-h: 48px;
   --modal-max-w: 720px;
   --modal-max-w-sm: 520px;
   --search-max-w: 680px;
@@ -1615,14 +1615,19 @@ select:focus-visible {
   /* Ensure minimum height to prevent layout shift */
   min-height: calc(100vh - var(--nav-h) - 32px);
 }
+
+/* When there are few cards (search results), use natural heights to avoid unnecessary stretching */
+.cards.few-cards {
+  align-items: start;
+}
 .card {
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 12px;
-  padding-bottom: 48px;
+  padding-bottom: 24px;
   position: relative;
-  min-height: 96px;
+  min-height: 48px;
   cursor: pointer;
   transition: background-color var(--duration-normal) var(--ease-out),
               border-color var(--duration-normal) var(--ease-out),
@@ -2236,7 +2241,7 @@ html[data-theme$="high-contrast"] .snackbar.error {
   animation: shimmer 1.2s infinite;
 }
 .skel-card {
-  height: 96px;
+  height: 48px;
   border-radius: 12px;
 }
 @keyframes shimmer {
