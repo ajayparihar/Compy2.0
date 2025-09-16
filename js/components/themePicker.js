@@ -54,8 +54,8 @@ export function createThemePicker(modalManager, themeManager) {
     // Render initial theme grid
     renderThemes();
     
-    // Update current theme display
-    updateCurrentThemeDisplay();
+    // Update circular theme indicator
+    updateThemeIndicator();
     
     if (UI_CONFIG.debug) console.log('Theme picker initialized with', Object.keys(THEME_DEFINITIONS).length, 'themes');
   }
@@ -87,7 +87,6 @@ export function createThemePicker(modalManager, themeManager) {
    * Open the theme picker modal
    */
   function openThemePicker() {
-    updateCurrentThemeDisplay();
     renderThemes();
     
     modalManager.open('#themePickerModal', { 
@@ -286,29 +285,38 @@ export function createThemePicker(modalManager, themeManager) {
   }
 
   /**
-   * Update current theme display
+   * Update circular theme indicator with current theme colors
    */
-  function updateCurrentThemeDisplay() {
+  function updateThemeIndicator() {
     const currentThemeId = getCurrentThemeId();
     const currentTheme = THEME_DEFINITIONS[currentThemeId];
     
     if (!currentTheme) return;
     
-    const nameElement = document.getElementById('currentThemeName');
-    const previewElement = document.getElementById('currentThemePreview');
+    // Update the color segments in the circular indicator
+    const primarySegment = document.querySelector('.color-segment[data-color="primary"]');
+    const surfaceSegment = document.querySelector('.color-segment[data-color="surface"]');
+    const textSegment = document.querySelector('.color-segment[data-color="text"]');
+    const bgSegment = document.querySelector('.color-segment[data-color="bg"]');
     
-    if (nameElement) {
-      nameElement.textContent = currentTheme.name;
+    if (primarySegment) {
+      primarySegment.style.backgroundColor = currentTheme.colors.primary;
+    }
+    if (surfaceSegment) {
+      surfaceSegment.style.backgroundColor = currentTheme.colors.surface;
+    }
+    if (textSegment) {
+      textSegment.style.backgroundColor = currentTheme.colors.text;
+    }
+    if (bgSegment) {
+      bgSegment.style.backgroundColor = currentTheme.colors.bg;
     }
     
-    if (previewElement) {
-      previewElement.innerHTML = `
-        <div class="color-swatch" style="background-color: ${currentTheme.colors.bg}"></div>
-        <div class="color-swatch" style="background-color: ${currentTheme.colors.surface}"></div>
-        <div class="color-swatch" style="background-color: ${currentTheme.colors.primary}"></div>
-        <div class="color-swatch" style="background-color: ${currentTheme.colors.text}"></div>
-        <div class="color-swatch" style="background-color: ${currentTheme.colors.textMuted}"></div>
-      `;
+    // Update button title with current theme name for accessibility
+    const themePickerBtn = document.getElementById('themePickerBtn');
+    if (themePickerBtn) {
+      themePickerBtn.title = `Choose theme (Current: ${currentTheme.name})`;
+      themePickerBtn.setAttribute('aria-label', `Open theme picker (Current theme: ${currentTheme.name})`);
     }
   }
 
@@ -332,10 +340,10 @@ export function createThemePicker(modalManager, themeManager) {
   }
 
   /**
-   * Update current theme display and refresh cards
+   * Update theme indicator and refresh cards
    */
   function updateSelectedTheme(themeId) {
-    updateCurrentThemeDisplay();
+    updateThemeIndicator();
     
     // Refresh theme cards to show current theme
     if (document.getElementById('themePickerModal')?.getAttribute('aria-hidden') === 'false') {
@@ -347,6 +355,6 @@ export function createThemePicker(modalManager, themeManager) {
   return {
     init,
     updateSelectedTheme,
-    updateCurrentThemeDisplay
+    updateThemeIndicator
   };
 }

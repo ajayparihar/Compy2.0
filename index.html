@@ -33,7 +33,12 @@
     } catch (e) {}
   </script>
   
-  <link rel="stylesheet" href="css/compy.css" />
+  <!-- Cache Control Meta Tags -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  
+  <link rel="stylesheet" href="css/compy.css?v=2.0.2" />
   <link rel="icon" href="favicon_io/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
@@ -41,8 +46,8 @@
   <link rel="manifest" href="favicon_io/site.webmanifest">
   
   <!-- Preload critical resources -->
-  <link rel="preload" href="css/compy.css" as="style" />
-  <link rel="modulepreload" href="js/main.js" />
+  <link rel="preload" href="css/compy.css?v=2.0.2" as="style" />
+  <link rel="modulepreload" href="js/main.js?v=2.0.2" />
 </head>
 <body>
   <header class="navbar" role="banner">
@@ -55,34 +60,36 @@
       <span id="profileDisplay" class="profile-display" aria-label="Current user profile"></span>
     </div>
     <div class="center">
-      <div class="search" role="search">
-        <label for="searchInput" class="sr-only">Search snippets</label>
-        <input 
-          id="searchInput" 
-          type="search" 
-          placeholder="Search snippets (Ctrl+F or /)" 
-          aria-label="Search snippets"
-          autocomplete="off"
-          spellcheck="false" />
+      <div class="search-container">
+        <div class="search" role="search">
+          <label for="searchInput" class="sr-only">Search snippets</label>
+          <input 
+            id="searchInput" 
+            type="search" 
+            placeholder="Search snippets (Ctrl+F or /)" 
+            aria-label="Search snippets"
+            autocomplete="off"
+            spellcheck="false" />
+          <button 
+            id="searchClear" 
+            class="icon-btn" 
+            title="Clear search" 
+            aria-label="Clear search input"
+            tabindex="-1">
+            <span aria-hidden="true">✕</span>
+          </button>
+        </div>
         <button 
-          id="searchClear" 
-          class="icon-btn" 
-          title="Clear search" 
-          aria-label="Clear search input"
-          tabindex="-1">
-          <span aria-hidden="true">✕</span>
+          id="addBtn" 
+          class="primary-btn" 
+          title="Add new snippet" 
+          aria-label="Add new snippet">
+          <span aria-hidden="true"><b>＋</b></span>
+          <span class="sr-only">Add</span>
         </button>
       </div>
     </div>
     <div id="navActions" class="right">
-      <button 
-        id="addBtn" 
-        class="primary-btn" 
-        title="Add new snippet" 
-        aria-label="Add new snippet">
-        <span aria-hidden="true"><b>＋</b></span>
-        <span class="sr-only">Add</span>
-      </button>
       <button 
         id="filterBtn" 
         class="icon-text-btn" 
@@ -94,10 +101,17 @@
       </button>
       <button 
         id="themePickerBtn" 
-        class="icon-text-btn" 
+        class="theme-indicator-btn" 
         title="Choose theme" 
         aria-label="Open theme picker">
-        Theme
+        <div id="themeIndicator" class="theme-indicator">
+          <div class="theme-color-ring">
+            <div class="color-segment" data-color="primary"></div>
+            <div class="color-segment" data-color="surface"></div>
+            <div class="color-segment" data-color="text"></div>
+            <div class="color-segment" data-color="bg"></div>
+          </div>
+        </div>
       </button>
       <label class="file-btn" title="Import snippets from file">
         <input 
@@ -505,12 +519,6 @@
           </div>
         </div>
         
-        <!-- Current Theme Display -->
-        <div class="current-theme-display">
-          <h4>Current: <span id="currentThemeName">Mystic Forest</span></h4>
-          <div class="current-theme-preview" id="currentThemePreview"></div>
-        </div>
-        
         <!-- Theme Grid -->
         <div class="themes-grid" id="themesGrid" role="radiogroup" aria-label="Available themes">
           <!-- Themes will be populated by JavaScript -->
@@ -585,7 +593,7 @@
     aria-atomic="true"></div>
 
   <!-- JavaScript -->
-  <script type="module" src="js/main.js" defer></script>
+  <script type="module" src="js/main.js?v=2.0.2" defer></script>
   
 </body>
 </html>

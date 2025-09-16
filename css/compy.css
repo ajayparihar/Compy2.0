@@ -1207,6 +1207,23 @@ body {
   max-width: clamp(100px, 20vw, 240px);
 }
 
+/* Search Container - holds search bar and + button side by side */
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 1.5vw, 16px);
+  width: min(720px, 100%);
+  justify-content: center;
+}
+
+/* + button in search container - ensure proper sizing */
+.search-container .primary-btn {
+  flex-shrink: 0;
+  width: auto;
+  min-width: var(--ctrl-h);
+  height: clamp(36px, 6vw, 44px); /* Match search bar height */
+}
+
 /* Search Bar - Single clean implementation */
 .search {
   position: relative;
@@ -1217,7 +1234,8 @@ body {
   border-radius: var(--radius-lg);
   height: clamp(36px, 6vw, 44px);
   padding: 0;
-  width: min(680px, 100%);
+  flex: 1;
+  min-width: 200px;
   transition: all var(--duration-normal) var(--ease-out);
   backdrop-filter: blur(8px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 
@@ -1473,6 +1491,76 @@ select:hover {
 }
 .menu-panel button:hover {
   background: var(--hover-overlay);
+}
+
+/* Theme Indicator Button */
+.theme-indicator-btn {
+  width: var(--ctrl-h) !important;
+  height: var(--ctrl-h) !important;
+  padding: 4px !important;
+  border-radius: 50% !important;
+  background: var(--surface) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  cursor: pointer;
+  transition: all 140ms ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.theme-indicator-btn:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface)) !important;
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  transform: scale(1.05);
+}
+
+.theme-indicator-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.theme-indicator {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+}
+
+.theme-color-ring {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.color-segment {
+  width: 50%;
+  height: 50%;
+  transition: all 200ms ease;
+}
+
+.color-segment[data-color="primary"] {
+  background: var(--primary);
+}
+
+.color-segment[data-color="surface"] {
+  background: var(--surface-elevated, var(--surface));
+}
+
+.color-segment[data-color="text"] {
+  background: var(--text);
+}
+
+.color-segment[data-color="bg"] {
+  background: var(--bg);
+}
+
+/* Light theme adjustments for theme indicator */
+html[data-theme^="light-"] .theme-indicator-btn {
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
   color: var(--text);
 }
 .menu-panel button:focus-visible {
@@ -2192,9 +2280,20 @@ mark {
     margin-bottom: 0;
   }
   
-  .navbar .center .search {
+  .navbar .center .search-container {
     width: 100%;
+    flex-direction: row;
+    gap: var(--space-4); /* Tighter gap on mobile */
+  }
+  
+  .navbar .center .search {
+    flex: 1;
     min-width: 0;
+  }
+  
+  /* On tablets and larger, show + button in search container */
+  .search-container #addBtn {
+    display: inline-flex;
   }
 }
 
@@ -2209,18 +2308,23 @@ mark {
   }
   .navbar .left { justify-content: flex-start; gap: var(--space-6); }
   .navbar .center { grid-row: 2; width: 100%; display: flex; justify-content: center; }
-  .navbar .center .search { width: min(92vw, var(--search-max-w)); margin: 0 auto; }
+  .navbar .center .search-container { 
+    width: min(92vw, var(--search-max-w)); 
+    margin: 0 auto;
+    gap: var(--space-4); /* Consistent with mobile breakpoint above */
+  }
+  .navbar .center .search { flex: 1; }
   
   /* Drawer styles */
   #navActions {
     position: fixed !important;
     top: var(--nav-h);
-    right: 0;
+    left: 0;
     bottom: 0;
     width: min(84vw, 22rem);
     max-width: 100vw;
     background: var(--surface);
-    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
     padding: var(--space-12);
     display: flex;
     flex-direction: column;
@@ -2228,19 +2332,21 @@ mark {
     justify-content: flex-start; /* ensure items start at the top */
     gap: var(--space-8);
     z-index: var(--z-fixed);
-    transform: translateX(100%);
+    transform: translateX(-100%);
     transition: transform var(--duration-slower) var(--ease-out);
     pointer-events: none;
     overflow-y: auto; /* allow scrolling if content exceeds height */
   }
-  #navActions[aria-hidden="false"] {
+  #navActions[aria-hidden="false"],
+  #navActions.open {
     transform: translateX(0);
     pointer-events: auto;
   }
   
   /* Backdrop visible only when drawer open */
   #navBackdrop[hidden] { display: none; }
-  #navBackdrop.show { display: block; }
+  #navBackdrop.show,
+  #navBackdrop.open { display: block; }
   
   /* stack actions full width & align consistently */
   #navActions > * { width: 100%; }
@@ -2268,11 +2374,37 @@ mark {
   /* compact search */
   .search { height: 40px; }
   
-  /* Hide inline Add in navbar; use FAB instead */
-  #addBtn { display: none !important; }
+  /* Hide inline Add in search container on mobile; use FAB instead */
+  .search-container #addBtn { display: none !important; }
   
   /* Hide low priority inline text inside buttons to save space */
   .navbar .right .icon-text-btn span:not(.badge) { display: none; }
+  
+  /* Make theme picker button consistent with other drawer buttons in mobile */
+  #navActions .theme-indicator-btn {
+    border-radius: var(--radius) !important;
+    width: 100% !important;
+    height: 44px !important;
+    padding: var(--space-8) var(--space-12) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    background: var(--surface) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  }
+  
+  #navActions .theme-indicator-btn::before {
+    content: "Theme";
+    color: var(--text);
+    font-size: var(--text-base);
+    font-weight: var(--font-normal);
+  }
+  
+  /* Hide the circular theme indicator in mobile drawer */
+  #navActions .theme-indicator {
+    display: none !important;
+  }
 }
 
 /* Tablets (481px–768px): show core actions, hide low-priority */
@@ -2983,32 +3115,6 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--primary-contrast);
-}
-
-.current-theme-display {
-  margin-bottom: var(--space-16);
-  padding: var(--space-12);
-  background: var(--surface-elevated);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-}
-
-.current-theme-display h4 {
-  margin: 0 0 var(--space-8);
-  color: var(--text);
-  font-size: var(--text-base);
-}
-
-.current-theme-preview {
-  height: 24px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  overflow: hidden;
-}
-
-.current-theme-preview .color-swatch {
-  flex: 1;
-  min-width: 20px;
 }
 
 .themes-grid {
