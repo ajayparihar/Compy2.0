@@ -501,6 +501,68 @@ export const formatDate = (date) => {
 };
 
 // =============================================================================
+// THEME VALIDATION UTILITIES
+// =============================================================================
+
+/**
+ * Validate if a theme ID is available in the application
+ * 
+ * This function checks if a given theme identifier exists in the list of
+ * available themes. It's used to validate theme values from localStorage
+ * or user input before applying them to prevent errors.
+ * 
+ * @param {string} themeId - Theme identifier to validate
+ * @returns {boolean} True if theme is valid and available
+ * 
+ * @example
+ * // Validate theme before applying
+ * if (isValidTheme('dark-mystic-forest')) {
+ *   applyTheme('dark-mystic-forest');
+ * }
+ * 
+ * // Check user input
+ * const userTheme = getUserSelectedTheme();
+ * const safeTheme = isValidTheme(userTheme) ? userTheme : 'dark-mystic-forest';
+ */
+export const isValidTheme = (themeId) => {
+  const availableThemes = [
+    'dark-mystic-forest', 'dark-crimson-night', 'dark-royal-elegance',
+    'light-sunrise', 'light-soft-glow', 'light-floral-breeze',
+    'dark-dracula', 'dark-solarized', 'dark-midnight-blue', 'dark-night-owl',
+    'dark-monokai', 'dark-deep-ocean', 'dark-high-contrast', 'dark-professional',
+    'dark-gruvbox', 'dark-material', 'light-solarized', 'light-high-contrast',
+    'light-professional', 'light-pastel-mint', 'light-earth-tones',
+    'light-oceanic', 'light-vanilla-cream', 'light-nordic', 'light-material',
+    'light-warm-beige'
+  ];
+  
+  return typeof themeId === 'string' && availableThemes.includes(themeId);
+};
+
+/**
+ * Get a safe theme ID with fallback to default
+ * 
+ * This function validates a theme ID and returns it if valid, or returns
+ * the default theme if the input is invalid. Useful for safely handling
+ * theme values from untrusted sources like localStorage.
+ * 
+ * @param {any} themeId - Theme identifier to validate (any type accepted)
+ * @param {string} [fallback='dark-mystic-forest'] - Fallback theme if invalid
+ * @returns {string} Valid theme identifier
+ * 
+ * @example
+ * // Safely get theme from localStorage
+ * const stored = localStorage.getItem('theme');
+ * const safeTheme = getSafeTheme(stored);
+ * 
+ * // With custom fallback
+ * const theme = getSafeTheme(userInput, 'light-soft-glow');
+ */
+export const getSafeTheme = (themeId, fallback = 'dark-mystic-forest') => {
+  return isValidTheme(themeId) ? themeId : fallback;
+};
+
+// =============================================================================
 // ACCESSIBILITY AND USER PREFERENCE UTILITIES
 // =============================================================================
 

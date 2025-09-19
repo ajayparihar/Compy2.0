@@ -8,7 +8,7 @@ import {
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
   getAllTags, filterItems, validateItem, debounce, 
-  addEventHandler, toggleVisibility
+  addEventHandler, toggleVisibility, isValidTheme, getSafeTheme
 } from './utils.js';
 import {
   initState, getState, subscribe, upsertItem,
@@ -406,28 +406,97 @@ class CompyApp {
     // Enhanced theme manager with smooth transitions
     this.theme = {
       apply: (themeName) => {
-        document.documentElement.setAttribute('data-theme', themeName);
-        localStorage.setItem(STORAGE_KEYS.theme, themeName);
-        
-        // Add transition class for smooth theme switching
-        document.documentElement.classList.add('theme-switching');
-        setTimeout(() => {
-          document.documentElement.classList.remove('theme-switching');
-        }, 300);
-        
-        // Update theme picker if available
-        if (this.themePicker) {
-          this.themePicker.updateSelectedTheme(themeName);
+        try {
+          // Validate theme name
+          if (!themeName || typeof themeName !== 'string') {
+            throw new Error('Invalid theme name provided');
+          }
+          
+          // Apply theme to DOM
+          document.documentElement.setAttribute('data-theme', themeName);
+          document.documentElement.setAttribute('data-theme-source', 'js');
+          
+          // Persist to localStorage with error handling
+          try {
+            localStorage.setItem(STORAGE_KEYS.theme, themeName);
+          } catch (storageError) {
+            console.warn('Failed to save theme to localStorage:', storageError);
+            // Continue without storage - theme will still work for current session
+          }
+          
+          // Add transition class for smooth theme switching
+          document.documentElement.classList.add('theme-switching');
+          setTimeout(() => {
+            document.documentElement.classList.remove('theme-switching');
+          }, 300);
+          
+          // Update theme picker if available
+          if (this.themePicker && this.themePicker.updateSelectedTheme) {
+            this.themePicker.updateSelectedTheme(themeName);
+          }
+          
+          if (UI_CONFIG.debug) {
+            console.log('Theme applied successfully:', themeName);
+          }
+        } catch (error) {
+          console.error('Failed to apply theme:', error);
+          this.showNotification('Failed to apply theme', 'error');
+          
+          // Try to recover with default theme
+          try {
+            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
+            document.documentElement.setAttribute('data-theme-source', 'fallback');
+          } catch (fallbackError) {
+            console.error('Failed to apply fallback theme:', fallbackError);
+          }
         }
       },
       
       load: () => {
-        const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || DEFAULT_THEME;
-        this.theme.apply(savedTheme);
+        try {
+          // Check if theme was already applied by HTML head script
+          const themeSource = document.documentElement.getAttribute('data-theme-source');
+          const currentTheme = document.documentElement.getAttribute('data-theme');
+          
+          if (themeSource === 'html' || themeSource === 'html-fallback') {
+            // Theme already applied by HTML, just sync with our state
+            if (UI_CONFIG.debug) {
+              console.log('Theme already applied by HTML:', currentTheme);
+            }
+            return;
+          }
+          
+          // No theme applied yet, load from storage
+          let savedTheme = DEFAULT_THEME;
+          try {
+            const stored = localStorage.getItem(STORAGE_KEYS.theme);
+            if (stored && typeof stored === 'string') {
+              savedTheme = stored;
+            }
+          } catch (storageError) {
+            console.warn('Failed to read theme from localStorage:', storageError);
+            // Continue with default theme
+          }
+          
+          this.theme.apply(savedTheme);
+        } catch (error) {
+          console.error('Failed to load theme:', error);
+          // Apply default theme as last resort
+          try {
+            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
+            document.documentElement.setAttribute('data-theme-source', 'error-fallback');
+          } catch (fallbackError) {
+            console.error('Critical theme system failure:', fallbackError);
+          }
+        }
+      },
+      
+      getCurrentTheme: () => {
+        return document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
       }
     };
 
-    // Load saved theme
+    // Load saved theme (respecting HTML head application)
     this.theme.load();
     
     // Initialize enhanced theme picker
@@ -438,6 +507,45 @@ class CompyApp {
       console.warn('Failed to initialize theme picker:', error);
       // Fallback to basic theme functionality
     }
+    
+    // Setup cross-tab synchronization
+    this.setupThemeSync();
+  }
+
+  /**
+   * Setup cross-tab theme synchronization using storage events
+   * 
+   * Listens for localStorage changes in other tabs and applies theme changes
+   * automatically to keep all tabs synchronized.
+   */
+  setupThemeSync() {
+    // Listen for storage events from other tabs
+    window.addEventListener('storage', (event) => {
+      // Only handle theme changes
+      if (event.key === STORAGE_KEYS.theme && event.newValue !== event.oldValue) {
+        const newTheme = event.newValue;
+        
+        // Validate the new theme
+        if (newTheme && typeof newTheme === 'string') {
+          const currentTheme = document.documentElement.getAttribute('data-theme');
+          
+          // Only apply if different from current theme
+          if (newTheme !== currentTheme) {
+            document.documentElement.setAttribute('data-theme', newTheme);
+            document.documentElement.setAttribute('data-theme-source', 'sync');
+            
+            // Update theme picker if available
+            if (this.themePicker && this.themePicker.updateSelectedTheme) {
+              this.themePicker.updateSelectedTheme(newTheme);
+            }
+            
+            if (UI_CONFIG.debug) {
+              console.log('Theme synchronized from other tab:', newTheme);
+            }
+          }
+        }
+      }
+    });
   }
 
   /**

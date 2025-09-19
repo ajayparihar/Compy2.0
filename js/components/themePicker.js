@@ -276,12 +276,19 @@ export function createThemePicker(modalManager, themeManager) {
    * Apply theme immediately and close modal
    */
   function applyTheme(themeId) {
-    if (!themeId || !THEME_DEFINITIONS[themeId]) return;
+    if (!themeId || !THEME_DEFINITIONS[themeId]) {
+      showNotification('Invalid theme selected', 'error');
+      return;
+    }
     
-    themeManager.apply(themeId);
-    modalManager.close('#themePickerModal');
-    
-    showNotification(`Applied theme: ${THEME_DEFINITIONS[themeId].name}`, 'info');
+    try {
+      themeManager.apply(themeId);
+      modalManager.close('#themePickerModal');
+      showNotification(`Applied theme: ${THEME_DEFINITIONS[themeId].name}`, 'success');
+    } catch (error) {
+      console.error('Failed to apply theme:', error);
+      showNotification('Failed to apply theme', 'error');
+    }
   }
 
   /**
