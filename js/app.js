@@ -3,24 +3,24 @@
  * Enhanced with better code organization, error handling, and modern JavaScript practices
  */
 
-import { STORAGE_KEYS, UI_CONFIG, ICONS, DEFAULT_THEME } from './constants.js';
+import { STORAGE_KEYS, UI_CONFIG, ICONS, DEFAULT_THEME } from './constants.js?v=2.0.2';
 import { 
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
   getAllTags, filterItems, validateItem, debounce, 
   addEventHandler, toggleVisibility, isValidTheme, getSafeTheme
-} from './utils.js';
+} from './utils.js?v=2.0.2';
 import {
   initState, getState, subscribe, upsertItem,
   deleteItem, updateFilterTags, updateSearch, updateProfile,
   setEditingId, getBackups
-} from './state.js';
-import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js';
-import { createModalManager } from './components/modals.js';
-import { createTagAutocomplete } from './components/tagAutocomplete.js';
-import { createMobileNavigationManager } from './components/mobileNavigation.js';
-import { createThemePicker } from './components/themePicker.js';
-import { createClipboardManager } from './components/clipboard.js';
+} from './state.js?v=2.0.2';
+import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.2';
+import { createModalManager } from './components/modals.js?v=2.0.2';
+import { createTagAutocomplete } from './components/tagAutocomplete.js?v=2.0.2';
+import { createMobileNavigationManager } from './components/mobileNavigation.js?v=2.0.2';
+import { createThemePicker } from './components/themePicker.js?v=2.0.2';
+import { createClipboardManager } from './components/clipboard.js?v=2.0.2';
 
 /**
  * @typedef {Object} AppItem

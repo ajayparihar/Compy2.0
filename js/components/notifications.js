@@ -18,8 +18,8 @@
  * @since 2025
  */
 
-import { UI_CONFIG } from '../constants.js';
-import { $ } from '../utils.js';
+import { UI_CONFIG } from '../constants.js?v=2.0.2';
+import { $ } from '../utils.js?v=2.0.2';
 
 /**
  * NotificationManager handles all user notifications and feedback

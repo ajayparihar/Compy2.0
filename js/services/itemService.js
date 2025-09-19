@@ -23,12 +23,12 @@ import {
   deleteItem, 
   getState, 
   setEditingId 
-} from '../state.js';
+} from '../state.js?v=2.0.2';
 import { 
   validateItem, 
   filterItems, 
   getAllTags
-} from '../utils.js';
+} from '../utils.js?v=2.0.2';
 
 /**
  * ItemService handles all item-related business operations

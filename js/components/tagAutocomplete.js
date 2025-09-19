@@ -19,8 +19,8 @@
  * @since 2025
  */
 
-import { $, $$, escapeHtml, getAllTags, debounce } from '../utils.js';
-import { getState } from '../state.js';
+import { $, $$, escapeHtml, getAllTags, debounce } from '../utils.js?v=2.0.2';
+import { getState } from '../state.js?v=2.0.2';
 
 /**
  * TagAutocomplete manages tag input with autocomplete dropdown functionality

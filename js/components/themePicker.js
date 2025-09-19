@@ -13,8 +13,8 @@
  * @since 2025
  */
 
-import { THEME_DEFINITIONS, THEME_CATEGORIES, ACCESSIBILITY_LEVELS } from '../themes.js';
-import { UI_CONFIG } from '../constants.js';
+import { THEME_DEFINITIONS, THEME_CATEGORIES, ACCESSIBILITY_LEVELS } from '../themes.js?v=2.0.2';
+import { UI_CONFIG } from '../constants.js?v=2.0.2';
 
 /**
  * Create and manage the enhanced theme picker component

@@ -19,7 +19,7 @@
  * @since 2025
  */
 
-import { $, escapeHtml } from '../utils.js';
+import { $, escapeHtml } from '../utils.js?v=2.0.2';
 
 /**
  * @typedef {Object} ConfirmationOptions

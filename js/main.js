@@ -42,8 +42,8 @@
  * - Configuring UI components and event handlers
  * - Loading user data from storage
  */
-import { initializeApp } from './app.js';
-import { UI_CONFIG } from './constants.js';
+import { initializeApp } from './app.js?v=2.0.2';
+import { UI_CONFIG } from './constants.js?v=2.0.2';
 
 // =============================================================================
 // APPLICATION BOOTSTRAP AND ERROR HANDLING

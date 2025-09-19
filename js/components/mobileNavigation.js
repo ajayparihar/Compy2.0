@@ -17,7 +17,7 @@
  * @since 2025
  */
 
-import { $ } from '../utils.js';
+import { $ } from '../utils.js?v=2.0.2';
 
 /**
  * MobileNavigationManager handles mobile drawer navigation functionality

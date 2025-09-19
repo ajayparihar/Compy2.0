@@ -27,8 +27,8 @@
  */
 
 // Import necessary utilities and configuration
-import { STORAGE_KEYS, UI_CONFIG } from './constants.js';
-import { generateUID, debounce } from './utils.js';
+import { STORAGE_KEYS, UI_CONFIG } from './constants.js?v=2.0.2';
+import { generateUID, debounce } from './utils.js?v=2.0.2';
 
 // =============================================================================
 // TYPE DEFINITIONS
