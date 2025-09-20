@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Alignment Debug</title>
+    <style>
+        .debug-card {
+            position: relative;
+            width: 300px;
+            height: 200px;
+            background: #1a2026;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            margin: 20px;
+        }
+        
+        .debug-actions {
+            position: absolute !important;
+            right: 8px !important;
+            bottom: 8px !important;
+            display: block !important;
+            text-align: right !important;
+        }
+        
+        .debug-btn {
+            width: 32px;
+            height: 32px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            float: right;
+            margin-left: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .expanded-card {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 500px !important;
+            height: 400px !important;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body style="background: #0a0d10; color: white; font-family: sans-serif;">
+    <h2>Normal Card</h2>
+    <div class="debug-card">
+        <div class="debug-actions">
+            <button class="debug-btn">E</button>
+            <button class="debug-btn">C</button>
+            <button class="debug-btn">D</button>
+            <button class="debug-btn">X</button>
+        </div>
+    </div>
+    
+    <h2>Expanded Card</h2>
+    <div class="debug-card expanded-card">
+        <div class="debug-actions">
+            <button class="debug-btn">E</button>
+            <button class="debug-btn">C</button>
+            <button class="debug-btn">D</button>
+            <button class="debug-btn">X</button>
+        </div>
+    </div>
+    
+    <button onclick="document.querySelector('.expanded-card').style.display = document.querySelector('.expanded-card').style.display === 'none' ? 'block' : 'none'">Toggle Expanded</button>
+</body>
+</html>

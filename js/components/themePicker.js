@@ -30,6 +30,8 @@ export function createThemePicker(modalManager, themeManager) {
    * Get all theme entries as array
    */
   function getAllThemes() {
+    // THEME SOURCE OF TRUTH: THEME_DEFINITIONS (themes.js) centralizes all theme metadata.
+    // This list is derived from that single source to avoid drift across modules.
     return Object.entries(THEME_DEFINITIONS).map(([id, theme]) => ({
       id,
       ...theme
@@ -284,6 +286,7 @@ export function createThemePicker(modalManager, themeManager) {
     try {
       themeManager.apply(themeId);
       modalManager.close('#themePickerModal');
+      // Notify user via global app snackbar if available
       showNotification(`Applied theme: ${THEME_DEFINITIONS[themeId].name}`, 'success');
     } catch (error) {
       console.error('Failed to apply theme:', error);

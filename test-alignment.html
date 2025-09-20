@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Alignment Test</title>
+    <link rel="stylesheet" href="css/compy.css">
+    <style>
+        body {
+            background: #1a1a1a;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 20px;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-card {
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Button Alignment Test</h1>
+        
+        <h2>Normal Card (hover to see buttons)</h2>
+        <div class="test-card">
+            <article class="card expandable-card">
+                <div class="expandable-card-content">
+                    <div class="title">Test Card Title</div>
+                    <div class="desc">This is a test description to check button alignment.</div>
+                    <div class="tags">
+                        <span class="chip" style="--hue: 180">test</span>
+                        <span class="chip" style="--hue: 270">alignment</span>
+                    </div>
+                </div>
+                
+                <div class="actions" aria-label="Card actions">
+                    <div class="expand-collapse-container">
+                        <button class="icon-btn expand-trigger" data-act="expand" title="Expand card">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="none" stroke="currentColor" stroke-width="2" d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+                            </svg>
+                        </button>
+                        <button class="icon-btn collapse-action card-action-hidden" data-act="collapse" title="Collapse card">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="none" stroke="currentColor" stroke-width="2" d="M4 14h4v4M20 10h-4V6"/>
+                                <path fill="none" stroke="currentColor" stroke-width="2" d="m20 6-6 6M4 18l6-6"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <button class="icon-btn" data-act="delete" title="Delete snippet">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" data-act="copy" title="Copy to clipboard">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                            <rect width="8" height="4" x="8" y="2" rx="1" ry="1" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" data-act="edit" title="Edit snippet">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="m18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
+                </div>
+            </article>
+        </div>
+        
+        <h2>Always Visible Buttons (for testing)</h2>
+        <div class="test-card">
+            <article class="card expandable-card selected">
+                <div class="expandable-card-content">
+                    <div class="title">Always Visible Buttons</div>
+                    <div class="desc">This card has buttons always visible for testing alignment.</div>
+                    <div class="tags">
+                        <span class="chip" style="--hue: 120">always</span>
+                        <span class="chip" style="--hue: 300">visible</span>
+                    </div>
+                </div>
+                
+                <div class="actions" aria-label="Card actions">
+                    <div class="expand-collapse-container">
+                        <button class="icon-btn expand-trigger" data-act="expand" title="Expand card">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="none" stroke="currentColor" stroke-width="2" d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+                            </svg>
+                        </button>
+                        <button class="icon-btn collapse-action card-action-hidden" data-act="collapse" title="Collapse card">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="none" stroke="currentColor" stroke-width="2" d="M4 14h4v4M20 10h-4V6"/>
+                                <path fill="none" stroke="currentColor" stroke-width="2" d="m20 6-6 6M4 18l6-6"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <button class="icon-btn" data-act="delete" title="Delete snippet">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" data-act="copy" title="Copy to clipboard">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                            <rect width="8" height="4" x="8" y="2" rx="1" ry="1" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" data-act="edit" title="Edit snippet">
+                        <svg viewBox="0 0 24 24" width="20" height="20">
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path fill="none" stroke="currentColor" stroke-width="2" d="m18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
+                </div>
+            </article>
+        </div>
+        
+        <p><strong>Instructions:</strong></p>
+        <ul>
+            <li>Hover over the first card to see the buttons appear</li>
+            <li>The second card has buttons always visible (using .selected class)</li>
+            <li>All buttons should be aligned to the bottom-right corner of each card</li>
+            <li>Expand/Collapse buttons now share the same position to prevent alignment issues</li>
+            <li>Only one expand/collapse button is visible at a time based on the card state</li>
+            <li>Buttons should be arranged from right to left: Edit, Copy, Delete, Expand/Collapse</li>
+        </ul>
+    </div>
+    
+    <script>
+        // Add some interactivity for testing
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttons = document.querySelectorAll('.icon-btn');
+            buttons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const action = this.dataset.act || this.title;
+                    console.log('Button clicked:', action);
+                    alert('Button clicked: ' + action);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

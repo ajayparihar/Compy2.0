@@ -43,6 +43,7 @@ import { generateUID, debounce } from './utils.js?v=2.0.2';
  * @property {string} desc - Human-readable description of the snippet
  * @property {boolean} sensitive - Whether the snippet contains sensitive data (masked in UI)
  * @property {string[]} tags - Array of category/organization tags
+ * @property {number} position - Display order position (lower numbers appear first)
  */
 
 /**
@@ -213,7 +214,13 @@ export const loadState = () => {
           typeof item.desc === 'string' &&
           typeof item.sensitive === 'boolean' &&
           Array.isArray(item.tags)
-        );
+        ).map((item, index) => {
+          // Ensure position field exists for backwards compatibility
+          if (typeof item.position !== 'number') {
+            item.position = index;
+          }
+          return item;
+        });
       }
     }
     
@@ -462,11 +469,19 @@ export const upsertItem = (item) => {
     }
   } else {
     // INSERT NEW ITEM: Create item with unique identifier and add to list
-    const newItem = { id: generateUID(), ...item };
+    // If no position specified, assign highest position + 1 to put at end
+    const maxPosition = state.items.length > 0 
+      ? Math.max(...state.items.map(i => i.position)) 
+      : -1;
+    const newItem = { 
+      id: generateUID(), 
+      position: item.position ?? (maxPosition + 1),
+      ...item 
+    };
     
-    // CHRONOLOGICAL INSERTION: Add to end to maintain creation order
-    // New items appear at bottom, preserving user's mental model
-    state = { ...state, items: [...state.items, newItem] };
+    // Add new item and sort by position to maintain order
+    const updatedItems = [...state.items, newItem].sort((a, b) => a.position - b.position);
+    state = { ...state, items: updatedItems };
   }
   
   // PERSISTENCE AND BACKUP: Save changes and schedule automatic backup
@@ -491,6 +506,40 @@ export const deleteItem = (id) => {
   state = { ...state, items: state.items.filter(item => item.id !== id) };
   
   // Persist changes and trigger backups
+  saveState();
+};
+
+/**
+ * Reorder items based on new positions from drag and drop operations
+ * 
+ * Updates the position values of all items to reflect their new order.
+ * This function is called when cards are reordered via drag and drop.
+ * 
+ * @param {string[]} orderedIds - Array of item IDs in their new order
+ * 
+ * @example
+ * // Reorder items after drag and drop
+ * const newOrder = ['item3', 'item1', 'item2'];
+ * reorderItems(newOrder);
+ */
+export const reorderItems = (orderedIds) => {
+  // Items not present in orderedIds retain their existing position, preserving
+  // relative order for any items outside the current reordering scope.
+  // Create a map of item ID to new position
+  const positionMap = new Map();
+  orderedIds.forEach((id, index) => {
+    positionMap.set(id, index);
+  });
+  
+  // Update positions immutably
+  const updatedItems = state.items.map(item => ({
+    ...item,
+    position: positionMap.has(item.id) ? positionMap.get(item.id) : item.position
+  })).sort((a, b) => a.position - b.position);
+  
+  state = { ...state, items: updatedItems };
+  
+  // Persist changes immediately for drag and drop
   saveState();
 };
 

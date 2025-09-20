@@ -151,6 +151,16 @@ export class ExpandableCardManager {
       });
     }
 
+    // Collapse trigger button (for data-act="collapse")
+    const collapseTrigger = card.querySelector('[data-act="collapse"]');
+    if (collapseTrigger) {
+      collapseTrigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.handleCloseTrigger(card);
+      });
+    }
+
     // Card click (only when not expanded)
     card.addEventListener('click', (e) => {
       // Don't expand if clicking on buttons or interactive elements
@@ -225,6 +235,17 @@ export class ExpandableCardManager {
     const closeBtn = card.querySelector('.close-btn');
     if (closeBtn) {
       closeBtn.hidden = true;
+    }
+
+    // Ensure collapse button is hidden initially and expand button is shown
+    // Note: CSS handles visibility via opacity/pointer-events, not hidden attribute
+    const expandBtn = card.querySelector('[data-act="expand"]');
+    const collapseBtn = card.querySelector('[data-act="collapse"]');
+    if (expandBtn) {
+      expandBtn.classList.remove('card-action-hidden');
+    }
+    if (collapseBtn) {
+      collapseBtn.classList.add('card-action-hidden');
     }
   }
 
@@ -356,6 +377,16 @@ export class ExpandableCardManager {
         closeBtn.hidden = false;
       }
 
+      // Show collapse button and hide expand button
+      const expandBtn = card.querySelector('[data-act="expand"]');
+      const collapseBtn = card.querySelector('[data-act="collapse"]');
+      if (expandBtn) {
+        expandBtn.classList.add('card-action-hidden');
+      }
+      if (collapseBtn) {
+        collapseBtn.classList.remove('card-action-hidden');
+      }
+
       // Apply expanded state after a small delay for animation
       await this.delay(50);
       
@@ -423,6 +454,16 @@ export class ExpandableCardManager {
       const closeBtn = card.querySelector('.close-btn');
       if (closeBtn) {
         closeBtn.hidden = true;
+      }
+
+      // Hide collapse button and show expand button
+      const expandBtn = card.querySelector('[data-act="expand"]');
+      const collapseBtn = card.querySelector('[data-act="collapse"]');
+      if (expandBtn) {
+        expandBtn.classList.remove('card-action-hidden');
+      }
+      if (collapseBtn) {
+        collapseBtn.classList.add('card-action-hidden');
       }
 
       // Hide backdrop completely

@@ -14,7 +14,7 @@ import {
 import {
   initState, getState, subscribe, upsertItem,
   deleteItem, updateFilterTags, updateSearch, updateProfile,
-  setEditingId, getBackups
+  setEditingId, getBackups, reorderItems
 } from './state.js?v=2.0.2';
 import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.2';
 import { createModalManager } from './components/modals.js?v=2.0.2';
@@ -23,6 +23,7 @@ import { createMobileNavigationManager } from './components/mobileNavigation.js?
 import { createThemePicker } from './components/themePicker.js?v=2.0.2';
 import { createClipboardManager } from './components/clipboard.js?v=2.0.2';
 import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.2';
+import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.2';
 
 /**
  * @typedef {Object} AppItem
@@ -31,6 +32,7 @@ import { createExpandableCardManager } from './components/expandableCard.js?v=2.
  * @property {string} desc
  * @property {boolean} sensitive
  * @property {string[]} tags
+ * @property {number} position
  */
 /**
  * @typedef {Object} AppState
@@ -89,6 +91,7 @@ class CompyApp {
     this.mobileNavigation = null;
     this.themePicker = null;
     this.expandableCardManager = null;
+    this.dragDropManager = null;
     
     // Manual scroll restoration across refreshes
     this.initialScrollY = 0;     // saved scroll position from previous session load (sessionStorage)
@@ -136,6 +139,7 @@ class CompyApp {
     this.initSearch();
     this.initCards();
     this.initExpandableCards();
+    this.initDragAndDrop();
   }
 
   /**
@@ -639,6 +643,131 @@ class CompyApp {
   }
 
   /**
+   * Initialize drag and drop functionality for card reordering.
+   * Creates and initializes the drag and drop manager for snippet cards.
+   */
+  initDragAndDrop() {
+    try {
+      const cardsContainer = $('#cards');
+      
+      if (!cardsContainer) {
+        Logger.warn('Cards container not found; skipping drag and drop initialization');
+        return;
+      }
+
+      // Respect reduced motion preference
+      // Respect OS/browser reduced-motion preference for accessibility.
+      // Animations are disabled when the user requests reduced motion.
+      const prefersReducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const animMs = prefersReducedMotion ? 0 : 200;
+
+      // Create drag and drop manager
+      this.dragDropManager = createCardDragDropManager(cardsContainer, {
+        animationDuration: animMs,
+        onStart: (event) => {
+          // Add visual feedback when drag starts
+          event.item.setAttribute('aria-grabbed', 'true');
+        },
+        onEnd: (event) => {
+          // Clean up accessibility attributes
+          event.item.setAttribute('aria-grabbed', 'false');
+        }
+      });
+
+      Logger.info('Drag and drop manager initialized');
+    } catch (error) {
+      Logger.error('Failed to initialize drag and drop:', error);
+      // Don't fail the entire app if drag and drop fails
+    }
+  }
+
+  // Helper: return true if reordering should be disabled (search/filters active or not enough cards)
+  isReorderDisabled() {
+    try {
+      const s = getState();
+      const hasSearch = !!(s.search && s.search.trim());
+      const hasFilters = Array.isArray(s.filterTags) && s.filterTags.length > 0;
+      return hasSearch || hasFilters || this.cardElements.length <= 1;
+    } catch (e) { return this.cardElements.length <= 1; }
+  }
+
+  // Helper: update drag handle tooltips based on disabled state
+  updateDragHandleTooltips(isDisabled) {
+    try {
+      // Accessibility: reflect disabled state via title and aria-disabled on handles
+      const handles = document.querySelectorAll('.drag-handle');
+      handles.forEach(h => {
+        h.setAttribute('title', isDisabled ? 'Clear search and filters to reorder' : 'Drag to reorder');
+        if (isDisabled) {
+          h.setAttribute('aria-disabled', 'true');
+        } else {
+          h.removeAttribute('aria-disabled');
+        }
+      });
+    } catch (e) {}
+  }
+
+  /**
+   * Move a card up one position using keyboard navigation
+   * @param {number} cardIndex - Current index of the card
+   */
+  moveCardUp(cardIndex) {
+    if (cardIndex <= 0 || !this.visibleItems[cardIndex]) return;
+    
+    const targetIndex = cardIndex - 1;
+    this.moveCardToPosition(cardIndex, targetIndex);
+    this.showNotification('Card moved up', 'info');
+  }
+  
+  /**
+   * Move a card down one position using keyboard navigation
+   * @param {number} cardIndex - Current index of the card
+   */
+  moveCardDown(cardIndex) {
+    if (cardIndex >= this.visibleItems.length - 1 || !this.visibleItems[cardIndex]) return;
+    
+    const targetIndex = cardIndex + 1;
+    this.moveCardToPosition(cardIndex, targetIndex);
+    this.showNotification('Card moved down', 'info');
+  }
+  
+  /**
+   * Move a card to a specific position using keyboard navigation
+   * @param {number} fromIndex - Current index of the card
+   * @param {number} toIndex - Target index for the card
+   */
+  moveCardToPosition(fromIndex, toIndex) {
+    if (fromIndex === toIndex || !this.visibleItems[fromIndex]) return;
+    
+    // Clamp target index to valid range
+    const clampedToIndex = Math.max(0, Math.min(toIndex, this.visibleItems.length - 1));
+    
+    // Create new order array by moving the item
+    const newOrder = [...this.visibleItems];
+    const [movedItem] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(clampedToIndex, 0, movedItem);
+    
+    // Extract IDs in new order and update state
+    const orderedIds = newOrder.map(item => item.id);
+    
+    try {
+      reorderItems(orderedIds);
+    } catch (error) {
+      Logger.error('Failed to reorder items:', error);
+      this.showNotification('Failed to reorder cards', 'error');
+      return;
+    }
+    
+    // Update focus to maintain keyboard navigation
+    setTimeout(() => {
+      const targetCard = document.querySelector(`[data-card-index="${clampedToIndex}"]`);
+      if (targetCard) {
+        targetCard.focus();
+      }
+    }, 100);
+  }
+
+  /**
    * Render the visible list of cards from state.
    * Uses requestAnimationFrame to batch DOM work for smooth updates.
    * 
@@ -661,6 +790,9 @@ class CompyApp {
     const container = $('#cards');
     const filteredItems = filterItems(state.items, state.search, state.filterTags);
     
+    // Sort items by position to maintain custom order
+    const sortedItems = [...filteredItems].sort((a, b) => (a.position || 0) - (b.position || 0));
+    
     // Preserve scroll position during re-render
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     
@@ -669,13 +801,28 @@ class CompyApp {
       container.innerHTML = '';
 
       // Render empties consistently
-      if (this.renderEmptyIfNeeded(container, state, filteredItems)) {
+      if (this.renderEmptyIfNeeded(container, state, sortedItems)) {
+        // Disable drag and drop when there are no visible items
+        if (this.dragDropManager) {
+          this.dragDropManager.setEnabled(false);
+        }
         return;
       }
 
       // Remove empty state class and build list
       container.classList.remove('empty-state');
-      this.buildCardList(container, filteredItems, state.search);
+      this.buildCardList(container, sortedItems, state.search);
+
+      // Refresh and toggle drag/drop availability after render
+      const isFiltered = !!(state.search && state.search.trim()) || (state.filterTags && state.filterTags.length > 0);
+      if (this.dragDropManager) {
+        this.dragDropManager.refresh();
+        const enableDnD = !isFiltered && this.cardElements.length > 1;
+        this.dragDropManager.setEnabled(enableDnD);
+      }
+      // Reflect DnD availability in UI (tooltip and styling)
+      container.classList.toggle('dnd-disabled', isFiltered || this.cardElements.length <= 1);
+      this.updateDragHandleTooltips(isFiltered);
 
       // Ensure selection is valid and restore it visually if needed
       this.ensureSelectionWithinBounds();
@@ -693,6 +840,8 @@ class CompyApp {
    * @returns {boolean}
    */
   renderEmptyIfNeeded(container, state, filteredItems) {
+    // Contract: returns true if an empty-state UI was rendered so callers
+    // can short-circuit further list building and DnD setup.
     // Handle welcome state
     if (state.items.length === 0) {
       this.renderEmptyState(container, 'welcome');
@@ -770,68 +919,185 @@ class CompyApp {
   }
 
   /**
-   * Create a DOM element representing a single item card.
-   * Respects the 'sensitive' flag by masking the title.
-   * @param {Object} item - Item with text, desc, sensitive, tags
-   * @param {string} [searchQuery=''] - Current search query for highlighting
-   * @param {number} [index] - Index of the card for keyboard navigation
-   * @returns {HTMLElement}
+   * Create the base card element structure with essential attributes
+   * @private
+   * @param {Object} item - Item data
+   * @param {number} index - Card index for navigation
+   * @returns {HTMLElement} Base card element
    */
-  createCardElement(item, searchQuery = '', index = -1) {
+  createBaseCardElement(item, index) {
+    // ELEMENT CREATION: Create the article element with base structure
     const card = document.createElement('article');
     card.className = 'card expandable-card';
     card.id = `card-${item.id}`;
     card.dataset.cardId = item.id;
     
-    // Add data attribute for keyboard navigation
+    // NAVIGATION SUPPORT: Add index for keyboard navigation if provided
     if (index >= 0) {
       card.dataset.cardIndex = index;
     }
     
+    return card;
+  }
+
+  /**
+   * Apply accessibility and interaction attributes to card element
+   * @private
+   * @param {HTMLElement} card - Card element to configure
+   * @param {Object} item - Item data for aria-label content
+   */
+  configureCardAccessibility(card, item) {
+    // ACCESSIBILITY ATTRIBUTES: Essential for screen readers and keyboard navigation
+    const attributes = {
+      'aria-grabbed': 'false',
+      'role': 'button',
+      'tabindex': '0',
+      'aria-label': `Snippet: ${item.sensitive ? 'Sensitive content' : item.text}. Press Enter to copy, Ctrl+arrows to reorder.`
+    };
+    
+    // BATCH ATTRIBUTE SETTING: More efficient than individual setAttribute calls
+    Object.entries(attributes).forEach(([key, value]) => {
+      card.setAttribute(key, value);
+    });
+  }
+
+  /**
+   * Generate the HTML content for a card with highlighted search terms
+   * @private
+   * @param {Object} item - Item data
+   * @param {string} searchQuery - Search query for highlighting
+   * @returns {string} Card HTML content
+   */
+  generateCardHTML(item, searchQuery) {
+    // TEXT PROCESSING: Handle sensitive content masking and highlighting
     const displayText = item.sensitive ? '••••••••••' : escapeHtml(item.text);
     const highlightedText = highlightText(displayText, searchQuery);
     const highlightedDesc = highlightText(escapeHtml(item.desc), searchQuery);
+    const tagsHTML = this.renderTags(item.tags, searchQuery);
     
-    // Original card structure - keep it simple!
-    card.innerHTML = `
+    // SECURITY NOTE: All user-provided fields are sanitized prior to innerHTML usage.
+    // - Text/desc are escaped via escapeHtml() and then highlighted with safe <mark> tags.
+    // - Tags are rendered through renderTags(), which escapes and highlights safely.
+    // - Sensitive content is masked at display level, but copy action uses original text.
+    
+    // TEMPLATE GENERATION: Structured card content with expandable sections
+    return `
       <div class="expandable-card-content">
         <div class="title">${highlightedText}</div>
         <div class="desc">${highlightedDesc}</div>
-        <div class="tags">${this.renderTags(item.tags, searchQuery)}</div>
+        <div class="tags">${tagsHTML}</div>
         
         <!-- Expanded view shows full content without truncation -->
         <div class="card-details">
           <div class="details-content">
             <div class="expanded-title">${highlightedText}</div>
             <div class="expanded-desc">${highlightedDesc}</div>
-            ${item.tags.length > 0 ? `<div class="expanded-tags">${this.renderTags(item.tags, searchQuery)}</div>` : ''}
+            ${item.tags.length > 0 ? `<div class=\"expanded-tags\">${tagsHTML}</div>` : ''}
           </div>
         </div>
       </div>
       
+      ${this.generateCardActionsHTML()}
+      ${this.generateCardCloseButtonHTML()}
+      ${this.generateDragHandleHTML()}
+    `;
+  }
+
+  /**
+   * Generate HTML for card action buttons
+   * @private
+   * @returns {string} Action buttons HTML
+   */
+  generateCardActionsHTML() {
+    return `
       <div class="actions" aria-label="Card actions">
-        <button class="icon-btn" data-act="edit" title="Edit snippet" aria-label="Edit snippet">
-          ${ICONS.edit}
-        </button>
+        <div class="expand-collapse-container">
+          <button class="icon-btn expand-trigger" data-act="expand" title="Expand card" aria-label="Expand card">
+            ${ICONS.expand}
+          </button>
+          <button class="icon-btn collapse-action card-action-hidden" data-act="collapse" title="Collapse card" aria-label="Collapse card">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/>
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>
+            </svg>
+          </button>
+        </div>
         <button class="icon-btn" data-act="delete" title="Delete snippet" aria-label="Delete snippet">
           ${ICONS.delete}
         </button>
         <button class="icon-btn" data-act="copy" title="Copy to clipboard" aria-label="Copy to clipboard">
           ${ICONS.copy}
         </button>
-        <button class="icon-btn expand-trigger" data-act="expand" title="Expand card" aria-label="Expand card">
-          ${ICONS.expand}
+        <button class="icon-btn" data-act="edit" title="Edit snippet" aria-label="Edit snippet">
+          ${ICONS.edit}
         </button>
       </div>
-      
+    `;
+  }
+
+  /**
+   * Generate HTML for card close button
+   * @private
+   * @returns {string} Close button HTML
+   */
+  generateCardCloseButtonHTML() {
+    return `
       <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
     `;
+  }
 
-    // Setup event handlers
+  /**
+   * Generate HTML for card drag handle (bottom-left)
+   * @private
+   * @returns {string} Drag handle HTML
+   */
+  generateDragHandleHTML() {
+    return `
+      <button class="icon-btn drag-handle" title="Drag to reorder" aria-label="Drag to reorder">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <circle cx="6" cy="8" r="1.5" fill="currentColor"/>
+          <circle cx="12" cy="8" r="1.5" fill="currentColor"/>
+          <circle cx="18" cy="8" r="1.5" fill="currentColor"/>
+          <circle cx="6" cy="16" r="1.5" fill="currentColor"/>
+          <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
+          <circle cx="18" cy="16" r="1.5" fill="currentColor"/>
+        </svg>
+      </button>
+    `;
+  }
+
+  /**
+   * Create a DOM element representing a single item card.
+   * 
+   * This function has been modularized into smaller, focused methods for better
+   * maintainability and testability. The card creation process follows these steps:
+   * 1. Create base element structure
+   * 2. Configure accessibility attributes
+   * 3. Generate and inject HTML content
+   * 4. Setup event handlers for interactions
+   * 
+   * @param {Object} item - Item with text, desc, sensitive, tags
+   * @param {string} [searchQuery=''] - Current search query for highlighting
+   * @param {number} [index] - Index of the card for keyboard navigation
+   * @returns {HTMLElement} Fully configured card element
+   */
+  createCardElement(item, searchQuery = '', index = -1) {
+    // MODULAR CARD CREATION: Build card using focused helper methods
+    
+    // 1. CREATE BASE STRUCTURE: Essential element and attributes
+    const card = this.createBaseCardElement(item, index);
+    
+    // 2. CONFIGURE ACCESSIBILITY: ARIA attributes and interaction support
+    this.configureCardAccessibility(card, item);
+    
+    // 3. INJECT CONTENT: Generated HTML with search highlighting
+    card.innerHTML = this.generateCardHTML(item, searchQuery);
+
+    // 4. SETUP INTERACTIONS: Event handlers for user interactions
     this.setupCardEventHandlers(card, item);
     
     return card;
@@ -846,15 +1112,87 @@ class CompyApp {
   setupCardEventHandlers(card, item) {
     // Click to select card and copy (but not on action buttons)
     card.addEventListener('click', (e) => {
-      if (!e.target.closest('.actions')) {
+      if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
         // Select the clicked card (suppress notification for clicks)
         const cardIndex = parseInt(card.dataset.cardIndex);
         if (!isNaN(cardIndex)) {
           this.selectCard(cardIndex, false);
+          // Move keyboard focus to the card to enable arrow-key navigation
+          card.focus();
         }
         
         // Copy the content
         this.clipboard.copy(item.text);
+      }
+    });
+    
+    // Keyboard accessibility for reordering
+    card.addEventListener('keydown', (e) => {
+      const cardIndex = parseInt(card.dataset.cardIndex);
+      if (isNaN(cardIndex)) return;
+      
+      // KEYBOARD CONTROLS OVERVIEW
+      // - Space/Enter: Copy when not currently grabbed (aria-grabbed='false').
+      // - Ctrl/Cmd + ArrowUp/ArrowDown/Home/End: Reorder card in visible list.
+      //   Reordering is disabled when search or filters are active to avoid index drift.
+      //   We announce constraints via snackbar for user clarity.
+      switch (e.key) {
+        case ' ':
+        case 'Enter':
+          // Space or Enter to copy content or start reorder mode
+          if (!card.hasAttribute('aria-grabbed') || card.getAttribute('aria-grabbed') === 'false') {
+            e.preventDefault();
+            this.clipboard.copy(item.text);
+          }
+          break;
+          
+        case 'ArrowUp':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + Up to move card up
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardUp(cardIndex);
+          }
+          break;
+          
+        case 'ArrowDown':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + Down to move card down
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardDown(cardIndex);
+          }
+          break;
+          
+        case 'Home':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + Home to move to top
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardToPosition(cardIndex, 0);
+          }
+          break;
+          
+        case 'End':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + End to move to bottom
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardToPosition(cardIndex, this.visibleItems.length - 1);
+          }
+          break;
       }
     });
 
@@ -878,6 +1216,11 @@ class CompyApp {
           case 'expand':
             if (this.expandableCardManager) {
               this.expandableCardManager.expand(card);
+            }
+            break;
+          case 'collapse':
+            if (this.expandableCardManager) {
+              this.expandableCardManager.collapse();
             }
             break;
         }
@@ -1524,14 +1867,15 @@ class CompyApp {
         [''], // Empty row separator
         
         // Data headers
-        ['text', 'desc', 'sensitive', 'tags'],
+        ['text', 'desc', 'sensitive', 'tags', 'position'],
         
         // Data rows
         ...validItems.map(item => [
           csvEscape(item.text || ''),
           csvEscape(item.desc || ''),
           item.sensitive ? '1' : '0',
-          csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : '')
+          csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : ''),
+          item.position || 0
         ])
       ];
       
@@ -1932,7 +2276,8 @@ class CompyApp {
       text: headers.indexOf('text'),
       desc: headers.indexOf('desc'),
       sensitive: headers.indexOf('sensitive'),
-      tags: headers.indexOf('tags')
+      tags: headers.indexOf('tags'),
+      position: headers.indexOf('position')
     };
 
     // Validate required columns
@@ -1971,7 +2316,9 @@ class CompyApp {
           .split('|')
           .map(t => t.trim())
           .filter(Boolean)
-        : []
+        : [],
+      position: columnMapping.position >= 0 ? 
+        parseInt(values[columnMapping.position] || '0', 10) || 0 : 0
     };
   }
 
