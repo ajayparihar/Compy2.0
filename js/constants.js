@@ -148,6 +148,14 @@ export const ICONS = {
   copy: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="9" y="9" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>
     <rect x="4" y="4" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>
+  </svg>`,
+  
+  /** Expand/fullscreen icon - Used for expanding cards or entering fullscreen mode */
+  expand: `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/>
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/>
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/>
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>
   </svg>`
 };
 
