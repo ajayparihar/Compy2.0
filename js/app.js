@@ -22,6 +22,7 @@ import { createTagAutocomplete } from './components/tagAutocomplete.js?v=2.0.2';
 import { createMobileNavigationManager } from './components/mobileNavigation.js?v=2.0.2';
 import { createThemePicker } from './components/themePicker.js?v=2.0.2';
 import { createClipboardManager } from './components/clipboard.js?v=2.0.2';
+import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.2';
 
 /**
  * @typedef {Object} AppItem
@@ -87,6 +88,7 @@ class CompyApp {
     this.tagAutocomplete = null;
     this.mobileNavigation = null;
     this.themePicker = null;
+    this.expandableCardManager = null;
     
     // Manual scroll restoration across refreshes
     this.initialScrollY = 0;     // saved scroll position from previous session load (sessionStorage)
@@ -133,6 +135,7 @@ class CompyApp {
     this.initTheme();
     this.initSearch();
     this.initCards();
+    this.initExpandableCards();
   }
 
   /**
@@ -613,6 +616,29 @@ class CompyApp {
   }
 
   /**
+   * Initialize expandable card functionality.
+   * Creates and initializes the expandable card manager for interactive card expansion.
+   */
+  initExpandableCards() {
+    try {
+      // Create expandable card manager
+      this.expandableCardManager = createExpandableCardManager({
+        closeOnBackdropClick: true,
+        closeOnEscape: true,
+        animationDuration: 300
+      });
+
+      // Initialize the manager
+      this.expandableCardManager.init();
+
+      Logger.info('Expandable card manager initialized');
+    } catch (error) {
+      Logger.error('Failed to initialize expandable cards:', error);
+      // Don't fail the entire app if expandable cards fail
+    }
+  }
+
+  /**
    * Render the visible list of cards from state.
    * Uses requestAnimationFrame to batch DOM work for smooth updates.
    * 
@@ -753,7 +779,9 @@ class CompyApp {
    */
   createCardElement(item, searchQuery = '', index = -1) {
     const card = document.createElement('article');
-    card.className = 'card';
+    card.className = 'card expandable-card';
+    card.id = `card-${item.id}`;
+    card.dataset.cardId = item.id;
     
     // Add data attribute for keyboard navigation
     if (index >= 0) {
@@ -764,7 +792,23 @@ class CompyApp {
     const highlightedText = highlightText(displayText, searchQuery);
     const highlightedDesc = highlightText(escapeHtml(item.desc), searchQuery);
     
+    // Original card structure - keep it simple!
     card.innerHTML = `
+      <div class="expandable-card-content">
+        <div class="title">${highlightedText}</div>
+        <div class="desc">${highlightedDesc}</div>
+        <div class="tags">${this.renderTags(item.tags, searchQuery)}</div>
+        
+        <!-- Expanded view shows full content without truncation -->
+        <div class="card-details">
+          <div class="details-content">
+            <div class="expanded-title">${highlightedText}</div>
+            <div class="expanded-desc">${highlightedDesc}</div>
+            ${item.tags.length > 0 ? `<div class="expanded-tags">${this.renderTags(item.tags, searchQuery)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+      
       <div class="actions" aria-label="Card actions">
         <button class="icon-btn" data-act="edit" title="Edit snippet" aria-label="Edit snippet">
           ${ICONS.edit}
@@ -775,10 +819,16 @@ class CompyApp {
         <button class="icon-btn" data-act="copy" title="Copy to clipboard" aria-label="Copy to clipboard">
           ${ICONS.copy}
         </button>
+        <button class="icon-btn expand-trigger" data-act="expand" title="Expand card" aria-label="Expand card">
+          ${ICONS.expand}
+        </button>
       </div>
-      <div class="title">${highlightedText}</div>
-      <div class="desc">${highlightedDesc}</div>
-      <div class="tags">${this.renderTags(item.tags, searchQuery)}</div>
+      
+      <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
     `;
 
     // Setup event handlers
@@ -808,22 +858,40 @@ class CompyApp {
       }
     });
 
-    // Keyboard support removed - handled globally by handleKeyboardShortcuts
-
-    // Action buttons
-    card.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent card selection
-      this.openItemModal(item.id);
-    });
-    
-    card.querySelector('[data-act="delete"]').addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent card selection
-      this.removeItem(item.id);
-    });
-    
-    card.querySelector('[data-act="copy"]').addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent card selection
-      this.clipboard.copy(item.text);
+    // Action buttons - use event delegation for all buttons
+    card.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-act]');
+      if (button) {
+        e.stopPropagation();
+        const action = button.dataset.act;
+        
+        switch (action) {
+          case 'edit':
+            this.openItemModal(item.id);
+            break;
+          case 'delete':
+            this.removeItem(item.id);
+            break;
+          case 'copy':
+            this.clipboard.copy(item.text);
+            break;
+          case 'expand':
+            if (this.expandableCardManager) {
+              this.expandableCardManager.expand(card);
+            }
+            break;
+        }
+        return;
+      }
+      
+      // Handle close button
+      const closeBtn = e.target.closest('.close-btn');
+      if (closeBtn) {
+        e.stopPropagation();
+        if (this.expandableCardManager) {
+          this.expandableCardManager.collapse();
+        }
+      }
     });
   }
 

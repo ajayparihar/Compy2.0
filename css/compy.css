@@ -3252,7 +3252,434 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   
 }
 
-/* ============= UTILITY CLASSES ============= */
+/* ============= EXPANDABLE CARD COMPONENT ============= */
+
+/* Cards in grid layout (default state) */
+.cards .expandable-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  z-index: auto;
+  overflow: hidden;
+  
+  /* Grid layout sizing */
+  width: auto;
+  height: auto;
+  bottom: auto;
+  left: auto;
+  min-height: var(--card-min-h);
+  
+  /* Standard card flow behavior */
+  pointer-events: auto;
+}
+
+/* Standalone expandable card (demo/fixed position) */
+.expandable-card:not(.card) {
+  position: fixed;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  z-index: 10;
+  overflow: hidden;
+  
+  /* Fixed positioning for standalone cards */
+  width: 320px;
+  height: 180px;
+  bottom: 120px;
+  left: 40px;
+  
+  /* Ensure card doesn't interfere with content flow */
+  pointer-events: auto;
+}
+
+/* Card content container */
+.expandable-card-content {
+  padding: var(--space-16);
+  height: 100%;
+  overflow: hidden;
+  transition: overflow var(--duration-normal) var(--ease-out);
+}
+
+/* Card header styles */
+.expandable-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-12);
+}
+
+.expandable-card .card-title {
+  color: var(--primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+  margin: 0;
+  line-height: var(--leading-tight);
+}
+
+.expandable-card .card-meta {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* Card preview content */
+.expandable-card .card-preview {
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  margin-bottom: var(--space-12);
+}
+
+.expandable-card .card-preview p {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Detailed content (hidden by default) */
+.expandable-card .card-details {
+  margin-top: var(--space-16);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+}
+
+.expandable-card .details-content h4 {
+  color: var(--primary);
+  font-size: var(--text-md);
+  font-weight: var(--font-medium);
+  margin: 0 0 var(--space-8) 0;
+}
+
+.expandable-card .details-content p {
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-12) 0;
+  line-height: var(--leading-normal);
+}
+
+.expandable-card .details-content ul {
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-16) var(--space-20);
+  padding: 0;
+}
+
+.expandable-card .details-content li {
+  margin-bottom: var(--space-4);
+  line-height: var(--leading-normal);
+}
+
+/* Card tags */
+.expandable-card .card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-bottom: var(--space-16);
+}
+
+/* Card actions */
+.expandable-card .card-actions {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+  margin-top: var(--space-16);
+}
+
+/* Expand trigger button - integrated with existing card actions */
+.expandable-card .expand-trigger {
+  /* Remove absolute positioning - it's now part of .actions group */
+  background: transparent;
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
+  width: clamp(26px, 8vw, 34px);
+  height: clamp(26px, 8vw, 34px);
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: var(--transition-colors), transform var(--duration-fast) var(--ease-out);
+  z-index: 2;
+}
+
+.expandable-card .expand-trigger svg {
+  width: clamp(14px, 3.8vw, 18px);
+  height: clamp(14px, 3.8vw, 18px);
+}
+
+/* Keep original card styles - just add expandable functionality */
+.expandable-card .expandable-card-content {
+  padding: inherit;
+  height: 100%;
+  overflow: hidden;
+  transition: overflow var(--duration-normal) var(--ease-out);
+}
+
+/* When expanded, allow content to scroll */
+.expandable-card.expanded .expandable-card-content {
+  overflow-y: auto;
+  padding-right: var(--space-20); /* Account for close button */
+}
+
+/* Expanded content styling - make it larger and more readable */
+.expandable-card .card-details {
+  display: none; /* Completely hidden by default - no space taken */
+}
+
+.expandable-card.expanded .card-details {
+  display: block; /* Show only when expanded */
+  margin-top: var(--space-16);
+  animation: fadeInUp var(--duration-normal) var(--ease-out);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.expandable-card .expanded-title {
+  color: var(--primary);
+  font-weight: 700;
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  margin-bottom: var(--space-16);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.expandable-card .expanded-desc {
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-16);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.expandable-card .expanded-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
+}
+
+.expandable-card .expanded-tags .chip {
+  font-size: var(--text-sm);
+  padding: var(--space-6) var(--space-12);
+}
+
+/* Hide normal content when expanded to avoid duplication */
+.expandable-card.expanded .title,
+.expandable-card.expanded .desc,
+.expandable-card.expanded .tags {
+  display: none;
+}
+
+/* Close button - hidden by default, shown when expanded */
+.expandable-card .close-btn {
+  display: none;
+}
+
+.expandable-card.expanded .close-btn {
+  display: flex;
+}
+
+.expandable-card .expand-trigger:hover {
+  background: var(--hover-overlay);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.expandable-card .expand-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.expandable-card .expand-trigger .expand-icon {
+  color: var(--text-muted);
+  transition: color var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+}
+
+.expandable-card .expand-trigger:hover .expand-icon {
+  color: var(--primary);
+}
+
+/* Close button */
+.expandable-card .close-btn {
+  position: absolute;
+  top: var(--space-12);
+  right: var(--space-12);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-colors), transform var(--duration-fast) var(--ease-out);
+  z-index: 3;
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.expandable-card .close-btn svg {
+  color: var(--text-muted);
+  transition: color var(--duration-normal) var(--ease-out);
+}
+
+.expandable-card .close-btn:hover {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border-color: var(--danger);
+  transform: scale(1) translateY(-1px);
+}
+
+.expandable-card .close-btn:hover svg {
+  color: var(--danger);
+}
+
+.expandable-card .close-btn:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+/* Expanded state */
+.expandable-card.expanded {
+  /* Center the card and make it larger */
+  position: fixed !important;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90vw, 600px);
+  height: min(85vh, 500px);
+  max-height: 85vh;
+  cursor: default;
+  z-index: var(--z-modal);
+  box-shadow: var(--shadow-xl);
+}
+
+.expandable-card.expanded .expandable-card-content {
+  overflow-y: auto;
+  height: 100%;
+  padding-right: var(--space-20); /* Account for close button */
+}
+
+.expandable-card.expanded .card-details {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.expandable-card.expanded .expand-trigger {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.9);
+}
+
+.expandable-card.expanded .close-btn {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.expandable-card.expanded .card-preview p {
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+
+/* Backdrop for expanded card */
+.expandable-card-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-overlay);
+  backdrop-filter: blur(2px);
+  z-index: calc(var(--z-modal) - 1);
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+  pointer-events: none;
+}
+
+.expandable-card-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Hover effects (only when not expanded) */
+@media (hover: hover) {
+  .expandable-card:not(.expanded):hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .expandable-card {
+    /* Adjust initial position for mobile */
+    width: min(90vw, 300px);
+    height: 160px;
+    bottom: 80px;
+    left: 5vw;
+  }
+  
+  .expandable-card.expanded {
+    width: 95vw;
+    height: 90vh;
+    max-height: 90vh;
+  }
+  
+  .expandable-card-content {
+    padding: var(--space-12);
+  }
+  
+  .expandable-card.expanded .expandable-card-content {
+    padding-right: var(--space-16);
+  }
+}
+
+/* Animation for card expansion */
+@keyframes expandCard {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.02);
+  }
+}
+
+.expandable-card.expanding {
+  animation: expandCard var(--duration-slower) var(--ease-spring);
+}
+
+/* Ensure card works well with existing themes */
+html[data-theme^="light-"] .expandable-card {
+  box-shadow: var(--shadow), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme^="light-"] .expandable-card.expanded {
+  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+/* ============= UTILITY CLASSES =============*/
 /* Screen reader only content */
 .sr-only {
   position: absolute;
