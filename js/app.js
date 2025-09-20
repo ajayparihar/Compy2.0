@@ -8,7 +8,8 @@ import {
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
   getAllTags, filterItems, validateItem, debounce, 
-  addEventHandler, toggleVisibility, isValidTheme, getSafeTheme
+  addEventHandler, toggleVisibility, isValidTheme, getSafeTheme,
+  Logger, DOMUtils, ValidationUtils, ErrorUtils
 } from './utils.js?v=2.0.2';
 import {
   initState, getState, subscribe, upsertItem,
@@ -206,10 +207,10 @@ class CompyApp {
       this.setupGlobalAccess();
       
       this.initialized = true;
-      if (UI_CONFIG.debug) console.log('Compy 2.0 initialized successfully');
+      Logger.info('Compy 2.0 initialized successfully');
       
     } catch (error) {
-      console.error('Failed to initialize Compy 2.0:', error);
+      Logger.error('Failed to initialize Compy 2.0:', error);
       this.showNotification('Failed to initialize application', 'error');
     }
   }
@@ -292,12 +293,12 @@ class CompyApp {
    */
   validateClipboardInput(text) {
     if (!text || typeof text !== 'string') {
-      console.warn('Clipboard copy attempted with invalid text:', text);
+      Logger.warn('Clipboard copy attempted with invalid text:', text);
       return false;
     }
     
     if (text.length === 0) {
-      console.warn('Clipboard copy attempted with empty text');
+      Logger.warn('Clipboard copy attempted with empty text');
       return false;
     }
     
@@ -370,12 +371,12 @@ class CompyApp {
   showNotification(message, type = 'info') {
     try {
       if (!this.notifications || typeof this.notifications.show !== 'function') {
-        console.warn('Notifications unavailable; skipping message', { message, type });
+        Logger.warn('Notifications unavailable; skipping message', { message, type });
         return;
       }
       this.notifications.show(message, type);
     } catch (err) {
-      console.warn('Notification error; skipping message', err);
+      Logger.warn('Notification error; skipping message', err);
     }
   }
 
@@ -420,7 +421,7 @@ class CompyApp {
           try {
             localStorage.setItem(STORAGE_KEYS.theme, themeName);
           } catch (storageError) {
-            console.warn('Failed to save theme to localStorage:', storageError);
+            Logger.warn('Failed to save theme to localStorage:', storageError);
             // Continue without storage - theme will still work for current session
           }
           
@@ -435,11 +436,9 @@ class CompyApp {
             this.themePicker.updateSelectedTheme(themeName);
           }
           
-          if (UI_CONFIG.debug) {
-            console.log('Theme applied successfully:', themeName);
-          }
+          Logger.debug('Theme applied successfully:', themeName);
         } catch (error) {
-          console.error('Failed to apply theme:', error);
+          Logger.error('Failed to apply theme:', error);
           this.showNotification('Failed to apply theme', 'error');
           
           // Try to recover with default theme
@@ -447,7 +446,7 @@ class CompyApp {
             document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
             document.documentElement.setAttribute('data-theme-source', 'fallback');
           } catch (fallbackError) {
-            console.error('Failed to apply fallback theme:', fallbackError);
+            Logger.error('Failed to apply fallback theme:', fallbackError);
           }
         }
       },
@@ -460,9 +459,7 @@ class CompyApp {
           
           if (themeSource === 'html' || themeSource === 'html-fallback') {
             // Theme already applied by HTML, just sync with our state
-            if (UI_CONFIG.debug) {
-              console.log('Theme already applied by HTML:', currentTheme);
-            }
+            Logger.debug('Theme already applied by HTML:', currentTheme);
             return;
           }
           
@@ -474,19 +471,19 @@ class CompyApp {
               savedTheme = stored;
             }
           } catch (storageError) {
-            console.warn('Failed to read theme from localStorage:', storageError);
+            Logger.warn('Failed to read theme from localStorage:', storageError);
             // Continue with default theme
           }
           
           this.theme.apply(savedTheme);
         } catch (error) {
-          console.error('Failed to load theme:', error);
+          Logger.error('Failed to load theme:', error);
           // Apply default theme as last resort
           try {
             document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
             document.documentElement.setAttribute('data-theme-source', 'error-fallback');
           } catch (fallbackError) {
-            console.error('Critical theme system failure:', fallbackError);
+            Logger.error('Critical theme system failure:', fallbackError);
           }
         }
       },
@@ -504,7 +501,7 @@ class CompyApp {
       this.themePicker = createThemePicker(this.modalManager, this.theme);
       this.themePicker.init();
     } catch (error) {
-      console.warn('Failed to initialize theme picker:', error);
+      Logger.warn('Failed to initialize theme picker:', error);
       // Fallback to basic theme functionality
     }
     
@@ -539,9 +536,7 @@ class CompyApp {
               this.themePicker.updateSelectedTheme(newTheme);
             }
             
-            if (UI_CONFIG.debug) {
-              console.log('Theme synchronized from other tab:', newTheme);
-            }
+            Logger.debug('Theme synchronized from other tab:', newTheme);
           }
         }
       }
@@ -1009,7 +1004,7 @@ class CompyApp {
     try {
       // Input Validation: Ensure itemId is valid when provided
       if (itemId && typeof itemId !== 'string') {
-        console.warn('Invalid itemId provided to openItemModal:', itemId);
+        Logger.warn('Invalid itemId provided to openItemModal:', itemId);
         this.showNotification('Invalid item ID', 'error');
         return;
       }
@@ -1024,7 +1019,7 @@ class CompyApp {
         
         // Validation: Ensure item exists when editing
         if (!item) {
-          console.error(`Item with ID '${itemId}' not found`);
+          Logger.error(`Item with ID '${itemId}' not found`);
           this.showNotification('Item not found', 'error');
           return;
         }
@@ -1045,7 +1040,7 @@ class CompyApp {
       const sensitiveElement = $('#itemSensitive');
       
       if (!titleElement || !textElement || !descElement || !sensitiveElement) {
-        console.error('Required modal elements not found');
+        Logger.error('Required modal elements not found');
         this.showNotification('Modal initialization failed', 'error');
         return;
       }
@@ -1062,7 +1057,7 @@ class CompyApp {
 
       // Modal Opening: Handle modal manager failures
       if (!this.modalManager) {
-        console.error('Modal manager not initialized');
+        Logger.error('Modal manager not initialized');
         this.showNotification('Modal system unavailable', 'error');
         return;
       }
@@ -1071,7 +1066,7 @@ class CompyApp {
       
     } catch (error) {
       // Global Error Handler: Catch any unexpected errors
-      console.error('Failed to open item modal:', error);
+      Logger.error('Failed to open item modal:', error);
       this.showNotification('Failed to open edit form', 'error');
     }
   }
@@ -1125,7 +1120,7 @@ class CompyApp {
         const profileInput = $('#profileNameInput');
         
         if (!profileInput) {
-          console.error('Profile input element not found');
+          Logger.error('Profile input element not found');
           this.showNotification('Profile editor unavailable', 'error');
           return;
         }
@@ -1133,7 +1128,7 @@ class CompyApp {
         profileInput.value = state.profileName || '';
         this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
       } catch (error) {
-        console.error('Failed to open profile editor:', error);
+        Logger.error('Failed to open profile editor:', error);
         this.showNotification('Failed to open profile editor', 'error');
       }
     });
@@ -1164,26 +1159,31 @@ class CompyApp {
    */
   saveProfileWithValidation() {
     try {
-      const profileInput = $('#profileNameInput');
-      
-      if (!profileInput) {
-        console.error('Profile input element not found during save');
+      const validation = ValidationUtils.validateElement('#profileNameInput', 'profile save');
+      if (!validation.isValid) {
+        Logger.error(validation.error);
         this.showNotification('Profile save failed: Input not found', 'error');
         return;
       }
 
-      // Input Sanitization: Get and clean the input value
+      const profileInput = validation.element;
       const rawName = profileInput.value || '';
-      const trimmedName = rawName.trim();
-
-      // Length Validation: Check character limits
-      if (trimmedName.length > 100) {
-        this.showNotification('Profile name too long (max 100 characters)', 'error');
+      
+      // Use centralized validation utility
+      const textValidation = ValidationUtils.validateTextInput(rawName, {
+        maxLength: 100,
+        allowEmpty: true,
+        fieldName: 'Profile name'
+      });
+      
+      if (!textValidation.isValid) {
+        this.showNotification(textValidation.errors[0], 'error');
         return;
       }
-
-      // Content Validation: Ensure safe characters only
-      // Allow letters, numbers, spaces, and basic punctuation
+      
+      const trimmedName = textValidation.value || '';
+      
+      // Additional content validation for profile names
       const safePattern = /^[a-zA-Z0-9\s\-_.,']*$/;
       if (trimmedName.length > 0 && !safePattern.test(trimmedName)) {
         this.showNotification('Profile name contains invalid characters', 'error');
@@ -1208,7 +1208,7 @@ class CompyApp {
       this.showNotification(message, 'success');
       
     } catch (error) {
-      console.error('Profile save failed:', error);
+      Logger.error('Profile save failed:', error);
       this.showNotification('Failed to save profile', 'error');
     }
   }
@@ -1250,7 +1250,7 @@ class CompyApp {
 
     // Guard against missing DOM
     if (!exportBtn || !exportMenu) {
-      if (UI_CONFIG.debug) console.warn('Export UI not found; skipping export handlers');
+      Logger.warn('Export UI not found; skipping export handlers');
       return;
     }
     
@@ -1284,89 +1284,264 @@ class CompyApp {
   }
 
   /**
+   * Validate export state and prepare export data
+   * 
+   * @returns {{isValid: boolean, payload?: Object, error?: string}} Validation result
+   * @private
+   */
+  prepareJSONExportData() {
+    const state = getState();
+    
+    // State validation
+    if (!state || typeof state !== 'object') {
+      return {
+        isValid: false,
+        error: 'Invalid application state for export'
+      };
+    }
+    
+    // Data validation and cleanup
+    const items = Array.isArray(state.items) ? state.items : [];
+    const validItems = items.filter(item => item && typeof item === 'object' && item.id);
+    
+    // User confirmation for empty exports using consistent confirmation system
+    if (validItems.length === 0) {
+      // This will be handled by the async calling function since we can't await here
+      return { isValid: false, error: 'No items to export', requiresConfirmation: true };
+    }
+    
+    // Build export payload
+    const payload = {
+      profileName: (state.profileName || '').trim(),
+      items: validItems
+    };
+    
+    return { isValid: true, payload };
+  }
+  
+  /**
+   * Serialize export data to JSON string
+   * 
+   * @param {Object} payload - Data to serialize
+   * @returns {{success: boolean, jsonString?: string, error?: string}} Serialization result
+   * @private
+   */
+  serializeExportData(payload) {
+    try {
+      const jsonString = JSON.stringify(payload, null, 2);
+      return { success: true, jsonString };
+    } catch (serializationError) {
+      Logger.error('JSON serialization failed:', serializationError);
+      return {
+        success: false,
+        error: 'Unable to serialize data - check for circular references or invalid data types'
+      };
+    }
+  }
+  
+  /**
+   * Handle JSON file download with error recovery
+   * 
+   * @param {string} jsonString - Serialized JSON data
+   * @param {number} itemCount - Number of items being exported
+   * @returns {{success: boolean, error?: string}} Download result
+   * @private
+   */
+  downloadJSONFile(jsonString, itemCount) {
+    try {
+      downloadFile('compy-export.json', jsonString, 'application/json');
+      return { success: true };
+    } catch (downloadError) {
+      Logger.error('Download failed:', downloadError);
+      return {
+        success: false,
+        error: 'Download failed - check browser permissions and storage space'
+      };
+    }
+  }
+  
+  /**
    * Export the current state as a JSON file.
    * 
-   * Error Handling:
-   * - Validates state data before export
-   * - Handles JSON serialization errors
-   * - Provides fallback values for missing data
-   * - Shows appropriate user feedback for failures
+   * This method coordinates the entire JSON export process through focused helper methods,
+   * providing comprehensive error handling and user feedback at each step.
    */
   exportJSON() {
-    try {
-      // State Validation: Ensure valid state exists
-      const state = getState();
-      if (!state || typeof state !== 'object') {
-        console.error('Invalid application state for export');
-        this.showNotification('Export failed: Invalid application state', 'error');
-        return;
-      }
-
-      // Data Validation: Ensure items array exists and is valid
-      const items = Array.isArray(state.items) ? state.items : [];
-      if (items.length === 0) {
-        const proceed = confirm('No snippets to export. Export empty file anyway?');
-        if (!proceed) return;
-      }
-
-      // Payload Construction: Build export data with validation
-      const payload = {
-        profileName: (state.profileName || '').trim(),
-        items: items.filter(item => item && typeof item === 'object' && item.id)
-      };
-
-      // JSON Serialization: Handle potential serialization errors
-      let jsonString;
-      try {
-        jsonString = JSON.stringify(payload, null, 2);
-      } catch (serializationError) {
-        console.error('JSON serialization failed:', serializationError);
-        this.showNotification('Export failed: Unable to serialize data', 'error');
-        return;
-      }
-
-      // File Download: Handle download failures
-      try {
-        downloadFile('compy-export.json', jsonString, 'application/json');
-        this.showNotification(
-          `JSON export downloaded (${payload.items.length} items)`,
-          'success'
-        );
-      } catch (downloadError) {
-        console.error('Download failed:', downloadError);
-        this.showNotification('Export failed: Download error', 'error');
+    return ErrorUtils.safeExecute(async () => {
+      // Prepare and validate export data
+      const preparation = this.prepareJSONExportData();
+      if (!preparation.isValid) {
+        // Handle empty export confirmation
+        if (preparation.requiresConfirmation) {
+          const confirmed = await this.confirmationManager.show({
+            title: 'Export Empty File',
+            message: 'No snippets to export. Export empty file anyway?',
+            confirmText: 'Export Empty',
+            cancelText: 'Cancel',
+            variant: 'warning'
+          });
+          
+          if (!confirmed) {
+            return; // User cancelled
+          }
+          
+          // User confirmed, create empty payload
+          const state = getState();
+          preparation.isValid = true;
+          preparation.payload = {
+            profileName: (state.profileName || '').trim(),
+            items: []
+          };
+        } else {
+          if (preparation.error && !preparation.error.includes('cancelled')) {
+            this.showNotification(`Export failed: ${preparation.error}`, 'error');
+          }
+          return;
+        }
       }
       
-    } catch (error) {
-      // Global Error Handler: Catch any unexpected errors
-      console.error('JSON export failed:', error);
-      this.showNotification('Export failed: Unexpected error', 'error');
-    }
+      // Serialize data to JSON
+      const serialization = this.serializeExportData(preparation.payload);
+      if (!serialization.success) {
+        this.showNotification(`Export failed: ${serialization.error}`, 'error');
+        return;
+      }
+      
+      // Download the file
+      const download = this.downloadJSONFile(serialization.jsonString, preparation.payload.items.length);
+      if (!download.success) {
+        this.showNotification(`Export failed: ${download.error}`, 'error');
+        return;
+      }
+      
+      // Success feedback
+      this.showNotification(
+        `JSON export downloaded (${preparation.payload.items.length} items)`,
+        'success'
+      );
+      
+    }, {
+      context: 'JSON export',
+      fallback: (error) => {
+        Logger.error('JSON export failed:', error);
+        this.showNotification('Export failed: Unexpected error', 'error');
+      }
+    });
   }
 
   /**
+   * Generate CSV rows from application state
+   * 
+   * @returns {{success: boolean, rows?: Array[], itemCount?: number, error?: string}} Generation result
+   * @private
+   */
+  generateCSVRows() {
+    const state = getState();
+    
+    if (!state || typeof state !== 'object') {
+      return {
+        success: false,
+        error: 'Invalid application state for CSV export'
+      };
+    }
+    
+    const items = Array.isArray(state.items) ? state.items : [];
+    const validItems = items.filter(item => item && typeof item === 'object' && item.id);
+    
+    try {
+      const rows = [
+        // Metadata section
+        ['profileName'],
+        [csvEscape(state.profileName || '')],
+        [''], // Empty row separator
+        
+        // Data headers
+        ['text', 'desc', 'sensitive', 'tags'],
+        
+        // Data rows
+        ...validItems.map(item => [
+          csvEscape(item.text || ''),
+          csvEscape(item.desc || ''),
+          item.sensitive ? '1' : '0',
+          csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : '')
+        ])
+      ];
+      
+      return {
+        success: true,
+        rows,
+        itemCount: validItems.length
+      };
+    } catch (error) {
+      Logger.error('CSV row generation failed:', error);
+      return {
+        success: false,
+        error: 'Failed to generate CSV data - check for invalid characters in data'
+      };
+    }
+  }
+  
+  /**
+   * Convert CSV rows to CSV string format
+   * 
+   * @param {Array[]} rows - CSV rows to convert
+   * @returns {{success: boolean, csv?: string, error?: string}} Conversion result
+   * @private
+   */
+  convertRowsToCSV(rows) {
+    try {
+      const csv = rows.map(row => row.join(',')).join('\n');
+      return { success: true, csv };
+    } catch (error) {
+      Logger.error('CSV conversion failed:', error);
+      return {
+        success: false,
+        error: 'Failed to convert data to CSV format'
+      };
+    }
+  }
+  
+  /**
    * Export the current state as a CSV file.
-   * Includes an optional metadata section for profileName.
+   * 
+   * This method provides structured CSV export with comprehensive error handling
+   * and includes metadata section for profile information.
    */
   exportCSV() {
-    const state = getState();
-    const rows = [
-      ['profileName'],
-      [csvEscape(state.profileName || '')],
-      [''],
-      ['text', 'desc', 'sensitive', 'tags'],
-      ...state.items.map(item => [
-        csvEscape(item.text),
-        csvEscape(item.desc),
-        item.sensitive ? '1' : '0',
-        csvEscape(item.tags.join('|'))
-      ])
-    ];
-    
-    const csv = rows.map(row => row.join(',')).join('\n');
-    
-    downloadFile('compy-export.csv', csv, 'text/csv');
-    this.showNotification('CSV export downloaded');
+    return ErrorUtils.safeExecute(async () => {
+      // Generate CSV rows from state
+      const rowGeneration = this.generateCSVRows();
+      if (!rowGeneration.success) {
+        this.showNotification(`CSV export failed: ${rowGeneration.error}`, 'error');
+        return;
+      }
+      
+      // Convert rows to CSV string
+      const csvConversion = this.convertRowsToCSV(rowGeneration.rows);
+      if (!csvConversion.success) {
+        this.showNotification(`CSV export failed: ${csvConversion.error}`, 'error');
+        return;
+      }
+      
+      // Download the file
+      try {
+        downloadFile('compy-export.csv', csvConversion.csv, 'text/csv');
+        this.showNotification(
+          `CSV export downloaded (${rowGeneration.itemCount} items)`,
+          'success'
+        );
+      } catch (downloadError) {
+        Logger.error('CSV download failed:', downloadError);
+        this.showNotification('CSV export failed: Download error', 'error');
+      }
+      
+    }, {
+      context: 'CSV export',
+      fallback: (error) => {
+        Logger.error('CSV export failed:', error);
+        this.showNotification('CSV export failed: Unexpected error', 'error');
+      }
+    });
   }
 
   /**
@@ -1526,71 +1701,126 @@ class CompyApp {
   }
 
   /**
+   * Parse JSON import data and extract items and profile information
+   * 
+   * @param {string} jsonText - Raw JSON string to parse
+   * @returns {{items: Array, profileName: string}} Parsed import data
+   * @throws {Error} If JSON format is invalid
+   * @private
+   */
+  parseJSONImportData(jsonText) {
+    const parsed = JSON.parse(jsonText);
+    let items = [];
+    let profileName = '';
+    
+    if (Array.isArray(parsed)) {
+      // Legacy format: array of items
+      items = parsed;
+    } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
+      // New format with profile
+      items = parsed.items;
+      profileName = (parsed.profileName || '').trim();
+    } else {
+      throw new Error('Invalid JSON format - expected array or object with items property');
+    }
+    
+    return { items, profileName };
+  }
+  
+  /**
+   * Handle import decision when existing data is present
+   * 
+   * @param {Array} importItems - Items to be imported
+   * @param {string} importProfile - Profile name to be imported
+   * @returns {Promise<{shouldContinue: boolean, shouldClearExisting: boolean}>}
+   * @private
+   */
+  async handleImportDecision(importItems, importProfile) {
+    const currentState = getState();
+    const hasExistingData = currentState.items.length > 0 || currentState.profileName;
+
+    if (!hasExistingData) {
+      return { shouldContinue: true, shouldClearExisting: false };
+    }
+    
+    const decision = await this.promptImportOption(
+      currentState.items.length,
+      currentState.profileName || 'Not set',
+      importItems.length,
+      importProfile || 'Not set'
+    );
+    
+    if (decision.option === 'cancel') {
+      return { shouldContinue: false, shouldClearExisting: false };
+    }
+    
+    return {
+      shouldContinue: true,
+      shouldClearExisting: decision.shouldClearExisting
+    };
+  }
+  
+  /**
+   * Process import items and handle deduplication
+   * 
+   * @param {Array} items - Items to import
+   * @param {Set<string>} dedupeSet - Set for duplicate detection
+   * @returns {{importCount: number, skippedCount: number}} Import results
+   * @private
+   */
+  processImportItems(items, dedupeSet) {
+    let importCount = 0;
+    let skippedCount = 0;
+    
+    for (const item of items) {
+      if (this.addImportedItem(item, dedupeSet)) {
+        importCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    return { importCount, skippedCount };
+  }
+  
+  /**
    * Import items from a JSON payload.
    * Accepts both legacy array-only exports and the newer object format containing { items, profileName }.
    * @param {string} jsonText - Raw JSON string
    */
   async importJSON(jsonText) {
-    try {
-      const parsed = JSON.parse(jsonText);
-      let items = [];
-      let profileName = '';
+    return await ErrorUtils.safeExecute(async () => {
+      // Parse JSON data into structured format
+      const { items, profileName } = this.parseJSONImportData(jsonText);
       
-      if (Array.isArray(parsed)) {
-        // Legacy format: array of items
-        items = parsed;
-      } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
-        // New format with profile
-        items = parsed.items;
-        profileName = (parsed.profileName || '').trim();
-      } else {
-        throw new Error('Invalid JSON format');
-      }
-
-      // Check if there's existing data and ask for import options
+      // Handle user decision about existing data
+      const { shouldContinue, shouldClearExisting } = await this.handleImportDecision(items, profileName);
+      if (!shouldContinue) return;
+      
+      // Prepare for import based on user decision
       const currentState = getState();
-      const hasExistingData = currentState.items.length > 0 || currentState.profileName;
-
-      // Decide how to handle existing data (Add/Replace/Cancel)
-      let shouldClearExisting = false;
-      if (hasExistingData) {
-        const decision = await this.promptImportOption(
-          currentState.items.length,
-          currentState.profileName || 'Not set',
-          items.length,
-          profileName || 'Not set'
-        );
-        if (decision.option === 'cancel') return;
-        shouldClearExisting = decision.shouldClearExisting;
-      }
-
-      // Prepare duplicate-detection set (based on existing items when adding)
       const dedupeSet = this.buildDedupeSetFromState(currentState, shouldClearExisting);
-
-      // Clear existing data if user chose replace
+      
       if (shouldClearExisting) {
         this.clearAllData();
       }
-
+      
       // Update profile if provided
       this.updateProfileIfProvided(profileName);
-
-      let importCount = 0;
-      let skippedCount = 0;
-      for (const item of items) {
-        if (this.addImportedItem(item, dedupeSet)) {
-          importCount++;
-        } else {
-          skippedCount++;
-        }
-      }
-
+      
+      // Process all items and track results
+      const { importCount, skippedCount } = this.processImportItems(items, dedupeSet);
+      
+      // Show results to user
       this.showImportResult(importCount, skippedCount);
       
-    } catch (error) {
-      console.error('JSON import failed:', error);
-      this.showNotification('Invalid JSON file', 'error');
-    }
+    }, {
+      context: 'JSON import',
+      fallback: (error) => {
+        Logger.error('JSON import failed:', error);
+        this.showNotification('Invalid JSON file', 'error');
+      }
+    });
   }
 
   /**
@@ -2620,15 +2850,15 @@ class CompyApp {
    * @returns {void}
    */
   updateCardSelection() {
-    // Remove selection class from all cards
-    this.cardElements.forEach(card => {
-      card.classList.remove('selected');
-    });
-    
-    // Add selection class to selected card
-    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
-      this.cardElements[this.selectedCardIndex].classList.add('selected');
-    }
+    // Remove selection class from all cards using optimized DOM batch operation
+    DOMUtils.batchUpdate([
+      () => this.cardElements.forEach(card => DOMUtils.removeClass(card, 'selected')),
+      () => {
+        if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+          DOMUtils.addClass(this.cardElements[this.selectedCardIndex], 'selected');
+        }
+      }
+    ]);
   }
   
   /**

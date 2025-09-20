@@ -1226,6 +1226,658 @@ export const filterItems = (items, searchQuery = '', filterTags = []) => {
  *   showErrors(validateItem(newItem).errors);
  * }
  */
+// =============================================================================
+// LOGGING AND DEBUG UTILITIES
+// =============================================================================
+
+/**
+ * Centralized logging utility for consistent debug output across the application
+ * 
+ * This utility provides a consistent interface for logging throughout the application,
+ * with built-in support for different log levels and conditional output based on
+ * the debug configuration.
+ * 
+ * Benefits:
+ * - Consistent log formatting across all modules
+ * - Easy to disable logging in production
+ * - Centralized control over log levels
+ * - Type-safe logging with JSDoc annotations
+ * 
+ * @namespace Logger
+ */
+export const Logger = {
+  /**
+   * Log informational messages (only when debug is enabled)
+   * @param {string} message - The log message
+   * @param {...any} args - Additional arguments to log
+   */
+  info: (message, ...args) => {
+    if (typeof window !== 'undefined' && 
+        window.location && 
+        (window.location.hostname === 'localhost' || 
+         window.location.hostname === '127.0.0.1' ||
+         window.location.protocol === 'file:')) {
+      console.log(`ℹ️ ${message}`, ...args);
+    }
+  },
+  
+  /**
+   * Log warning messages (always shown)
+   * @param {string} message - The warning message
+   * @param {...any} args - Additional arguments to log
+   */
+  warn: (message, ...args) => {
+    console.warn(`⚠️ ${message}`, ...args);
+  },
+  
+  /**
+   * Log error messages (always shown)
+   * @param {string} message - The error message
+   * @param {...any} args - Additional arguments to log
+   */
+  error: (message, ...args) => {
+    console.error(`❌ ${message}`, ...args);
+  },
+  
+  /**
+   * Log debug messages (only in development)
+   * @param {string} message - The debug message
+   * @param {...any} args - Additional arguments to log
+   */
+  debug: (message, ...args) => {
+    if (typeof window !== 'undefined' && 
+        window.location && 
+        (window.location.hostname === 'localhost' || 
+         window.location.hostname === '127.0.0.1' ||
+         window.location.protocol === 'file:')) {
+      console.log(`🔍 DEBUG: ${message}`, ...args);
+    }
+  }
+};
+
+// =============================================================================
+// DOM UTILITIES AND MANIPULATION HELPERS
+// =============================================================================
+
+/**
+ * Collection of common DOM manipulation patterns used throughout the application
+ * 
+ * These utilities eliminate redundant DOM operations and provide consistent
+ * behavior across components while improving performance through optimized
+ * batch operations.
+ * 
+ * @namespace DOMUtils
+ */
+export const DOMUtils = {
+  /**
+   * Safely add CSS classes to elements with validation
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @param {...string} classNames - Class names to add
+   * @returns {boolean} True if successful
+   */
+  addClass: (elementOrSelector, ...classNames) => {
+    const element = typeof elementOrSelector === 'string'
+      ? $(elementOrSelector)
+      : elementOrSelector;
+    
+    if (!element || !classNames.length) return false;
+    
+    element.classList.add(...classNames);
+    return true;
+  },
+  
+  /**
+   * Safely remove CSS classes from elements
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @param {...string} classNames - Class names to remove
+   * @returns {boolean} True if successful
+   */
+  removeClass: (elementOrSelector, ...classNames) => {
+    const element = typeof elementOrSelector === 'string'
+      ? $(elementOrSelector)
+      : elementOrSelector;
+    
+    if (!element || !classNames.length) return false;
+    
+    element.classList.remove(...classNames);
+    return true;
+  },
+  
+  /**
+   * Toggle CSS classes on elements
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @param {...string} classNames - Class names to toggle
+   * @returns {boolean} True if successful
+   */
+  toggleClass: (elementOrSelector, ...classNames) => {
+    const element = typeof elementOrSelector === 'string'
+      ? $(elementOrSelector)
+      : elementOrSelector;
+    
+    if (!element || !classNames.length) return false;
+    
+    classNames.forEach(className => element.classList.toggle(className));
+    return true;
+  },
+  
+  /**
+   * Safely set element attributes with validation
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @param {Object} attributes - Object with attribute key-value pairs
+   * @returns {boolean} True if successful
+   */
+  setAttributes: (elementOrSelector, attributes) => {
+    const element = typeof elementOrSelector === 'string'
+      ? $(elementOrSelector)
+      : elementOrSelector;
+    
+    if (!element || !attributes || typeof attributes !== 'object') return false;
+    
+    Object.entries(attributes).forEach(([key, value]) => {
+      if (typeof key === 'string' && key.trim()) {
+        element.setAttribute(key, String(value));
+      }
+    });
+    return true;
+  },
+  
+  /**
+   * Batch DOM updates for performance optimization
+   * @param {Function[]} operations - Array of DOM operation functions
+   * @returns {Promise<void>} Promise that resolves when operations complete
+   */
+  batchUpdate: (operations) => {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        operations.forEach(operation => {
+          try {
+            if (typeof operation === 'function') {
+              operation();
+            }
+          } catch (error) {
+            Logger.warn('DOM batch operation failed:', error);
+          }
+        });
+        resolve();
+      });
+    });
+  },
+  
+  /**
+   * Show/hide elements with optional animation classes
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @param {boolean} show - Whether to show or hide
+   * @param {string} [animationClass] - Optional CSS animation class
+   * @returns {boolean} True if successful
+   */
+  setVisibility: (elementOrSelector, show, animationClass) => {
+    const element = typeof elementOrSelector === 'string'
+      ? $(elementOrSelector)
+      : elementOrSelector;
+    
+    if (!element) return false;
+    
+    if (show) {
+      element.hidden = false;
+      element.setAttribute('aria-hidden', 'false');
+      if (animationClass) {
+        element.classList.add(animationClass);
+        setTimeout(() => element.classList.remove(animationClass), 300);
+      }
+    } else {
+      element.hidden = true;
+      element.setAttribute('aria-hidden', 'true');
+    }
+    
+    return true;
+  }
+};
+
+// =============================================================================
+// VALIDATION UTILITIES
+// =============================================================================
+
+/**
+ * Common validation patterns used throughout the application
+ * 
+ * These utilities provide consistent validation behavior and reduce
+ * code duplication across components.
+ * 
+ * @namespace ValidationUtils
+ */
+export const ValidationUtils = {
+  /**
+   * Check if a value is a non-empty string
+   * @param {any} value - Value to validate
+   * @returns {boolean} True if value is a non-empty string
+   */
+  isNonEmptyString: (value) => {
+    return typeof value === 'string' && value.trim().length > 0;
+  },
+  
+  /**
+   * Validate element existence for DOM operations
+   * @param {Element|string} elementOrSelector - Element or selector to validate
+   * @param {string} context - Context for error messages
+   * @returns {{isValid: boolean, element?: Element, error?: string}}
+   */
+  validateElement: (elementOrSelector, context = 'operation') => {
+    try {
+      const element = typeof elementOrSelector === 'string'
+        ? $(elementOrSelector)
+        : elementOrSelector;
+      
+      if (!element) {
+        return {
+          isValid: false,
+          error: `Element not found for ${context}: ${elementOrSelector}`
+        };
+      }
+      
+      return { isValid: true, element };
+    } catch (error) {
+      return {
+        isValid: false,
+        error: `Element validation failed for ${context}: ${error.message}`
+      };
+    }
+  },
+  
+  /**
+   * Validate and sanitize text input
+   * @param {any} input - Input to validate
+   * @param {Object} options - Validation options
+   * @param {number} [options.maxLength] - Maximum allowed length
+   * @param {boolean} [options.allowEmpty=false] - Whether empty strings are allowed
+   * @param {string} [options.fieldName='field'] - Name for error messages
+   * @returns {{isValid: boolean, value?: string, errors: string[]}}
+   */
+  validateTextInput: (input, options = {}) => {
+    const { maxLength, allowEmpty = false, fieldName = 'field' } = options;
+    const errors = [];
+    
+    // Type validation
+    if (typeof input !== 'string') {
+      if (input === null || input === undefined) {
+        if (!allowEmpty) {
+          errors.push(`${fieldName} is required`);
+        }
+      } else {
+        errors.push(`${fieldName} must be a string`);
+      }
+      return { isValid: false, errors };
+    }
+    
+    const trimmedValue = input.trim();
+    
+    // Empty validation
+    if (trimmedValue.length === 0 && !allowEmpty) {
+      errors.push(`${fieldName} cannot be empty`);
+      return { isValid: false, errors };
+    }
+    
+    // Length validation
+    if (maxLength && trimmedValue.length > maxLength) {
+      errors.push(`${fieldName} cannot exceed ${maxLength} characters`);
+      return { isValid: false, errors };
+    }
+    
+    return {
+      isValid: true,
+      value: trimmedValue,
+      errors: []
+    };
+  },
+  
+  /**
+   * Validate array input with element validation
+   * @param {any} input - Input to validate
+   * @param {Object} options - Validation options
+   * @param {number} [options.maxLength] - Maximum array length
+   * @param {Function} [options.elementValidator] - Function to validate each element
+   * @param {string} [options.fieldName='array'] - Name for error messages
+   * @returns {{isValid: boolean, value?: any[], errors: string[]}}
+   */
+  validateArrayInput: (input, options = {}) => {
+    const { maxLength, elementValidator, fieldName = 'array' } = options;
+    const errors = [];
+    
+    if (!Array.isArray(input)) {
+      errors.push(`${fieldName} must be an array`);
+      return { isValid: false, errors };
+    }
+    
+    if (maxLength && input.length > maxLength) {
+      errors.push(`${fieldName} cannot have more than ${maxLength} items`);
+      return { isValid: false, errors };
+    }
+    
+    // Validate each element if validator provided
+    if (elementValidator && typeof elementValidator === 'function') {
+      const elementErrors = [];
+      input.forEach((element, index) => {
+        try {
+          const result = elementValidator(element);
+          if (result && !result.isValid && result.errors) {
+            elementErrors.push(...result.errors.map(err => `Item ${index + 1}: ${err}`));
+          }
+        } catch (error) {
+          elementErrors.push(`Item ${index + 1}: validation error`);
+        }
+      });
+      
+      if (elementErrors.length > 0) {
+        errors.push(...elementErrors);
+        return { isValid: false, errors };
+      }
+    }
+    
+    return {
+      isValid: true,
+      value: input,
+      errors: []
+    };
+  }
+};
+
+// =============================================================================
+// ERROR HANDLING UTILITIES
+// =============================================================================
+
+/**
+ * Utilities for consistent error handling and recovery patterns
+ * 
+ * These utilities provide standardized error handling, logging, and recovery
+ * strategies to reduce code duplication and improve consistency.
+ * 
+ * @namespace ErrorUtils
+ */
+export const ErrorUtils = {
+  /**
+   * Safe execution wrapper with automatic error handling and logging
+   * @param {Function} fn - Function to execute safely
+   * @param {Object} options - Error handling options
+   * @param {string} [options.context='operation'] - Context for error messages
+   * @param {Function} [options.fallback] - Fallback function on error
+   * @param {boolean} [options.suppressErrors=false] - Whether to suppress error notifications
+   * @returns {Promise<any>|any} Result of function execution or fallback
+   */
+  safeExecute: async (fn, options = {}) => {
+    const { context = 'operation', fallback, suppressErrors = false } = options;
+    
+    try {
+      return await fn();
+    } catch (error) {
+      Logger.error(`${context} failed:`, error);
+      
+      if (fallback && typeof fallback === 'function') {
+        try {
+          return await fallback(error);
+        } catch (fallbackError) {
+          Logger.error(`${context} fallback also failed:`, fallbackError);
+        }
+      }
+      
+      if (!suppressErrors) {
+        // Could integrate with notification system if available
+        Logger.warn(`${context} encountered an error - check console for details`);
+      }
+      
+      return null;
+    }
+  },
+  
+  /**
+   * Validate and execute DOM operations with error recovery
+   * @param {Function} operation - DOM operation to execute
+   * @param {Object} options - Operation options
+   * @param {string} [options.context='DOM operation'] - Context for error messages
+   * @param {boolean} [options.skipValidation=false] - Skip DOM validation
+   * @returns {Promise<boolean>} True if operation succeeded
+   */
+  safeDOMOperation: async (operation, options = {}) => {
+    const { context = 'DOM operation', skipValidation = false } = options;
+    
+    if (!skipValidation && typeof document === 'undefined') {
+      Logger.warn(`${context} skipped - DOM not available`);
+      return false;
+    }
+    
+    return await ErrorUtils.safeExecute(
+      operation,
+      {
+        context,
+        fallback: () => {
+          Logger.warn(`${context} failed but application continues`);
+          return false;
+        },
+        suppressErrors: true
+      }
+    ) !== null;
+  },
+  
+  /**
+   * Safe localStorage operations with fallback handling
+   * @param {Function} operation - Storage operation to execute
+   * @param {Object} options - Operation options
+   * @param {any} [options.fallbackValue] - Value to return on failure
+   * @param {string} [options.context='storage operation'] - Context for error messages
+   * @returns {any} Operation result or fallback value
+   */
+  safeStorage: (operation, options = {}) => {
+    const { fallbackValue = null, context = 'storage operation' } = options;
+    
+    return ErrorUtils.safeExecute(
+      operation,
+      {
+        context,
+        fallback: () => fallbackValue,
+        suppressErrors: true
+      }
+    );
+  }
+};
+
+// =============================================================================
+// UI STATE MANAGEMENT UTILITIES
+// =============================================================================
+
+/**
+ * Utilities for managing common UI state patterns and interactions
+ * 
+ * These utilities provide reusable patterns for modal management,
+ * form handling, and other common UI operations.
+ * 
+ * @namespace UIUtils
+ */
+export const UIUtils = {
+  /**
+   * Create a reusable modal state manager for consistent modal interactions
+   * 
+   * @param {Object} options - Modal configuration options
+   * @param {string} options.modalSelector - CSS selector for modal element
+   * @param {string} [options.openClass='open'] - CSS class to add when modal is open
+   * @param {boolean} [options.closeOnBackdrop=true] - Whether to close on backdrop click
+   * @param {boolean} [options.closeOnEscape=true] - Whether to close on Escape key
+   * @returns {Object} Modal manager with show/hide methods
+   */
+  createModalState: (options) => {
+    const { modalSelector, openClass = 'open', closeOnBackdrop = true, closeOnEscape = true } = options;
+    let isOpen = false;
+    let modal = null;
+    
+    const show = () => {
+      modal = $(modalSelector);
+      if (!modal) {
+        Logger.warn(`Modal not found: ${modalSelector}`);
+        return false;
+      }
+      
+      isOpen = true;
+      DOMUtils.addClass(modal, openClass);
+      DOMUtils.setAttributes(modal, { 'aria-hidden': 'false' });
+      
+      return true;
+    };
+    
+    const hide = () => {
+      if (!modal || !isOpen) return false;
+      
+      isOpen = false;
+      DOMUtils.removeClass(modal, openClass);
+      DOMUtils.setAttributes(modal, { 'aria-hidden': 'true' });
+      
+      return true;
+    };
+    
+    const toggle = () => isOpen ? hide() : show();
+    
+    // Setup event handlers if enabled
+    if (closeOnEscape) {
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isOpen) {
+          hide();
+        }
+      });
+    }
+    
+    if (closeOnBackdrop) {
+      document.addEventListener('click', (e) => {
+        if (isOpen && modal && e.target === modal) {
+          hide();
+        }
+      });
+    }
+    
+    return { show, hide, toggle, isOpen: () => isOpen };
+  },
+  
+  /**
+   * Create a form validation manager with common patterns
+   * 
+   * @param {Object} options - Form configuration
+   * @param {string} options.formSelector - CSS selector for form element
+   * @param {Object} options.fields - Field validation configuration
+   * @param {Function} [options.onSubmit] - Submit handler
+   * @param {Function} [options.onValidation] - Validation handler
+   * @returns {Object} Form manager with validation methods
+   */
+  createFormState: (options) => {
+    const { formSelector, fields, onSubmit, onValidation } = options;
+    const form = $(formSelector);
+    
+    if (!form) {
+      Logger.warn(`Form not found: ${formSelector}`);
+      return null;
+    }
+    
+    const validateField = (fieldName, value) => {
+      const fieldConfig = fields[fieldName];
+      if (!fieldConfig) return { isValid: true, errors: [] };
+      
+      return ValidationUtils.validateTextInput(value, {
+        maxLength: fieldConfig.maxLength,
+        allowEmpty: fieldConfig.allowEmpty,
+        fieldName: fieldConfig.displayName || fieldName
+      });
+    };
+    
+    const validateAll = () => {
+      const results = {};
+      let isFormValid = true;
+      
+      Object.keys(fields).forEach(fieldName => {
+        const fieldElement = form.querySelector(`[name="${fieldName}"]`) || 
+                          form.querySelector(`#${fieldName}`);
+        
+        if (fieldElement) {
+          const validation = validateField(fieldName, fieldElement.value);
+          results[fieldName] = validation;
+          
+          if (!validation.isValid) {
+            isFormValid = false;
+          }
+        }
+      });
+      
+      if (onValidation) {
+        onValidation(results, isFormValid);
+      }
+      
+      return { isValid: isFormValid, fields: results };
+    };
+    
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      const validation = validateAll();
+      
+      if (validation.isValid && onSubmit) {
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        onSubmit(data, validation);
+      }
+    };
+    
+    // Setup form submission handler
+    form.addEventListener('submit', handleSubmit);
+    
+    return { validateField, validateAll, form };
+  },
+  
+  /**
+   * Create a loading state manager for async operations
+   * 
+   * @param {Object} options - Loading state configuration
+   * @param {string} [options.loadingClass='loading'] - CSS class for loading state
+   * @param {string} [options.disabledClass='disabled'] - CSS class for disabled state
+   * @returns {Object} Loading state manager
+   */
+  createLoadingState: (options = {}) => {
+    const { loadingClass = 'loading', disabledClass = 'disabled' } = options;
+    let isLoading = false;
+    const trackedElements = new Set();
+    
+    const setLoading = (elements, loading = true) => {
+      const elementList = Array.isArray(elements) ? elements : [elements];
+      
+      elementList.forEach(elementOrSelector => {
+        const element = typeof elementOrSelector === 'string'
+          ? $(elementOrSelector)
+          : elementOrSelector;
+        
+        if (!element) return;
+        
+        if (loading) {
+          trackedElements.add(element);
+          DOMUtils.addClass(element, loadingClass, disabledClass);
+          element.disabled = true;
+        } else {
+          trackedElements.delete(element);
+          DOMUtils.removeClass(element, loadingClass, disabledClass);
+          element.disabled = false;
+        }
+      });
+      
+      isLoading = loading;
+    };
+    
+    const clearAll = () => {
+      trackedElements.forEach(element => {
+        DOMUtils.removeClass(element, loadingClass, disabledClass);
+        element.disabled = false;
+      });
+      trackedElements.clear();
+      isLoading = false;
+    };
+    
+    return {
+      start: (elements) => setLoading(elements, true),
+      stop: (elements) => elements ? setLoading(elements, false) : clearAll(),
+      isLoading: () => isLoading
+    };
+  }
+};
+
 export const validateItem = (item) => {
   const errors = [];
   
