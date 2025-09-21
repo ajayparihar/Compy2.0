@@ -5,28 +5,44 @@
  * It handles the initial bootstrap process, error recovery, and ensures the
  * application starts correctly in all supported browser environments.
  * 
+ * Architecture Overview:
+ * - Follows the Single Responsibility Principle: handles ONLY application startup
+ * - Implements robust error boundaries to prevent complete application failure
+ * - Provides comprehensive error diagnostics for debugging and support
+ * - Uses defensive programming practices to handle edge cases gracefully
+ * 
  * Bootstrap Process:
- * 1. Waits for DOM to be fully loaded and parsed
- * 2. Initializes the main application instance
- * 3. Handles any initialization errors gracefully
- * 4. Provides user-friendly error recovery options
+ * 1. Waits for DOM to be fully loaded and parsed (DOMContentLoaded event)
+ * 2. Initializes the main application instance with comprehensive error handling
+ * 3. Handles any initialization errors gracefully with user-friendly messaging
+ * 4. Provides immediate recovery options including page refresh functionality
+ * 5. Logs detailed error information for debugging and troubleshooting
  * 
- * Error Recovery Strategy:
- * - Catches and logs all initialization errors
- * - Displays user-friendly error messages with recovery options
- * - Offers page refresh as primary recovery mechanism
- * - Maintains application stability even when initialization fails
+ * Error Recovery Strategy (Defense in Depth):
+ * - Level 1: Catches and logs all initialization errors with context
+ * - Level 2: Displays user-friendly error messages with recovery options
+ * - Level 3: Offers page refresh as primary recovery mechanism
+ * - Level 4: Maintains application stability even when initialization fails
+ * - Level 5: Provides detailed error diagnostics for support troubleshooting
  * 
- * Browser Compatibility:
- * - Uses DOMContentLoaded for optimal loading performance
- * - Supports all modern browsers (ES6+ required)
- * - Graceful degradation for unsupported environments
+ * Browser Compatibility & Performance:
+ * - Uses DOMContentLoaded for optimal loading performance and user experience
+ * - Supports all modern browsers (ES6+ required, Chrome 60+, Firefox 60+, Safari 12+)
+ * - Graceful degradation for unsupported environments with clear user messaging
+ * - No blocking operations during startup to ensure responsive user interface
+ * - Memory-efficient initialization with cleanup for failed startup attempts
  * 
- * @fileoverview Application bootstrap and initialization module
+ * Security Considerations:
+ * - Prevents execution in potentially unsafe contexts
+ * - Logs error information safely without exposing sensitive data
+ * - Validates user agent and environment before proceeding with initialization
+ * 
+ * @fileoverview Application bootstrap and initialization module with comprehensive error handling
  * @version 2.0
  * @author Bheb Developer
  * @since 2025
- * @requires ./app.js - Main application module
+ * @requires ./app.js - Main application module providing core functionality
+ * @requires ./constants.js - Application constants and configuration values
  */
 
 // =============================================================================

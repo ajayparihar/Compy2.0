@@ -275,17 +275,100 @@ export class ModalManager {
   }
 
   /**
-   * Check if an element is visible
+   * Check if an element is visible and can receive focus
    * 
-   * @param {HTMLElement} element - Element to check
-   * @returns {boolean} True if element is visible
+   * This method performs comprehensive visibility checks that go beyond simple
+   * style properties to determine if an element can realistically receive focus
+   * and be interacted with by users.
+   * 
+   * Visibility Criteria Checked:
+   * - Display property is not 'none' (element is rendered)
+   * - Visibility property is not 'hidden' (element is visible)
+   * - Opacity is greater than 0 (element is not transparent)
+   * - Element dimensions are greater than 0 (element has size)
+   * - Element is not disabled (for form elements)
+   * - Element is within the viewport (not scrolled out of view)
+   * 
+   * Use Cases:
+   * - Determining focus targets for modal initialization
+   * - Validating interactive elements during focus trapping
+   * - Accessibility compliance for keyboard navigation
+   * 
+   * @param {HTMLElement} element - Element to check for visibility and focusability
+   * @returns {boolean} True if element is visible and can be focused
    * @private
    */
   isVisible(element) {
-    const style = window.getComputedStyle(element);
-    return style.display !== 'none' && 
-           style.visibility !== 'hidden' && 
-           style.opacity !== '0';
+    // ELEMENT VALIDATION: Ensure we have a valid element to check
+    if (!element || !element.nodeType || element.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+
+    // COMPUTED STYLE CHECK: Get current computed styles
+    let computedStyle;
+    try {
+      computedStyle = window.getComputedStyle(element);
+    } catch (error) {
+      // Handle edge cases where getComputedStyle might fail
+      console.warn('Could not get computed style for element:', error);
+      return false;
+    }
+
+    // BASIC VISIBILITY: Check fundamental CSS visibility properties
+    if (computedStyle.display === 'none' || 
+        computedStyle.visibility === 'hidden' || 
+        computedStyle.opacity === '0') {
+      return false;
+    }
+
+    // DIMENSIONS CHECK: Element must have actual size to be focusable
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      return false;
+    }
+
+    // FORM ELEMENT STATE: Check if form element is disabled
+    if (element.disabled === true) {
+      return false;
+    }
+
+    // PARENT VISIBILITY: Recursively check parent elements for visibility
+    // An element can be visible but have a hidden parent
+    let parent = element.parentElement;
+    while (parent && parent !== document.body) {
+      try {
+        const parentStyle = window.getComputedStyle(parent);
+        if (parentStyle.display === 'none' || 
+            parentStyle.visibility === 'hidden' || 
+            parentStyle.opacity === '0') {
+          return false;
+        }
+      } catch (error) {
+        // If we can't check parent styles, assume visible to avoid false negatives
+        break;
+      }
+      parent = parent.parentElement;
+    }
+
+    // VIEWPORT CHECK: Element should be at least partially visible in viewport
+    // This prevents focusing elements that are scrolled completely out of view
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    
+    // Element is considered visible if any part is within the viewport
+    if (rect.bottom < 0 || rect.top > viewportHeight || 
+        rect.right < 0 || rect.left > viewportWidth) {
+      return false;
+    }
+
+    // ACCESSIBILITY ATTRIBUTES: Check for accessibility-specific hiding
+    if (element.getAttribute('aria-hidden') === 'true' || 
+        element.getAttribute('hidden') !== null) {
+      return false;
+    }
+
+    // SUCCESS: Element passes all visibility and focusability checks
+    return true;
   }
 
   /**

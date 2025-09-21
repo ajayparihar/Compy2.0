@@ -768,23 +768,40 @@ class CompyApp {
   }
 
   /**
-   * Render the visible list of cards from state.
-   * Uses requestAnimationFrame to batch DOM work for smooth updates.
+   * Render the visible list of cards from state with comprehensive DOM optimization
    * 
-   * Rendering Algorithm:
-   * 1. Filter items based on search query and active tags
-   * 2. Determine appropriate empty state (welcome vs no-results)
-   * 3. Use requestAnimationFrame for smooth, non-blocking DOM updates
-   * 4. Create card elements with event delegation for performance
-   * 5. Apply search highlighting and accessibility attributes
+   * This method is the core of the application's UI rendering system. It transforms
+   * the application state into a visual representation while maintaining optimal
+   * performance through advanced DOM manipulation techniques.
    * 
-   * Performance Features:
-   * - Batched DOM updates prevent layout thrashing
-   * - Minimal DOM queries through efficient selectors
-   * - Event delegation reduces memory usage
-   * - Conditional rendering avoids unnecessary work
+   * Rendering Algorithm (5-Phase Process):
+   * 1. FILTERING: Apply search query and tag filters to determine visible items
+   * 2. SORTING: Order items by position property to maintain custom user ordering
+   * 3. STATE DETECTION: Determine appropriate UI state (content, welcome, no-results)
+   * 4. DOM MANIPULATION: Use requestAnimationFrame for smooth, non-blocking updates
+   * 5. POST-PROCESSING: Setup drag/drop, restore scroll, update accessibility
    * 
-   * @param {Object} state - Current application state
+   * Performance Optimizations:
+   * - Batched DOM updates prevent layout thrashing and visual glitches
+   * - requestAnimationFrame ensures rendering happens at optimal 60fps timing
+   * - Minimal DOM queries through efficient cached selectors
+   * - Event delegation reduces memory usage and improves performance
+   * - Conditional rendering avoids unnecessary DOM work for empty states
+   * - Scroll position preservation prevents jarring user experience
+   * 
+   * Accessibility Features:
+   * - Proper ARIA attributes for screen readers
+   * - Keyboard navigation support through card indexing
+   * - Focus management during re-renders
+   * - Screen reader announcements for state changes
+   * 
+   * State Management Integration:
+   * - Maintains visual selection state across re-renders
+   * - Synchronizes drag-and-drop availability with filter state
+   * - Updates UI to reflect current search/filter criteria
+   * - Preserves scroll position during content updates
+   * 
+   * @param {Object} state - Current application state containing items, search, filters
    */
   renderCards(state) {
     const container = $('#cards');
@@ -1110,9 +1127,14 @@ class CompyApp {
    * @param {Object} item - Item backing the card
    */
   setupCardEventHandlers(card, item) {
-    // Click to select card and copy (but not on action buttons)
+    // Click to select card and copy (but not on action buttons or when expanded)
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
+        // Skip copy functionality when card is expanded
+        if (card.classList.contains('expanded')) {
+          return;
+        }
+        
         // Select the clicked card (suppress notification for clicks)
         const cardIndex = parseInt(card.dataset.cardIndex);
         if (!isNaN(cardIndex)) {
@@ -1139,8 +1161,12 @@ class CompyApp {
       switch (e.key) {
         case ' ':
         case 'Enter':
-          // Space or Enter to copy content or start reorder mode
+          // Space or Enter to copy content (unless card is expanded)
           if (!card.hasAttribute('aria-grabbed') || card.getAttribute('aria-grabbed') === 'false') {
+            // Skip copy functionality when card is expanded
+            if (card.classList.contains('expanded')) {
+              return;
+            }
             e.preventDefault();
             this.clipboard.copy(item.text);
           }
@@ -1205,9 +1231,17 @@ class CompyApp {
         
         switch (action) {
           case 'edit':
+            // Collapse expanded card first if it's expanded
+            if (card.classList.contains('expanded') && this.expandableCardManager) {
+              this.expandableCardManager.collapse();
+            }
             this.openItemModal(item.id);
             break;
           case 'delete':
+            // Collapse expanded card first if it's expanded
+            if (card.classList.contains('expanded') && this.expandableCardManager) {
+              this.expandableCardManager.collapse();
+            }
             this.removeItem(item.id);
             break;
           case 'copy':
@@ -1841,12 +1875,41 @@ class CompyApp {
   }
 
   /**
-   * Generate CSV rows from application state
+   * Generate CSV rows from application state with comprehensive data processing
+   * 
+   * This method transforms the application state into a structured CSV format that includes
+   * both metadata (profile information) and item data. The CSV structure follows RFC 4180
+   * standards for maximum compatibility with spreadsheet applications.
+   * 
+   * CSV Structure Generated:
+   * 1. Metadata Section:
+   *    - Row 1: "profileName" (header)
+   *    - Row 2: Actual profile name (escaped)
+   *    - Row 3: Empty row (visual separator)
+   * 
+   * 2. Data Section:
+   *    - Row 4: Column headers (text, desc, sensitive, tags, position)
+   *    - Row 5+: Item data rows with proper escaping
+   * 
+   * Data Processing Features:
+   * - Validates state structure before processing to prevent runtime errors
+   * - Filters out invalid items that lack required properties (id, text, desc)
+   * - Properly escapes special characters using csvEscape utility function
+   * - Converts boolean sensitive flag to "1"/"0" for cross-platform compatibility
+   * - Joins tags array with pipe separator for compact representation
+   * - Preserves positional ordering through position field
+   * 
+   * Error Handling:
+   * - Validates application state object before processing
+   * - Gracefully handles missing or malformed item properties
+   * - Returns detailed error information for debugging
+   * - Catches and logs any unexpected processing errors
    * 
    * @returns {{success: boolean, rows?: Array[], itemCount?: number, error?: string}} Generation result
    * @private
    */
   generateCSVRows() {
+    // STATE VALIDATION: Ensure we have valid state to work with
     const state = getState();
     
     if (!state || typeof state !== 'object') {
@@ -1856,35 +1919,61 @@ class CompyApp {
       };
     }
     
+    // DATA EXTRACTION AND FILTERING: Get valid items for export
+    // Only include items that have the required structure to prevent CSV corruption
     const items = Array.isArray(state.items) ? state.items : [];
-    const validItems = items.filter(item => item && typeof item === 'object' && item.id);
+    const validItems = items.filter(item => 
+      item && 
+      typeof item === 'object' && 
+      item.id &&           // Must have unique identifier
+      typeof item.text === 'string' &&   // Must have snippet content
+      typeof item.desc === 'string'      // Must have description
+    );
     
     try {
+      // CSV STRUCTURE GENERATION: Build the complete CSV row structure
       const rows = [
-        // Metadata section
-        ['profileName'],
-        [csvEscape(state.profileName || '')],
-        [''], // Empty row separator
+        // METADATA SECTION: Profile information block
+        // This allows users to identify which profile the export came from
+        ['profileName'],  // Header row for profile metadata
+        [csvEscape(state.profileName || '')],  // Actual profile name (escaped for safety)
+        [''],            // Empty row separator for visual clarity
         
-        // Data headers
+        // DATA SECTION HEADERS: Column definitions for import compatibility
+        // These headers must match the import parsing logic exactly
         ['text', 'desc', 'sensitive', 'tags', 'position'],
         
-        // Data rows
+        // DATA ROWS: Transform each valid item into CSV row format
         ...validItems.map(item => [
+          // SNIPPET CONTENT: Main text content with CSV escaping
           csvEscape(item.text || ''),
+          
+          // DESCRIPTION: User-provided description with CSV escaping
           csvEscape(item.desc || ''),
+          
+          // SENSITIVITY FLAG: Convert boolean to string for cross-platform compatibility
+          // Using "1"/"0" format as it's universally recognized in spreadsheet apps
           item.sensitive ? '1' : '0',
+          
+          // TAGS: Join array into pipe-separated string for compact storage
+          // Pipe separator (|) is chosen as it's rarely used in tag names
           csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : ''),
+          
+          // POSITION: Ordering information for maintaining snippet sequence
+          // Fallback to 0 if position is not set (for backwards compatibility)
           item.position || 0
         ])
       ];
       
+      // SUCCESS RESULT: Return structured data with metadata
       return {
         success: true,
-        rows,
-        itemCount: validItems.length
+        rows,                        // Complete CSV row structure ready for conversion
+        itemCount: validItems.length // Number of items included in export
       };
+      
     } catch (error) {
+      // ERROR HANDLING: Log detailed error information for debugging
       Logger.error('CSV row generation failed:', error);
       return {
         success: false,
@@ -3020,24 +3109,30 @@ class CompyApp {
     }
     
     // Card navigation shortcuts
+    console.log('Key pressed:', e.key, 'Target:', e.target.tagName);
     switch (e.key) {
       case 'ArrowUp':
+        console.log('ArrowUp pressed - calling selectCardUp()');
         e.preventDefault();
         this.selectCardUp();
         break;
       case 'ArrowDown':
+        console.log('ArrowDown pressed - calling selectCardDown()');
         e.preventDefault();
         this.selectCardDown();
         break;
       case 'ArrowLeft':
+        console.log('ArrowLeft pressed - calling selectCardLeft()');
         e.preventDefault();
         this.selectCardLeft();
         break;
       case 'ArrowRight':
+        console.log('ArrowRight pressed - calling selectCardRight()');
         e.preventDefault();
         this.selectCardRight();
         break;
       case 'Escape':
+        console.log('Escape pressed - clearing selection');
         this.clearCardSelection();
         break;
     }
@@ -3265,15 +3360,20 @@ class CompyApp {
    * @returns {void}
    */
   updateCardSelection() {
-    // Remove selection class from all cards using optimized DOM batch operation
-    DOMUtils.batchUpdate([
-      () => this.cardElements.forEach(card => DOMUtils.removeClass(card, 'selected')),
-      () => {
-        if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
-          DOMUtils.addClass(this.cardElements[this.selectedCardIndex], 'selected');
-        }
-      }
-    ]);
+    // Remove selection class from all cards (direct DOM manipulation for immediate effect)
+    this.cardElements.forEach(card => card.classList.remove('selected'));
+    
+    // Apply selection class to the currently selected card
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+      const selectedCard = this.cardElements[this.selectedCardIndex];
+      selectedCard.classList.add('selected');
+      
+      // Debug logging to verify selection is working
+      console.log(`Card selected: index ${this.selectedCardIndex}, element:`, selectedCard);
+      console.log('Selected card classes:', selectedCard.className);
+    } else {
+      console.log('No card selected (cleared selection)');
+    }
   }
   
   /**
@@ -3362,17 +3462,14 @@ class CompyApp {
   }
 
   /**
-   * Compute target index when moving left within the same row, with wrapping.
+   * Compute target index when moving left through the entire grid.
    * @param {number} currentIndex
-   * @param {number} columns
    * @param {number} total
    * @returns {number}
    */
-  indexLeft(currentIndex, columns, total) {
-    if (currentIndex % columns === 0) {
-      const row = Math.floor(currentIndex / columns);
-      const rightmostInRow = Math.min((row + 1) * columns - 1, total - 1);
-      return rightmostInRow;
+  indexLeft(currentIndex, total) {
+    if (currentIndex <= 0) {
+      return total - 1; // Wrap to last card
     }
     return currentIndex - 1;
   }
@@ -3387,6 +3484,19 @@ class CompyApp {
     if (currentIndex < 0) return 0;
     const next = currentIndex + 1;
     return next < total ? next : 0;
+  }
+
+  /**
+   * Compute target index when moving right through the entire grid.
+   * @param {number} currentIndex
+   * @param {number} total
+   * @returns {number}
+   */
+  indexRight(currentIndex, total) {
+    if (currentIndex >= total - 1) {
+      return 0; // Wrap to first card
+    }
+    return currentIndex + 1;
   }
 
   /**
@@ -3428,10 +3538,12 @@ class CompyApp {
    * @returns {void}
    */
   selectCardUp() {
+    console.log('selectCardUp called, cardElements.length:', this.cardElements.length);
     if (this.cardElements.length === 0) return;
     const columns = this.calculateGridColumns();
     const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
     const target = this.wrapIndexUp(currentIndex, columns, this.cardElements.length);
+    console.log(`Moving up: currentIndex ${currentIndex} -> target ${target}`);
     this.selectCard(target);
   }
   
@@ -3450,28 +3562,26 @@ class CompyApp {
   }
   
   /**
-   * Move the selection left by one column (wraps to the rightmost column in the row).
+   * Move the selection left through the entire grid (wraps to last card when at first).
    *
    * @returns {void}
    */
   selectCardLeft() {
     if (this.cardElements.length === 0) return;
-    const columns = this.calculateGridColumns();
     const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
-    const target = this.indexLeft(currentIndex, columns, this.cardElements.length);
+    const target = this.indexLeft(currentIndex, this.cardElements.length);
     this.selectCard(target);
   }
   
   /**
-   * Move the selection right linearly through all cards (wraps to first at end).
+   * Move the selection right through the entire grid (wraps to first card when at last).
    *
    * @returns {void}
    */
   selectCardRight() {
     if (this.cardElements.length === 0) return;
     const currentIndex = this.selectedCardIndex === -1 ? -1 : this.selectedCardIndex;
-    if (UI_CONFIG.debug) console.log('→ Right navigation (linear): index', currentIndex, '/', this.cardElements.length);
-    const target = this.indexRightLinear(currentIndex, this.cardElements.length);
+    const target = this.indexRight(currentIndex, this.cardElements.length);
     this.selectCard(target);
   }
   
