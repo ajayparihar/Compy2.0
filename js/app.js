@@ -388,6 +388,38 @@ class CompyApp {
   }
 
   /**
+   * Announce a message to screen readers via the live region
+   * @param {string} message - Message to announce
+   * @param {string} [priority='polite'] - Announcement priority ('polite' or 'assertive')
+   */
+  announceToScreenReader(message, priority = 'polite') {
+    try {
+      const liveRegion = $('#liveRegion');
+      if (!liveRegion) {
+        Logger.warn('Live region not found; skipping screen reader announcement');
+        return;
+      }
+      
+      // Set the priority level
+      liveRegion.setAttribute('aria-live', priority);
+      
+      // Clear and set the message
+      liveRegion.textContent = '';
+      setTimeout(() => {
+        liveRegion.textContent = message;
+      }, 50);
+      
+      // Clear the message after it's been announced
+      setTimeout(() => {
+        liveRegion.textContent = '';
+      }, 3000);
+      
+    } catch (err) {
+      Logger.warn('Screen reader announcement error:', err);
+    }
+  }
+
+  /**
    * Initialize modal helpers and close-button behaviors.
    * Relies on [data-close-modal] attributes inside .modal elements.
    */
@@ -1033,7 +1065,7 @@ class CompyApp {
             ${ICONS.expand}
           </button>
           <button class="icon-btn collapse-action card-action-hidden" data-act="collapse" title="Collapse card" aria-label="Collapse card">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
               <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/>
               <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>
             </svg>
@@ -1060,7 +1092,7 @@ class CompyApp {
   generateCardCloseButtonHTML() {
     return `
       <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
           <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
@@ -1075,7 +1107,7 @@ class CompyApp {
   generateDragHandleHTML() {
     return `
       <button class="icon-btn drag-handle" title="Drag to reorder" aria-label="Drag to reorder">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" role="img">
           <circle cx="6" cy="8" r="1.5" fill="currentColor"/>
           <circle cx="12" cy="8" r="1.5" fill="currentColor"/>
           <circle cx="18" cy="8" r="1.5" fill="currentColor"/>
@@ -1500,6 +1532,9 @@ class CompyApp {
       const tags = Array.isArray(item.tags) ? item.tags : [];
       this.setTagChips(tags);
 
+      // Clear any existing form errors before opening
+      this.clearFormErrors();
+      
       // Modal Opening: Handle modal manager failures
       if (!this.modalManager) {
         Logger.error('Modal manager not initialized');
@@ -1571,6 +1606,10 @@ class CompyApp {
         }
         
         profileInput.value = state.profileName || '';
+        
+        // Clear any existing profile form errors
+        this.clearProfileFormErrors();
+        
         this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
       } catch (error) {
         Logger.error('Failed to open profile editor:', error);
@@ -1593,6 +1632,74 @@ class CompyApp {
   }
 
   /**
+   * Clear profile form errors
+   * @private
+   */
+  clearProfileFormErrors() {
+    const field = $('#profileNameInput');
+    if (field) {
+      field.removeAttribute('aria-invalid');
+      field.classList.remove('error');
+      
+      // Remove existing error message
+      const existingError = $('#profile-name-error');
+      if (existingError) {
+        existingError.remove();
+        
+        // Clean up aria-describedby
+        const currentDescribedBy = field.getAttribute('aria-describedby') || '';
+        const newDescribedBy = currentDescribedBy
+          .replace('profile-name-error', '')
+          .trim();
+        
+        if (newDescribedBy) {
+          field.setAttribute('aria-describedby', newDescribedBy);
+        } else {
+          field.removeAttribute('aria-describedby');
+        }
+      }
+    }
+  }
+  
+  /**
+   * Display profile validation error with ARIA support
+   * @private
+   * @param {string} errorMessage - Error message to display
+   */
+  displayProfileError(errorMessage) {
+    const field = $('#profileNameInput');
+    if (field) {
+      // Set aria-invalid
+      field.setAttribute('aria-invalid', 'true');
+      field.classList.add('error');
+      
+      // Create error message
+      const errorElement = document.createElement('div');
+      errorElement.id = 'profile-name-error';
+      errorElement.className = 'error-message';
+      errorElement.textContent = errorMessage;
+      errorElement.setAttribute('role', 'alert');
+      errorElement.setAttribute('aria-live', 'polite');
+      
+      // Insert error message after the field container
+      const fieldContainer = field.closest('.field');
+      if (fieldContainer) {
+        fieldContainer.appendChild(errorElement);
+      }
+      
+      // Associate error message with field
+      const currentDescribedBy = field.getAttribute('aria-describedby') || '';
+      const newDescribedBy = currentDescribedBy 
+        ? `${currentDescribedBy} profile-name-error`
+        : 'profile-name-error profileNameHelp';
+      field.setAttribute('aria-describedby', newDescribedBy);
+      
+      // Focus the field
+      setTimeout(() => field.focus(), 100);
+    }
+  }
+
+  /**
    * Validate and save profile name with comprehensive input validation
    * 
    * Validation Rules:
@@ -1604,41 +1711,42 @@ class CompyApp {
    */
   saveProfileWithValidation() {
     try {
-      const validation = ValidationUtils.validateElement('#profileNameInput', 'profile save');
-      if (!validation.isValid) {
-        Logger.error(validation.error);
+      // Clear any previous errors
+      this.clearProfileFormErrors();
+      
+      const profileInput = $('#profileNameInput');
+      if (!profileInput) {
         this.showNotification('Profile save failed: Input not found', 'error');
         return;
       }
-
-      const profileInput = validation.element;
+      
       const rawName = profileInput.value || '';
       
-      // Use centralized validation utility
-      const textValidation = ValidationUtils.validateTextInput(rawName, {
-        maxLength: 100,
-        allowEmpty: true,
-        fieldName: 'Profile name'
-      });
-      
-      if (!textValidation.isValid) {
-        this.showNotification(textValidation.errors[0], 'error');
+      // Validate length
+      if (rawName.length > 100) {
+        this.displayProfileError('Profile name cannot exceed 100 characters');
+        this.showNotification('Profile name too long', 'error');
+        this.announceToScreenReader('Profile name validation failed');
         return;
       }
       
-      const trimmedName = textValidation.value || '';
+      const trimmedName = rawName.trim();
       
       // Additional content validation for profile names
       const safePattern = /^[a-zA-Z0-9\s\-_.,']*$/;
       if (trimmedName.length > 0 && !safePattern.test(trimmedName)) {
+        this.displayProfileError('Profile name contains invalid characters. Only letters, numbers, spaces, and basic punctuation allowed.');
         this.showNotification('Profile name contains invalid characters', 'error');
+        this.announceToScreenReader('Profile name validation failed');
         return;
       }
 
       // XSS Prevention: Additional sanitization check
       const hasHtmlTags = /<[^>]*>/g.test(trimmedName);
       if (hasHtmlTags) {
+        this.displayProfileError('Profile name cannot contain HTML tags');
         this.showNotification('Profile name cannot contain HTML tags', 'error');
+        this.announceToScreenReader('Profile name validation failed');
         return;
       }
 
@@ -1651,10 +1759,12 @@ class CompyApp {
         ? `Profile updated to "${trimmedName}"`
         : 'Profile name cleared';
       this.showNotification(message, 'success');
+      this.announceToScreenReader(`Profile ${trimmedName ? 'updated' : 'cleared'} successfully`);
       
     } catch (error) {
       Logger.error('Profile save failed:', error);
       this.showNotification('Failed to save profile', 'error');
+      this.announceToScreenReader('Profile save failed');
     }
   }
 
@@ -2899,24 +3009,130 @@ class CompyApp {
   }
 
   /**
+   * Clear all validation error states from form fields
+   * @private
+   */
+  clearFormErrors() {
+    const fields = ['#itemText', '#itemDesc'];
+    
+    fields.forEach(selector => {
+      const field = $(selector);
+      if (field) {
+        field.removeAttribute('aria-invalid');
+        field.classList.remove('error');
+        
+        // Remove existing error message
+        const errorId = field.getAttribute('aria-describedby');
+        if (errorId && errorId.endsWith('-error')) {
+          const errorElement = $(`#${errorId}`);
+          if (errorElement && errorElement.classList.contains('error-message')) {
+            errorElement.remove();
+          }
+        }
+      }
+    });
+  }
+  
+  /**
+   * Display validation errors with proper ARIA attributes
+   * @private
+   * @param {Object} validation - Validation result from validateItem
+   */
+  displayFormErrors(validation) {
+    validation.errors.forEach((error, index) => {
+      // Determine which field the error relates to
+      let fieldSelector = null;
+      let fieldName = null;
+      
+      if (error.toLowerCase().includes('text')) {
+        fieldSelector = '#itemText';
+        fieldName = 'text';
+      } else if (error.toLowerCase().includes('description')) {
+        fieldSelector = '#itemDesc';
+        fieldName = 'desc';
+      }
+      
+      if (fieldSelector) {
+        const field = $(fieldSelector);
+        if (field) {
+          // Set aria-invalid to true
+          field.setAttribute('aria-invalid', 'true');
+          field.classList.add('error');
+          
+          // Create error message element
+          const errorId = `${fieldName}-error`;
+          const existingError = $(`#${errorId}`);
+          
+          if (!existingError) {
+            const errorElement = document.createElement('div');
+            errorElement.id = errorId;
+            errorElement.className = 'error-message';
+            errorElement.textContent = error;
+            errorElement.setAttribute('role', 'alert');
+            errorElement.setAttribute('aria-live', 'polite');
+            
+            // Insert error message after the field's container
+            const fieldContainer = field.closest('.field');
+            if (fieldContainer) {
+              fieldContainer.appendChild(errorElement);
+            }
+            
+            // Associate error message with field
+            const currentDescribedBy = field.getAttribute('aria-describedby') || '';
+            const newDescribedBy = currentDescribedBy ? 
+              `${currentDescribedBy} ${errorId}` : errorId;
+            field.setAttribute('aria-describedby', newDescribedBy);
+          }
+          
+          // Focus the first field with an error
+          if (index === 0) {
+            setTimeout(() => field.focus(), 100);
+          }
+        }
+      }
+    });
+  }
+
+  /**
    * Validate and persist the item currently in the edit form.
-   * Shows a notification on success or the first validation error.
+   * Shows validation errors with proper ARIA states and accessible error messages.
    */
   saveItem() {
+    // Clear any previous error states
+    this.clearFormErrors();
+    
     const text = $('#itemText').value.trim();
     const desc = $('#itemDesc').value.trim();
     const sensitive = $('#itemSensitive').checked;
     const tags = this.getTagsFromChips();
 
-    const validation = validateItem({ text, desc });
+    const validation = validateItem({ text, desc, sensitive, tags });
     if (!validation.isValid) {
-      this.showNotification(validation.errors[0], 'error');
+      // Display errors with ARIA support
+      this.displayFormErrors(validation);
+      
+      // Show notification for screen readers and visual users
+      const errorCount = validation.errors.length;
+      const errorMessage = errorCount === 1 
+        ? validation.errors[0]
+        : `${errorCount} errors found. Please check the form.`;
+      
+      this.showNotification(errorMessage, 'error');
+      
+      // Announce error to screen readers via live region
+      this.announceToScreenReader(
+        `Form has ${errorCount} error${errorCount > 1 ? 's' : ''}. Please review and correct.`
+      );
+      
       return;
     }
 
     upsertItem({ text, desc, sensitive, tags });
     this.modalManager.close('#itemModal');
-    this.showNotification('Snippet saved');
+    this.showNotification('Snippet saved', 'success');
+    
+    // Announce success to screen readers
+    this.announceToScreenReader('Snippet saved successfully');
   }
 
   /**

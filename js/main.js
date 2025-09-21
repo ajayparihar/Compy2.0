@@ -46,6 +46,55 @@
  */
 
 // =============================================================================
+// ACCESSIBILITY POLYFILLS
+// =============================================================================
+
+/**
+ * Focus-visible polyfill for better keyboard navigation accessibility
+ * 
+ * This polyfill ensures that focus indicators are only shown when navigating
+ * with the keyboard, not when clicking with a mouse. This improves the user
+ * experience for both keyboard and mouse users.
+ */
+(function() {
+  'use strict';
+  
+  let hadKeyboardEvent = true;
+  
+  function onPointerDown() {
+    hadKeyboardEvent = false;
+  }
+  
+  function onKeyDown(e) {
+    if (e.metaKey || e.altKey || e.ctrlKey) {
+      return;
+    }
+    hadKeyboardEvent = true;
+  }
+  
+  function onFocus(e) {
+    if (hadKeyboardEvent) {
+      e.target.classList.add('focus-visible');
+    }
+  }
+  
+  function onBlur(e) {
+    e.target.classList.remove('focus-visible');
+  }
+  
+  // Add event listeners
+  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('mousedown', onPointerDown, true);
+  document.addEventListener('pointerdown', onPointerDown, true);
+  document.addEventListener('touchstart', onPointerDown, true);
+  document.addEventListener('focus', onFocus, true);
+  document.addEventListener('blur', onBlur, true);
+  
+  // Mark body as js-focus-visible for CSS targeting
+  document.body.classList.add('js-focus-visible');
+})();
+
+// =============================================================================
 // APPLICATION IMPORTS
 // =============================================================================
 
