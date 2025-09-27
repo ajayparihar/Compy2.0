@@ -1122,15 +1122,26 @@ export const getAllTags = (items) => {
  * filterItems(items, 'python', ['js']); // Returns []
  */
 export const filterItems = (items, searchQuery = '', filterTags = []) => {
-  // INPUT VALIDATION AND SANITIZATION: Prevent errors from malformed data
+  // INPUT VALIDATION AND SANITIZATION: Comprehensive validation prevents runtime errors
+  // 
+  // ERROR HANDLING STRATEGY:
+  // - Level 1: Type validation with informative logging
+  // - Level 2: Early returns for performance optimization
+  // - Level 3: Per-item error handling to prevent single bad items from breaking entire filter
+  // - Level 4: Global exception handling with graceful fallback
+  // 
+  // VALIDATION RULES:
+  // - items: Must be an array (empty array is acceptable)
+  // - searchQuery: Must be string or convertible to string (null/undefined handled gracefully)
+  // - filterTags: Must be an array of strings (invalid tags are filtered out)
   try {
-    // TYPE SAFETY: Ensure items is an array
+    // TYPE SAFETY: Ensure items is an array with informative error logging
     if (!Array.isArray(items)) {
       Logger.warn('filterItems: items parameter must be an array, received:', typeof items);
-      return [];
+      return []; // Graceful fallback: return empty array instead of crashing
     }
     
-    // PERFORMANCE OPTIMIZATION: Early return for empty inputs
+    // PERFORMANCE OPTIMIZATION: Early return for empty inputs to avoid unnecessary processing
     if (items.length === 0) {
       return [];
     }
@@ -1224,55 +1235,6 @@ export const filterItems = (items, searchQuery = '', filterTags = []) => {
   }
 };
 
-/**
- * Validate item data structure and content for consistency and security
- * 
- * This function performs comprehensive validation of item objects to ensure
- * they meet the application's requirements and security standards. It checks
- * both structure (required fields, data types) and content (length limits,
- * character restrictions).
- * 
- * Validation Rules:
- * - text: Required, non-empty string, max 500 characters
- * - desc: Required, non-empty string, max 500 characters  
- * - tags: Optional array of strings, max 20 tags, max 30 chars per tag
- * - sensitive: Optional boolean, defaults to false
- * 
- * Security Considerations:
- * - Prevents XSS by limiting content length
- * - Validates data types to prevent injection
- * - Sanitizes tag content
- * 
- * @param {Object} item - Item object to validate
- * @param {string} item.text - Main snippet content
- * @param {string} item.desc - Description of the snippet
- * @param {boolean} [item.sensitive] - Whether snippet contains sensitive data
- * @param {string[]} [item.tags] - Array of category tags
- * @returns {{isValid: boolean, errors: string[]}} Validation result
- * 
- * @example
- * // Valid item
- * const result = validateItem({
- *   text: 'console.log("Hello")',
- *   desc: 'Basic logging',
- *   tags: ['javascript', 'debug']
- * });
- * // Result: { isValid: true, errors: [] }
- * 
- * // Invalid item
- * const result = validateItem({
- *   text: '', // Empty - invalid
- *   desc: 'Some description'
- * });
- * // Result: { isValid: false, errors: ['Text is required'] }
- * 
- * // Check before saving
- * if (validateItem(newItem).isValid) {
- *   saveItem(newItem);
- * } else {
- *   showErrors(validateItem(newItem).errors);
- * }
- */
 // =============================================================================
 // LOGGING AND DEBUG UTILITIES
 // =============================================================================
@@ -1506,6 +1468,230 @@ export const DOMUtils = {
     }
     
     return true;
+  }
+};
+
+// =============================================================================
+// UI GENERATION UTILITIES
+// =============================================================================
+
+/**
+ * Generate consistent SVG icon HTML with standardized attributes
+ * 
+ * This utility promotes DRY principles by centralizing SVG icon generation
+ * across the application. It ensures consistent accessibility attributes,
+ * sizing, and styling for all icon elements.
+ * 
+ * @param {Object} options - Icon configuration options
+ * @param {string} options.paths - SVG path data or content
+ * @param {string} [options.viewBox='0 0 24 24'] - SVG viewBox attribute
+ * @param {number} [options.width=20] - Icon width in pixels
+ * @param {number} [options.height=20] - Icon height in pixels
+ * @param {string} [options.className=''] - Additional CSS classes
+ * @param {string} [options.title] - Accessible title for screen readers
+ * @returns {string} Complete SVG element HTML
+ * 
+ * @example
+ * // Basic icon
+ * const closeIcon = createSVGIcon({
+ *   paths: '<path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+ * });
+ * 
+ * // Icon with custom sizing and accessibility
+ * const dragIcon = createSVGIcon({
+ *   paths: '<circle cx="6" cy="8" r="1.5" fill="currentColor"/>',
+ *   width: 16,
+ *   height: 16,
+ *   title: 'Drag to reorder'
+ * });
+ */
+export const createSVGIcon = (options = {}) => {
+  const {
+    paths = '',
+    viewBox = '0 0 24 24',
+    width = 20,
+    height = 20,
+    className = '',
+    title
+  } = options;
+  
+  // ACCESSIBILITY: Ensure proper attributes for screen readers
+  const titleAttribute = title ? `<title>${escapeHtml(title)}</title>` : '';
+  const ariaLabel = title ? `aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"';
+  const classAttribute = className ? ` class="${escapeHtml(className)}"` : '';
+  
+  return `<svg viewBox="${escapeHtml(viewBox)}" width="${width}" height="${height}" ${ariaLabel} focusable="false" role="img"${classAttribute}>
+    ${titleAttribute}
+    ${paths}
+  </svg>`;
+};
+
+/**
+ * Generate consistent button HTML with icon and accessibility attributes
+ * 
+ * This utility standardizes button creation across the application,
+ * ensuring consistent accessibility, styling, and interaction patterns.
+ * 
+ * @param {Object} options - Button configuration options
+ * @param {string} options.className - CSS classes for the button
+ * @param {string} [options.title] - Tooltip text
+ * @param {string} [options.ariaLabel] - ARIA label (defaults to title)
+ * @param {string} [options.dataAct] - data-act attribute value
+ * @param {string} [options.iconSVG] - SVG icon content
+ * @param {string} [options.textContent] - Button text content
+ * @returns {string} Complete button element HTML
+ * 
+ * @example
+ * const deleteBtn = createIconButton({
+ *   className: 'icon-btn',
+ *   title: 'Delete snippet',
+ *   dataAct: 'delete',
+ *   iconSVG: ICONS.delete
+ * });
+ */
+export const createIconButton = (options = {}) => {
+  const {
+    className = 'icon-btn',
+    title = '',
+    ariaLabel = title,
+    dataAct,
+    iconSVG = '',
+    textContent = ''
+  } = options;
+  
+  // Build attributes
+  const attributes = [];
+  if (className) attributes.push(`class="${escapeHtml(className)}"`);
+  if (title) attributes.push(`title="${escapeHtml(title)}"`);
+  if (ariaLabel) attributes.push(`aria-label="${escapeHtml(ariaLabel)}"`);
+  if (dataAct) attributes.push(`data-act="${escapeHtml(dataAct)}"`);
+  
+  const attributeString = attributes.join(' ');
+  const content = iconSVG + (textContent ? escapeHtml(textContent) : '');
+  
+  return `<button ${attributeString}>${content}</button>`;
+};
+
+// =============================================================================
+// ERROR HANDLING UTILITIES
+// =============================================================================
+
+/**
+ * Comprehensive error handling utilities for robust application behavior
+ * 
+ * These utilities provide consistent error handling patterns across the application,
+ * with support for error recovery, user-friendly messaging, and detailed logging
+ * for debugging purposes.
+ * 
+ * @namespace ErrorUtils
+ */
+export const ErrorUtils = {
+  /**
+   * Execute a function with comprehensive error handling and recovery
+   * 
+   * This utility wraps function execution with try-catch blocks and provides
+   * configurable fallback behavior, logging, and user notification options.
+   * 
+   * @param {Function} operation - Function to execute safely
+   * @param {Object} [options={}] - Configuration options
+   * @param {string} [options.context] - Context description for error logging
+   * @param {Function} [options.fallback] - Fallback function to call on error
+   * @param {boolean} [options.silent=false] - Whether to suppress error logging
+   * @param {boolean} [options.rethrow=false] - Whether to rethrow errors after handling
+   * @returns {any} Result of the operation or fallback
+   * 
+   * @example
+   * // Basic safe execution
+   * const result = ErrorUtils.safeExecute(() => {
+   *   return riskyOperation();
+   * }, {
+   *   context: 'User data processing',
+   *   fallback: () => 'Default value'
+   * });
+   * 
+   * // With error recovery
+   * await ErrorUtils.safeExecute(async () => {
+   *   await saveToServer(data);
+   * }, {
+   *   context: 'Server sync',
+   *   fallback: (error) => {
+   *     Logger.warn('Server sync failed, saving locally:', error);
+   *     saveLocally(data);
+   *   }
+   * });
+   */
+  safeExecute: (operation, options = {}) => {
+    const {
+      context = 'Unknown operation',
+      fallback = null,
+      silent = false,
+      rethrow = false
+    } = options;
+    
+    try {
+      return operation();
+    } catch (error) {
+      // ERROR LOGGING: Provide detailed error information unless silenced
+      if (!silent) {
+        Logger.error(`Error in ${context}:`, {
+          message: error.message,
+          stack: error.stack,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // FALLBACK EXECUTION: Run fallback function if provided
+      if (typeof fallback === 'function') {
+        try {
+          return fallback(error);
+        } catch (fallbackError) {
+          Logger.error(`Fallback failed for ${context}:`, fallbackError);
+        }
+      }
+      
+      // ERROR PROPAGATION: Re-throw if requested
+      if (rethrow) {
+        throw error;
+      }
+      
+      return undefined;
+    }
+  },
+  
+  /**
+   * Create a safe version of an async function with error boundaries
+   * 
+   * @param {Function} asyncFn - Async function to make safe
+   * @param {Object} [options={}] - Safe execution options
+   * @returns {Function} Safe version of the async function
+   * 
+   * @example
+   * const safeApiCall = ErrorUtils.createSafeAsync(fetchUserData, {
+   *   context: 'User data fetch',
+   *   fallback: () => ({ error: 'Failed to load user data' })
+   * });
+   */
+  createSafeAsync: (asyncFn, options = {}) => {
+    return async (...args) => {
+      return ErrorUtils.safeExecute(() => asyncFn(...args), options);
+    };
+  },
+  
+  /**
+   * Validate and sanitize error messages for user display
+   * 
+   * @param {Error|string} error - Error object or message
+   * @param {string} [fallbackMessage='An unexpected error occurred'] - Fallback message
+   * @returns {string} Safe, user-friendly error message
+   */
+  getSafeErrorMessage: (error, fallbackMessage = 'An unexpected error occurred') => {
+    if (!error) return fallbackMessage;
+    
+    // Extract message from Error objects
+    const message = typeof error === 'string' ? error : error.message || fallbackMessage;
+    
+    // Basic sanitization to prevent XSS in error messages
+    return escapeHtml(message).slice(0, 200); // Limit length
   }
 };
 
@@ -1870,18 +2056,14 @@ export const ValidationUtils = {
 };
 
 // =============================================================================
-// ERROR HANDLING UTILITIES
+// ADDITIONAL ERROR HANDLING UTILITIES (Extension of ErrorUtils)
 // =============================================================================
 
 /**
- * Utilities for consistent error handling and recovery patterns
- * 
- * These utilities provide standardized error handling, logging, and recovery
- * strategies to reduce code duplication and improve consistency.
- * 
- * @namespace ErrorUtils
+ * Additional utilities for consistent error handling and recovery patterns
+ * extending the existing ErrorUtils namespace with more specialized functions.
  */
-export const ErrorUtils = {
+export const ErrorHandlingUtils = {
   /**
    * Safe execution wrapper with automatic error handling and logging
    * @param {Function} fn - Function to execute safely
@@ -1891,7 +2073,7 @@ export const ErrorUtils = {
    * @param {boolean} [options.suppressErrors=false] - Whether to suppress error notifications
    * @returns {Promise<any>|any} Result of function execution or fallback
    */
-  safeExecute: async (fn, options = {}) => {
+  safeExecuteAdvanced: async (fn, options = {}) => {
     const { context = 'operation', fallback, suppressErrors = false } = options;
     
     try {

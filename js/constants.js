@@ -111,11 +111,11 @@ export const UI_CONFIG = {
 };
 
 /**
- * SVG Icon Library
+ * SVG Icon Library and Destructive Symbols
  * 
- * Inline SVG icons used throughout the application. These icons are embedded
- * directly in the JavaScript to avoid additional HTTP requests and ensure they
- * are always available, even offline.
+ * Inline SVG icons and standardized Unicode symbols used throughout the application. 
+ * These icons are embedded directly in the JavaScript to avoid additional HTTP requests 
+ * and ensure they are always available, even offline.
  * 
  * Benefits of inline SVG:
  * - No additional network requests
@@ -124,10 +124,18 @@ export const UI_CONFIG = {
  * - Accessible with proper aria-hidden attributes
  * - Works consistently across all browsers
  * 
+ * Destructive Action Standards:
+ * - Close/Cancel: ✕ (U+2715) for modal close, cancel actions
+ * - Remove/Clear: ✕ (U+2715) for field clearing, tag removal
+ * - Delete: SVG trash icon for permanent deletion actions
+ * 
  * @constant {Object} ICONS
  * @property {string} edit - Pencil/edit icon for modifying snippets
  * @property {string} delete - Trash can icon for deleting snippets
  * @property {string} copy - Clipboard icon for copying snippet content
+ * @property {string} expand - Expand/fullscreen icon for expanding cards
+ * @property {string} close - Standardized close symbol for consistent destructive actions
+ * @property {string} remove - Standardized remove symbol for tag/field clearing
  */
 export const ICONS = {
   /** Edit/pencil icon - Used for snippet modification actions */
@@ -156,7 +164,13 @@ export const ICONS = {
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/>
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/>
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>
-  </svg>`
+  </svg>`,
+  
+  /** Standardized close symbol - Used for modal close buttons and cancel actions */
+  close: '✕',
+  
+  /** Standardized remove symbol - Used for tag removal and field clearing */
+  remove: '✕'
 };
 
 

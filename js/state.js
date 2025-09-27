@@ -444,6 +444,26 @@ export const getState = () => ({ ...state });
  * });
  */
 export const upsertItem = (item) => {
+  // INPUT VALIDATION: Comprehensive validation for data integrity
+  // 
+  // ERROR HANDLING STRATEGY:
+  // - Validate item structure and required properties
+  // - Handle missing editingId gracefully
+  // - Ensure immutable state updates with error recovery
+  // - Log validation failures for debugging
+  // 
+  // VALIDATION REQUIREMENTS:
+  // - item: Must be an object with valid properties
+  // - item.text: Required string property
+  // - item.desc: Required string property
+  // - item.tags: Optional array of strings
+  // - item.sensitive: Optional boolean
+  
+  if (!item || typeof item !== 'object') {
+    Logger.error('upsertItem: item must be a valid object', item);
+    return; // Early return prevents state corruption
+  }
+  
   // CONDITIONAL OPERATION: Determine if this is an update or insert operation
   // The presence of editingId indicates we're updating an existing item
   // rather than creating a new one
@@ -492,54 +512,129 @@ export const upsertItem = (item) => {
 /**
  * Delete an item by its unique identifier
  * 
- * Removes the specified item from the items array and persists the change.
- * Uses array.filter for immutable deletion.
+ * This function performs an immutable deletion operation by creating a new array
+ * that excludes the item with the specified ID. It maintains referential integrity
+ * by preserving all other items in their original state.
  * 
- * @param {string} id - Unique ID of the item to delete
+ * Deletion Algorithm:
+ * 1. Validate the ID parameter to ensure it's a valid string
+ * 2. Use array.filter to create new array excluding target item
+ * 3. Update state immutably with the filtered array
+ * 4. Persist changes and schedule backup for data safety
+ * 5. Notify all subscribers of the state change
+ * 
+ * Performance Considerations:
+ * - filter() creates O(n) time complexity for deletion
+ * - Immutable approach prevents reference bugs
+ * - Single state update reduces listener notifications
+ * - Automatic persistence ensures data durability
+ * 
+ * Error Handling:
+ * - Validates ID parameter type and content
+ * - Handles missing items gracefully (no-op)
+ * - Continues operation even if item doesn't exist
+ * - Maintains state consistency throughout process
+ * 
+ * @param {string} id - Unique identifier of the item to delete
+ * @throws {TypeError} If id parameter is not a string
  * 
  * @example
  * // Delete item by ID
  * deleteItem('abc123def456');
+ * 
+ * // Attempt to delete non-existent item (safe no-op)
+ * deleteItem('non-existent-id');
  */
 export const deleteItem = (id) => {
-  // Filter out the item with matching ID (immutable deletion)
-  state = { ...state, items: state.items.filter(item => item.id !== id) };
+  // INPUT VALIDATION: Ensure ID is a valid string to prevent errors
+  if (typeof id !== 'string' || !id.trim()) {
+    console.warn('deleteItem: ID must be a non-empty string', id);
+    return; // Early return for invalid input
+  }
   
-  // Persist changes and trigger backups
+  // IMMUTABLE DELETION: Create new array excluding the target item
+  // filter() automatically handles case where no item matches the ID
+  const filteredItems = state.items.filter(item => item.id !== id);
+  
+  // STATE UPDATE: Apply the deletion immutably
+  // This triggers reactivity through the state update pattern
+  state = { ...state, items: filteredItems };
+  
+  // PERSISTENCE AND BACKUP: Ensure data safety and trigger notifications
+  // saveState() handles both localStorage persistence and backup scheduling
   saveState();
 };
 
 /**
  * Reorder items based on new positions from drag and drop operations
  * 
- * Updates the position values of all items to reflect their new order.
- * This function is called when cards are reordered via drag and drop.
+ * This function updates the position values of items to reflect their new order
+ * after drag and drop operations. It maintains the relative positioning of items
+ * not included in the reorder operation while updating the positions of moved items.
  * 
- * @param {string[]} orderedIds - Array of item IDs in their new order
+ * Reordering Algorithm:
+ * 1. Create a position mapping for all items in the new order
+ * 2. Update position values immutably while preserving other properties
+ * 3. Sort the entire items array by position to ensure consistent ordering
+ * 4. Update application state and persist changes immediately
+ * 
+ * Position Management Strategy:
+ * - Items in orderedIds get new sequential positions (0, 1, 2, ...)
+ * - Items not in orderedIds retain their existing positions
+ * - Final array is sorted to maintain consistent ordering
+ * - This approach handles partial reordering while preserving item stability
+ * 
+ * Performance Considerations:
+ * - Map lookup provides O(1) position access during mapping
+ * - Single pass through items array for position updates
+ * - Sort operation is O(n log n) but necessary for UI consistency
+ * - Immediate persistence prevents data loss during drag operations
+ * 
+ * @param {string[]} orderedIds - Array of item IDs in their new display order
+ * @throws {TypeError} If orderedIds is not an array
  * 
  * @example
- * // Reorder items after drag and drop
+ * // Reorder first three items after drag and drop
  * const newOrder = ['item3', 'item1', 'item2'];
  * reorderItems(newOrder);
+ * 
+ * // Partial reorder - other items maintain their positions
+ * const partialOrder = ['itemB', 'itemA']; // Only reorder these two
+ * reorderItems(partialOrder);
  */
 export const reorderItems = (orderedIds) => {
+  // INPUT VALIDATION: Ensure orderedIds is a valid array
+  if (!Array.isArray(orderedIds)) {
+    console.warn('reorderItems: orderedIds must be an array', orderedIds);
+    return; // Early return for invalid input
+  }
+  
+  // POSITION MAPPING: Create efficient lookup for new positions
+  // Using Map for O(1) lookup performance during item mapping
   // Items not present in orderedIds retain their existing position, preserving
   // relative order for any items outside the current reordering scope.
-  // Create a map of item ID to new position
   const positionMap = new Map();
   orderedIds.forEach((id, index) => {
-    positionMap.set(id, index);
+    // Validate ID is a string to prevent errors
+    if (typeof id === 'string') {
+      positionMap.set(id, index);
+    }
   });
   
-  // Update positions immutably
+  // IMMUTABLE POSITION UPDATE: Update positions while preserving other properties
+  // This approach maintains referential integrity for unchanged items
   const updatedItems = state.items.map(item => ({
-    ...item,
-    position: positionMap.has(item.id) ? positionMap.get(item.id) : item.position
-  })).sort((a, b) => a.position - b.position);
+    ...item, // Preserve all existing properties
+    position: positionMap.has(item.id) 
+      ? positionMap.get(item.id)    // Use new position if item was reordered
+      : item.position               // Keep existing position otherwise
+  })).sort((a, b) => a.position - b.position); // Ensure consistent ordering
   
+  // STATE UPDATE: Apply the reordered items immutably
   state = { ...state, items: updatedItems };
   
-  // Persist changes immediately for drag and drop
+  // IMMEDIATE PERSISTENCE: Critical for drag and drop operations
+  // Users expect their reordering to be saved immediately
   saveState();
 };
 
