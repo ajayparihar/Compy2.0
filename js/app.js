@@ -1094,6 +1094,7 @@ class CompyApp {
       },
       {
         action: 'delete',
+        className: 'icon-btn danger-icon',
         title: 'Delete snippet',
         iconSVG: ICONS.delete
       },

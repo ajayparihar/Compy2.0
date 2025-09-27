@@ -1887,6 +1887,32 @@ select:focus-visible {
   color: var(--danger) !important;
 }
 
+/* Destructive icon base styling */
+.danger-icon {
+  color: var(--danger) !important;
+  border-color: color-mix(in srgb, var(--danger) 20%, transparent) !important;
+}
+
+.danger-icon svg {
+  color: var(--danger) !important;
+}
+
+.danger-icon:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  transform: scale(1.05) !important;
+}
+
+.danger-icon:focus-visible {
+  outline: 2px solid var(--danger) !important;
+  outline-offset: 2px !important;
+}
+
+.danger-icon:active {
+  transform: scale(0.95) !important;
+  background: color-mix(in srgb, var(--danger) 18%, transparent) !important;
+}
+
 /* Modal */
 .modal {
   position: fixed;
