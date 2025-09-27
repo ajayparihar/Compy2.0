@@ -1923,6 +1923,11 @@ select:focus-visible {
   background: rgba(0, 0, 0, 0.5);
   z-index: var(--z-modal);
 }
+
+/* Prevent scrolling when modal is open */
+body.modal-open {
+  overflow: hidden;
+}
 .modal[aria-hidden="false"] {
   display: flex;
 }
