@@ -1889,12 +1889,12 @@ select:focus-visible {
 
 /* Destructive icon base styling */
 .danger-icon {
-  color: var(--danger) !important;
-  border-color: color-mix(in srgb, var(--danger) 20%, transparent) !important;
+  color: var(--text-muted);
+  border-color: var(--border-interactive);
 }
 
 .danger-icon svg {
-  color: var(--danger) !important;
+  color: var(--text-muted);
 }
 
 .danger-icon:hover {
@@ -2065,16 +2065,17 @@ button[data-close-modal]:active {
 /* Enhanced danger button styling for modal danger actions */
 .danger-btn,
 .modal-danger-btn {
-  background: var(--danger);
-  color: var(--danger-contrast);
-  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-interactive);
   font-weight: var(--font-medium);
 }
 
 .danger-btn:hover,
 .modal-danger-btn:hover {
-  background: color-mix(in srgb, var(--danger) 85%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 85%, transparent);
+  background: var(--danger);
+  color: var(--danger-contrast);
+  border-color: var(--danger);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--danger) 25%, transparent);
 }
@@ -4030,6 +4031,28 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
 
 .expandable-card.expanded .actions .icon-btn:hover svg {
   color: var(--primary) !important;
+}
+
+/* Override for delete buttons in expanded cards - use danger colors on hover like close button */
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  color: var(--danger) !important;
+}
+
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover svg {
+  color: var(--danger) !important;
+}
+
+/* Override for delete buttons in expanded cards */
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  color: var(--danger) !important;
+}
+
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover svg {
+  color: var(--danger) !important;
 }
 
 /* Force expanded cards to always show actions */

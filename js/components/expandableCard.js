@@ -352,6 +352,9 @@ export class ExpandableCardManager {
     this.previousFocus = document.activeElement;
 
     try {
+      // Prevent body scrolling when card is expanded
+      document.body.classList.add('modal-open');
+      
       // Show backdrop
       if (this.backdrop) {
         this.backdrop.hidden = false;
@@ -440,6 +443,9 @@ export class ExpandableCardManager {
       if (this.backdrop) {
         this.backdrop.classList.remove('show');
       }
+      
+      // Restore body scrolling when card is collapsed
+      document.body.classList.remove('modal-open');
 
       // Wait for animation to complete
       await this.delay(this.options.animationDuration);
