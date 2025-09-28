@@ -3,7 +3,7 @@
  * Enhanced with better code organization, error handling, and modern JavaScript practices
  */
 
-import { STORAGE_KEYS, UI_CONFIG, ICONS, DEFAULT_THEME } from './constants.js?v=2.0.2';
+import { STORAGE_KEYS, UI_CONFIG, ICONS, ICON_PATHS, DEFAULT_THEME } from './constants.js?v=2.0.2';
 import { 
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
@@ -356,6 +356,21 @@ class CompyApp {
    */
   initNotifications() {
     const snackbar = $('#snackbar');
+    
+    // Validate snackbar element exists
+    if (!snackbar) {
+      Logger.error('Snackbar element not found - notifications will not work');
+      // Create minimal fallback notification system
+      this.notifications = {
+        show: (message) => {
+          Logger.info('Notification (fallback):', message);
+          console.log(`[Notification] ${message}`);
+        },
+        hide: () => {}
+      };
+      return;
+    }
+    
     let currentTimeoutId = null;
     
     this.notifications = {
@@ -408,11 +423,29 @@ class CompyApp {
    */
   showNotification(message, type = 'info') {
     try {
-      if (!this.notifications || typeof this.notifications.show !== 'function') {
-        Logger.warn('Notifications unavailable; skipping message', { message, type });
+      // Input validation for message content
+      if (!message || typeof message !== 'string') {
+        Logger.warn('Invalid notification message:', { message, type });
         return;
       }
-      this.notifications.show(message, type);
+      
+      // Sanitize message to prevent potential issues
+      const sanitizedMessage = message.trim().slice(0, 500); // Limit length and trim
+      if (!sanitizedMessage) {
+        Logger.warn('Empty notification message after sanitization');
+        return;
+      }
+      
+      // Validate notification type
+      const validTypes = ['info', 'success', 'warning', 'error'];
+      const sanitizedType = validTypes.includes(type) ? type : 'info';
+      
+      if (!this.notifications || typeof this.notifications.show !== 'function') {
+        Logger.warn('Notifications unavailable; skipping message', { message: sanitizedMessage, type: sanitizedType });
+        return;
+      }
+      
+      this.notifications.show(sanitizedMessage, sanitizedType);
     } catch (err) {
       Logger.warn('Notification error; skipping message', err);
     }
@@ -946,28 +979,6 @@ class CompyApp {
     }
   }
 
-  /**
-   * Restore scroll position and entry animations after render.
-   * @param {number} prevScrollTop
-   */
-  postRenderScrollRestore(prevScrollTop) {
-    // Restore scroll position. On the very first render after a refresh, restore
-    // from the previously saved position (manual restoration). Thereafter, just
-    // preserve the current scroll across re-renders.
-    requestAnimationFrame(() => {
-      if (!this.scrollRestored && this.initialScrollY > 0) {
-        window.scrollTo({ top: this.initialScrollY, behavior: 'auto' });
-        this.scrollRestored = true;
-        // Re-enable entry animations after initial stabilization
-        document.documentElement.classList.remove('disable-entry-anim');
-      } else {
-        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
-        if (Math.abs(currentScrollTop - prevScrollTop) > 2) {
-          window.scrollTo({ top: prevScrollTop, behavior: 'auto' });
-        }
-      }
-    });
-  }
 
   /**
    * Create the base card element structure with essential attributes
@@ -1199,9 +1210,11 @@ class CompyApp {
       const hue = Math.abs(stringHash(tag)) % 360;
       const chip = createElement('span', {
         className: 'chip',
-        textContent: tag,
-        styles: { '--hue': hue }
+        textContent: tag
       });
+      
+      // Set CSS custom property for consistent tag colors
+      chip.style.setProperty('--hue', hue);
       
       // Apply safe highlighting to tag
       if (searchQuery) {
@@ -1243,39 +1256,35 @@ class CompyApp {
       className: 'expand-collapse-container'
     });
     
-    // Expand button
-    const expandBtn = this.createSecureIconButton({
-      className: 'icon-btn expand-trigger',
-      title: 'Expand card',
-      dataAct: 'expand',
-      iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>`
-    });
-    
-    // Collapse button
-    const collapseBtn = this.createSecureIconButton({
-      className: 'icon-btn collapse-action card-action-hidden',
-      title: 'Collapse card',
-      dataAct: 'collapse',
-      iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`
-    });
-    
-    expandCollapseContainer.appendChild(expandBtn);
-    expandCollapseContainer.appendChild(collapseBtn);
-    actions.appendChild(expandCollapseContainer);
-    
-    // Other action buttons
-    const actionButtons = [
-      { action: 'copy', iconPaths: `<rect x="9" y="9" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="4" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>`, title: 'Copy to clipboard' },
-      { action: 'edit', iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0-3-3L4 18v3z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M14 6l4 4"/>`, title: 'Edit snippet' },
-      { action: 'delete', iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18"/><path fill="none" stroke="currentColor" stroke-width="2" d="M8 6V4h8v2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path fill="none" stroke="currentColor" stroke-width="2" d="M10 11v6M14 11v6"/>`, title: 'Delete snippet', className: 'danger-icon' }
+    // Define all card action buttons with their configurations
+    const buttonConfigs = [
+      { action: 'expand', title: 'Expand card', className: 'expand-trigger', iconPaths: ICON_PATHS.expand },
+      { action: 'collapse', title: 'Collapse card', className: 'collapse-action card-action-hidden', iconPaths: ICON_PATHS.collapse },
+      { action: 'copy', title: 'Copy to clipboard', iconPaths: ICON_PATHS.copy },
+      { action: 'edit', title: 'Edit snippet', iconPaths: ICON_PATHS.edit },
+      { action: 'delete', title: 'Delete snippet', className: 'danger-icon', iconPaths: ICON_PATHS.delete }
     ];
     
-    actionButtons.forEach(btn => {
+    // Create expand/collapse container for the first two buttons
+    buttonConfigs.slice(0, 2).forEach(config => {
       const button = this.createSecureIconButton({
-        className: `icon-btn ${btn.className || ''}`.trim(),
-        title: btn.title,
-        dataAct: btn.action,
-        iconPaths: btn.iconPaths
+        className: `icon-btn ${config.className || ''}`.trim(),
+        title: config.title,
+        dataAct: config.action,
+        iconPaths: config.iconPaths
+      });
+      expandCollapseContainer.appendChild(button);
+    });
+    
+    actions.appendChild(expandCollapseContainer);
+    
+    // Create remaining action buttons (copy, edit, delete)
+    buttonConfigs.slice(2).forEach(config => {
+      const button = this.createSecureIconButton({
+        className: `icon-btn ${config.className || ''}`.trim(),
+        title: config.title,
+        dataAct: config.action,
+        iconPaths: config.iconPaths
       });
       actions.appendChild(button);
     });
@@ -1315,7 +1324,7 @@ class CompyApp {
     return this.createSecureIconButton({
       className: 'icon-btn drag-handle',
       title: 'Drag to reorder',
-      iconPaths: `<circle cx="6" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="18" cy="8" r="1.5" fill="currentColor"/><circle cx="6" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><circle cx="18" cy="16" r="1.5" fill="currentColor"/>`,
+      iconPaths: ICON_PATHS.dragHandle,
       width: 16,
       height: 16
     });
@@ -1364,13 +1373,40 @@ class CompyApp {
    * @returns {SVGElement} Secure SVG element
    */
   createSecureSVGIcon(paths, width = 20, height = 20, title = '') {
+    const svg = this.createBaseSVGElement(width, height);
+    this.configureSVGAccessibility(svg, title);
+    
+    if (paths) {
+      this.populateSVGElements(svg, paths);
+    }
+    
+    return svg;
+  }
+
+  /**
+   * Create base SVG element with standard attributes
+   * @private
+   * @param {number} width - Icon width
+   * @param {number} height - Icon height
+   * @returns {SVGElement} Base SVG element
+   */
+  createBaseSVGElement(width, height) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('width', width);
     svg.setAttribute('height', height);
     svg.setAttribute('focusable', 'false');
     svg.setAttribute('role', 'img');
-    
+    return svg;
+  }
+
+  /**
+   * Configure SVG accessibility attributes and title element
+   * @private
+   * @param {SVGElement} svg - SVG element to configure
+   * @param {string} title - Accessible title
+   */
+  configureSVGAccessibility(svg, title) {
     if (title) {
       svg.setAttribute('aria-label', title);
       const titleElement = document.createElementNS('http://www.w3.org/2000/svg', 'title');
@@ -1379,114 +1415,142 @@ class CompyApp {
     } else {
       svg.setAttribute('aria-hidden', 'true');
     }
-    
-    // Create path elements from paths string
-    if (paths) {
-      // Parse the paths safely
-      const pathRegex = /<path[^>]*d="([^"]*)"/g;
-      const circleRegex = /<circle[^>]*cx="([^"]*)"[^>]*cy="([^"]*)"[^>]*r="([^"]*)"/g;
-      const rectRegex = /<rect[^>]*x="([^"]*)"[^>]*y="([^"]*)"[^>]*width="([^"]*)"[^>]*height="([^"]*)"/g;
-      
-      let match;
-      
-      // Handle path elements
-      while ((match = pathRegex.exec(paths)) !== null) {
-        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        pathElement.setAttribute('d', match[1]);
-        
-        // Extract other attributes safely
-        const pathMatch = paths.match(new RegExp(`<path[^>]*d="${match[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`, 'g'));
-        if (pathMatch) {
-          const pathStr = pathMatch[0];
-          if (pathStr.includes('fill="none"')) pathElement.setAttribute('fill', 'none');
-          if (pathStr.includes('stroke="currentColor"')) pathElement.setAttribute('stroke', 'currentColor');
-          if (pathStr.includes('stroke-width="2"')) pathElement.setAttribute('stroke-width', '2');
-          if (pathStr.includes('stroke-linecap="round"')) pathElement.setAttribute('stroke-linecap', 'round');
-          if (pathStr.includes('stroke-linejoin="round"')) pathElement.setAttribute('stroke-linejoin', 'round');
-          if (pathStr.includes('fill="currentColor"')) pathElement.setAttribute('fill', 'currentColor');
-        }
-        
-        svg.appendChild(pathElement);
-      }
-      
-      // Handle circle elements
-      while ((match = circleRegex.exec(paths)) !== null) {
-        const circleElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circleElement.setAttribute('cx', match[1]);
-        circleElement.setAttribute('cy', match[2]);
-        circleElement.setAttribute('r', match[3]);
-        circleElement.setAttribute('fill', 'currentColor');
-        svg.appendChild(circleElement);
-      }
-      
-      // Handle rect elements
-      while ((match = rectRegex.exec(paths)) !== null) {
-        const rectElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rectElement.setAttribute('x', match[1]);
-        rectElement.setAttribute('y', match[2]);
-        rectElement.setAttribute('width', match[3]);
-        rectElement.setAttribute('height', match[4]);
-        
-        // Extract other rect attributes
-        const rectMatch = paths.match(new RegExp(`<rect[^>]*x="${match[1]}"[^>]*>`, 'g'));
-        if (rectMatch) {
-          const rectStr = rectMatch[0];
-          if (rectStr.includes('fill="none"')) rectElement.setAttribute('fill', 'none');
-          if (rectStr.includes('stroke="currentColor"')) rectElement.setAttribute('stroke', 'currentColor');
-          if (rectStr.includes('stroke-width="2"')) rectElement.setAttribute('stroke-width', '2');
-          if (rectStr.includes('rx="2"')) rectElement.setAttribute('rx', '2');
-          if (rectStr.includes('ry="2"')) rectElement.setAttribute('ry', '2');
-        }
-        
-        svg.appendChild(rectElement);
-      }
-    }
-    
-    return svg;
   }
 
   /**
-   * Generate HTML for card action buttons
+   * Parse and populate SVG with path, circle, and rect elements
    * @private
-   * @returns {string} Action buttons HTML
+   * @param {SVGElement} svg - SVG element to populate
+   * @param {string} paths - SVG path data string
    */
-  generateCardActionsHTML() {
-    const collapseIcon = createSVGIcon({
-      paths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`,
-      title: 'Collapse card'
-    });
-    
-    const buttons = [
-      { action: 'expand', icon: ICONS.expand, title: 'Expand card', className: 'expand-trigger' },
-      { action: 'copy', icon: ICONS.copy, title: 'Copy to clipboard' },
-      { action: 'edit', icon: ICONS.edit, title: 'Edit snippet' },
-      { action: 'delete', icon: ICONS.delete, title: 'Delete snippet', className: 'danger-icon' }
-    ];
-    
-    const actionButtons = buttons.map(btn => 
-      createIconButton({
-        className: `icon-btn ${btn.className || ''}`.trim(),
-        title: btn.title,
-        dataAct: btn.action,
-        iconSVG: btn.icon
-      })
-    ).join('');
-    
-    const collapseButton = createIconButton({
-      className: 'icon-btn collapse-action card-action-hidden',
-      title: 'Collapse card',
-      dataAct: 'collapse',
-      iconSVG: collapseIcon
-    });
-    
-    return `<div class="actions" aria-label="Card actions">
-      <div class="expand-collapse-container">
-        ${createIconButton({ className: 'icon-btn expand-trigger', title: 'Expand card', dataAct: 'expand', iconSVG: ICONS.expand })}
-        ${collapseButton}
-      </div>
-      ${buttons.slice(1).map(btn => createIconButton({ className: `icon-btn ${btn.className || ''}`.trim(), title: btn.title, dataAct: btn.action, iconSVG: btn.icon })).join('')}
-    </div>`;
+  populateSVGElements(svg, paths) {
+    // Parse and create different SVG element types
+    this.createSVGPathElements(svg, paths);
+    this.createSVGCircleElements(svg, paths);
+    this.createSVGRectElements(svg, paths);
   }
+
+  /**
+   * Create SVG path elements from path data
+   * @private
+   * @param {SVGElement} svg - Parent SVG element
+   * @param {string} paths - Path data string
+   */
+  createSVGPathElements(svg, paths) {
+    const pathRegex = /<path[^>]*d="([^"]*)"/g;
+    let match;
+    
+    while ((match = pathRegex.exec(paths)) !== null) {
+      const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathElement.setAttribute('d', match[1]);
+      
+      // Extract and apply path attributes
+      this.applySVGPathAttributes(pathElement, paths, match[1]);
+      svg.appendChild(pathElement);
+    }
+  }
+
+  /**
+   * Apply attributes to SVG path element based on source string
+   * @private
+   * @param {SVGPathElement} pathElement - Path element to configure
+   * @param {string} paths - Source paths string
+   * @param {string} pathData - Specific path data for matching
+   */
+  applySVGPathAttributes(pathElement, paths, pathData) {
+    const escapedPath = pathData.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pathMatch = paths.match(new RegExp(`<path[^>]*d="${escapedPath}"[^>]*>`, 'g'));
+    
+    if (pathMatch) {
+      const pathStr = pathMatch[0];
+      const attributeMap = {
+        'fill="none"': ['fill', 'none'],
+        'stroke="currentColor"': ['stroke', 'currentColor'],
+        'stroke-width="2"': ['stroke-width', '2'],
+        'stroke-linecap="round"': ['stroke-linecap', 'round'],
+        'stroke-linejoin="round"': ['stroke-linejoin', 'round'],
+        'fill="currentColor"': ['fill', 'currentColor']
+      };
+      
+      Object.entries(attributeMap).forEach(([pattern, [attr, value]]) => {
+        if (pathStr.includes(pattern)) {
+          pathElement.setAttribute(attr, value);
+        }
+      });
+    }
+  }
+
+  /**
+   * Create SVG circle elements from circle data
+   * @private
+   * @param {SVGElement} svg - Parent SVG element
+   * @param {string} paths - Path data string containing circles
+   */
+  createSVGCircleElements(svg, paths) {
+    const circleRegex = /<circle[^>]*cx="([^"]*)"[^>]*cy="([^"]*)"[^>]*r="([^"]*)"/g;
+    let match;
+    
+    while ((match = circleRegex.exec(paths)) !== null) {
+      const circleElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circleElement.setAttribute('cx', match[1]);
+      circleElement.setAttribute('cy', match[2]);
+      circleElement.setAttribute('r', match[3]);
+      circleElement.setAttribute('fill', 'currentColor');
+      svg.appendChild(circleElement);
+    }
+  }
+
+  /**
+   * Create SVG rect elements from rect data
+   * @private
+   * @param {SVGElement} svg - Parent SVG element
+   * @param {string} paths - Path data string containing rects
+   */
+  createSVGRectElements(svg, paths) {
+    const rectRegex = /<rect[^>]*x="([^"]*)"[^>]*y="([^"]*)"[^>]*width="([^"]*)"[^>]*height="([^"]*)"/g;
+    let match;
+    
+    while ((match = rectRegex.exec(paths)) !== null) {
+      const rectElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rectElement.setAttribute('x', match[1]);
+      rectElement.setAttribute('y', match[2]);
+      rectElement.setAttribute('width', match[3]);
+      rectElement.setAttribute('height', match[4]);
+      
+      // Apply additional rect attributes
+      this.applySVGRectAttributes(rectElement, paths, match[1]);
+      svg.appendChild(rectElement);
+    }
+  }
+
+  /**
+   * Apply additional attributes to SVG rect element
+   * @private
+   * @param {SVGRectElement} rectElement - Rect element to configure
+   * @param {string} paths - Source paths string
+   * @param {string} xValue - X coordinate for matching
+   */
+  applySVGRectAttributes(rectElement, paths, xValue) {
+    const rectMatch = paths.match(new RegExp(`<rect[^>]*x="${xValue}"[^>]*>`, 'g'));
+    
+    if (rectMatch) {
+      const rectStr = rectMatch[0];
+      const attributeMap = {
+        'fill="none"': ['fill', 'none'],
+        'stroke="currentColor"': ['stroke', 'currentColor'],
+        'stroke-width="2"': ['stroke-width', '2'],
+        'rx="2"': ['rx', '2'],
+        'ry="2"': ['ry', '2']
+      };
+      
+      Object.entries(attributeMap).forEach(([pattern, [attr, value]]) => {
+        if (rectStr.includes(pattern)) {
+          rectElement.setAttribute(attr, value);
+        }
+      });
+    }
+  }
+
 
 
   /**
@@ -1685,55 +1749,6 @@ class CompyApp {
     });
   }
 
-  /**
-   * Render tag chips for a card with deterministic hues and optional highlighting.
-   * Limits visible chips to UI_CONFIG.maxVisibleTags and shows a '+N more' affordance.
-   * 
-   * Tag Rendering Algorithm:
-   * 1. Slice array to respect max visible limit for performance
-   * 2. Generate deterministic colors using string hashing
-   * 3. Apply search highlighting while preserving tag colors
-   * 4. Add 'more tags' indicator when list is truncated
-   * 5. Return safe HTML string ready for innerHTML injection
-   * 
-   * Color Generation:
-   * - Uses stringHash() for consistent colors across renders
-   * - Modulo 360 maps hash to HSL hue value
-   * - Same tag always gets same color
-   * - Provides visual consistency and user recognition
-   * 
-   * @param {string[]} [tags=[]] - Array of tag strings to render
-   * @param {string} [searchQuery=''] - Search term for highlighting
-   * @returns {string} HTML string with styled tag chips
-   */
-  renderTags(tags = [], searchQuery = '') {
-    // PERFORMANCE OPTIMIZATION: Limit visible tags to prevent DOM bloat
-    // Only render the first N tags, with a "more" indicator for overflow
-    const maxVisible = UI_CONFIG.maxVisibleTags;
-    const visibleTags = tags.slice(0, maxVisible);
-    const extraCount = tags.length - visibleTags.length;
-    
-    // TAG CHIP GENERATION: Create styled HTML for each visible tag
-    let html = visibleTags.map(tag => {
-      // SECURITY: Escape HTML to prevent XSS, then apply search highlighting
-      const highlighted = highlightText(escapeHtml(tag), searchQuery);
-      
-      // COLOR CONSISTENCY: Generate deterministic hue from tag name hash
-      // Same tag always gets same color across renders and sessions
-      const hue = Math.abs(stringHash(tag)) % 360;
-      
-      // CSS CUSTOM PROPERTY: Use --hue for dynamic styling in CSS
-      return `<span class="chip" style="--hue: ${hue}">${highlighted}</span>`;
-    }).join('');
-    
-    // OVERFLOW INDICATOR: Show count of hidden tags when list is truncated
-    // Provides user feedback about hidden content
-    if (extraCount > 0) {
-      html += `<span class="more" data-more-tags title="Show all ${tags.length} tags">+${extraCount} more</span>`;
-    }
-    
-    return html;
-  }
 
   /**
    * Render contextual empty state UI (welcome or no-results) into container.
@@ -2286,6 +2301,59 @@ class CompyApp {
   }
 
   /**
+   * Detect file format based on both filename and content analysis
+   * 
+   * @param {string} filename - Original filename
+   * @param {string} content - File content
+   * @returns {string} Detected format: 'json', 'csv', or 'unknown'
+   * @private
+   */
+  detectFileFormat(filename, content) {
+    const extension = filename.toLowerCase().split('.').pop();
+    const trimmedContent = content.trim();
+    
+    // Try JSON detection first
+    try {
+      const parsed = JSON.parse(trimmedContent);
+      
+      // Valid JSON - check if it's the expected Compy format
+      if (Array.isArray(parsed) || (parsed && typeof parsed === 'object' && Array.isArray(parsed.items))) {
+        return 'json';
+      }
+      
+      // Valid JSON but not Compy format - only return 'json' if extension matches
+      if (extension === 'json') {
+        return 'json';
+      }
+    } catch (e) {
+      // Not valid JSON, continue to CSV detection
+    }
+    
+    // CSV detection based on content structure
+    if (trimmedContent.length > 0) {
+      const lines = trimmedContent.split(/\r?\n/).filter(line => line.trim());
+      
+      if (lines.length >= 2) {
+        // Check for Compy CSV format markers
+        if (lines[0] === 'profileName' || 
+            lines.some(line => line.toLowerCase().includes('text,desc')) ||
+            lines.some(line => line.includes(',') && (line.includes('"') || line.split(',').length > 2))) {
+          return 'csv';
+        }
+      }
+    }
+    
+    // Fallback to extension-based detection with validation
+    if (extension === 'json') {
+      return trimmedContent.startsWith('{') || trimmedContent.startsWith('[') ? 'json' : 'unknown';
+    } else if (extension === 'csv' || extension === 'txt') {
+      return 'csv';
+    }
+    
+    return 'unknown';
+  }
+
+  /**
    * Initialize file import handling for JSON and CSV formats.
    */
   initImport() {
@@ -2295,19 +2363,39 @@ class CompyApp {
       const file = e.target.files?.[0];
       if (!file) return;
 
+      // File size validation (10MB limit)
+      const maxSizeBytes = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSizeBytes) {
+        this.showNotification(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB.`, 'error');
+        importFile.value = '';
+        return;
+      }
+
       try {
         const text = await file.text();
         
-        if (file.name.endsWith('.json')) {
-          this.importJSON(text);
-        } else if (file.name.endsWith('.csv')) {
-          this.importCSV(text);
-        } else {
-          this.showNotification('Unsupported file format', 'error');
+        // Detect format based on content and filename
+        const format = this.detectFileFormat(file.name, text);
+        
+        switch (format) {
+          case 'json':
+            this.importJSON(text);
+            break;
+          case 'csv':
+            this.importCSV(text);
+            break;
+          default:
+            this.showNotification(`Unsupported file format. Please use JSON or CSV files.`, 'error');
+            console.warn('Unknown file format:', {
+              filename: file.name,
+              size: file.size,
+              type: file.type,
+              contentPreview: text.slice(0, 200)
+            });
         }
       } catch (error) {
         console.error('Import failed:', error);
-        this.showNotification('Import failed', 'error');
+        this.showNotification(`Import failed: ${error.message}`, 'error');
       } finally {
         importFile.value = ''; // Clear file input
       }
@@ -2601,6 +2689,21 @@ class CompyApp {
     }
     
     const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
+    
+    // Check for duplicate headers
+    const headerCounts = {};
+    headers.forEach(header => {
+      headerCounts[header] = (headerCounts[header] || 0) + 1;
+    });
+    
+    const duplicateHeaders = Object.entries(headerCounts)
+      .filter(([header, count]) => count > 1)
+      .map(([header]) => header);
+    
+    if (duplicateHeaders.length > 0) {
+      throw new Error(`Duplicate column headers found: ${duplicateHeaders.join(', ')}`);
+    }
+    
     const columnMapping = {
       text: headers.indexOf('text'),
       desc: headers.indexOf('desc'),
@@ -2610,8 +2713,20 @@ class CompyApp {
     };
 
     // Validate required columns
-    if (columnMapping.text === -1 || columnMapping.desc === -1) {
-      throw new Error('Required columns missing: text and desc columns are mandatory');
+    const missingColumns = [];
+    if (columnMapping.text === -1) missingColumns.push('text');
+    if (columnMapping.desc === -1) missingColumns.push('desc');
+    
+    if (missingColumns.length > 0) {
+      throw new Error(`Required columns missing: ${missingColumns.join(', ')}. Found columns: ${headers.join(', ')}`);
+    }
+    
+    // Validate optional columns have valid data types
+    const supportedColumns = ['text', 'desc', 'sensitive', 'tags', 'position'];
+    const unsupportedColumns = headers.filter(header => !supportedColumns.includes(header));
+    
+    if (unsupportedColumns.length > 0) {
+      console.warn('Unsupported CSV columns will be ignored:', unsupportedColumns);
     }
     
     const dataLines = lines.slice(headerIndex + 1).filter(line => line.trim());
@@ -2747,11 +2862,76 @@ class CompyApp {
   }
 
   /**
+   * Parse CSV text into proper rows, respecting quoted fields with newlines
+   * 
+   * @param {string} csvText - Raw CSV string
+   * @returns {string[]} Array of CSV rows
+   * @private
+   */
+  parseCSVRows(csvText) {
+    const rows = [];
+    let currentRow = '';
+    let inQuotes = false;
+    let i = 0;
+    
+    while (i < csvText.length) {
+      const char = csvText[i];
+      const nextChar = csvText[i + 1];
+      
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          // Escaped quote sequence
+          currentRow += '""';
+          i += 2;
+          continue;
+        } else if (char === '"') {
+          // End of quoted field
+          currentRow += char;
+          inQuotes = false;
+        } else {
+          // Regular character inside quotes (including newlines)
+          currentRow += char;
+        }
+      } else {
+        if (char === '"') {
+          // Start of quoted field
+          currentRow += char;
+          inQuotes = true;
+        } else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+          // End of row (only when not in quotes)
+          if (currentRow.trim()) {
+            rows.push(currentRow.trim());
+          }
+          currentRow = '';
+          
+          // Handle CRLF
+          if (char === '\r' && nextChar === '\n') {
+            i += 2;
+            continue;
+          }
+        } else if (char !== '\r') {
+          // Regular character (skip standalone \r)
+          currentRow += char;
+        }
+      }
+      
+      i++;
+    }
+    
+    // Add final row if exists
+    if (currentRow.trim()) {
+      rows.push(currentRow.trim());
+    }
+    
+    return rows.filter(row => row.length > 0);
+  }
+
+  /**
    * Import items from a CSV payload with comprehensive parsing and validation
    * 
    * This function handles the complex task of parsing CSV data with support for:
    * - Optional metadata header (profile information)
-   * - Robust quote handling and field parsing
+   * - Robust quote handling and field parsing including multi-line quoted fields
    * - BOM (Byte Order Mark) removal for international files
    * - Flexible column mapping and validation
    * 
@@ -2760,9 +2940,10 @@ class CompyApp {
    * 2. Main data: text, desc, sensitive, tags columns
    * 3. Tags are pipe-separated (|) within the tags column
    * 4. Sensitive values: '1' or 'true' (case-insensitive)
+   * 5. Multi-line quoted fields are properly handled
    * 
    * Performance Considerations:
-   * - Single pass through lines minimizes iterations
+   * - Proper CSV row parsing respects quoted field boundaries
    * - Early validation prevents processing invalid data
    * - Efficient string operations for large files
    * - Memory-conscious parsing for mobile devices
@@ -2771,8 +2952,8 @@ class CompyApp {
    */
   async importCSV(csvText) {
     try {
-      // Parse CSV structure and extract metadata
-      const lines = csvText.split(/\r?\n/).filter(line => line.trim());
+      // Parse CSV rows properly, respecting quoted fields with newlines
+      const lines = this.parseCSVRows(csvText);
       const csvStructure = this.parseCSVStructure(lines);
       
       // Handle import options with existing data

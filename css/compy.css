@@ -1784,7 +1784,7 @@ select:focus-visible {
   top: auto !important;
   display: none;
   width: max-content; /* shrink to fit button row */
-  height: auto;
+  height: 32px; /* Fixed height to match button height */
   margin: 0 !important;
   padding: 0 !important;
   flex-direction: row-reverse;
@@ -1805,9 +1805,12 @@ select:focus-visible {
   border: 1px solid var(--border-interactive);
   border-radius: var(--radius-sm);
   background: transparent;
+  color: var(--text-muted);
   transition: var(--transition-colors);
   flex-shrink: 0;
   margin: 0;
+  cursor: pointer;
+  box-sizing: border-box;
 }
 .card .actions .icon-btn svg {
   width: 16px;
@@ -1820,6 +1823,7 @@ select:focus-visible {
   background: var(--hover-overlay);
   border-color: var(--primary);
   color: var(--primary);
+  transform: scale(1.05);
 }
 
 .card .actions .icon-btn:hover svg {
@@ -1829,6 +1833,16 @@ select:focus-visible {
 .card .actions .icon-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+.card .actions .icon-btn:active {
+  transform: scale(0.95);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+}
+
+.card .actions .icon-btn:active svg {
+  color: var(--primary);
 }
 .card:hover .actions,
 .card:active .actions,
@@ -4241,8 +4255,8 @@ html[data-theme^="light-"] .expandable-card.expanded {
   position: absolute !important;
   left: 8px !important;
   bottom: 8px !important;
-  width: 36px !important;
-  height: 36px !important;
+  width: 32px !important;
+  height: 32px !important;
   display: none; /* hidden by default, shown on hover/selected like other actions */
   align-items: center !important;
   justify-content: center !important;
@@ -4254,10 +4268,30 @@ html[data-theme^="light-"] .expandable-card.expanded {
   z-index: 10 !important;
   transition: var(--transition-colors), transform var(--duration-fast) var(--ease-out) !important;
   padding: 0 !important;
+  margin: 0 !important;
+  /* Ensure exact same box model as action buttons */
+  box-sizing: border-box !important;
 }
 .card .drag-handle svg { width: 16px !important; height: 16px !important; }
 .card .drag-handle:hover {
   background: var(--hover-overlay) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  transform: scale(1.05) !important;
+}
+
+.card .drag-handle:hover svg {
+  color: var(--primary) !important;
+}
+
+.card .drag-handle:active {
+  transform: scale(0.95) !important;
+  background: color-mix(in srgb, var(--primary) 18%, transparent) !important;
+  color: var(--primary) !important;
+}
+
+.card .drag-handle:active svg {
+  color: var(--primary) !important;
 }
 .card .drag-handle:focus-visible {
   outline: 2px solid var(--primary) !important;
@@ -4288,6 +4322,13 @@ html[data-theme^="light-"] .expandable-card.expanded {
 }
 .cards.dnd-disabled .drag-handle:hover {
   background: transparent !important;
+  border-color: var(--border-interactive) !important;
+  color: var(--text-muted) !important;
+  transform: none !important;
+}
+
+.cards.dnd-disabled .drag-handle:hover svg {
+  color: var(--text-muted) !important;
 }
 
 /* ============= DRAG AND DROP STYLES ============= */

@@ -170,7 +170,51 @@ export const ICONS = {
   close: '✕',
   
   /** Standardized remove symbol - Used for tag removal and field clearing */
-  remove: '✕'
+  remove: '✕',
+  
+  /** Collapse icon - Used for collapsing expanded cards */
+  collapse: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/>
+    <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>
+  </svg>`,
+  
+  /** Drag handle icon - Used for reordering cards */
+  dragHandle: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" role="img">
+    <circle cx="6" cy="8" r="1.5" fill="currentColor"/>
+    <circle cx="12" cy="8" r="1.5" fill="currentColor"/>
+    <circle cx="18" cy="8" r="1.5" fill="currentColor"/>
+    <circle cx="6" cy="16" r="1.5" fill="currentColor"/>
+    <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
+    <circle cx="18" cy="16" r="1.5" fill="currentColor"/>
+  </svg>`
+};
+
+/**
+ * SVG Icon Path Data for Secure DOM Generation
+ * 
+ * These path strings are used by the secure DOM icon generation methods
+ * to avoid repeating complex SVG markup throughout the codebase.
+ * 
+ * @constant {Object} ICON_PATHS
+ */
+export const ICON_PATHS = {
+  /** Edit/pencil icon paths */
+  edit: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0-3-3L4 18v3z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M14 6l4 4"/>`,
+  
+  /** Delete/trash icon paths */
+  delete: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18"/><path fill="none" stroke="currentColor" stroke-width="2" d="M8 6V4h8v2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path fill="none" stroke="currentColor" stroke-width="2" d="M10 11v6M14 11v6"/>`,
+  
+  /** Copy/clipboard icon paths */
+  copy: `<rect x="9" y="9" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="4" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>`,
+  
+  /** Expand/fullscreen icon paths */
+  expand: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>`,
+  
+  /** Collapse icon paths */
+  collapse: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`,
+  
+  /** Drag handle icon paths */
+  dragHandle: `<circle cx="6" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="18" cy="8" r="1.5" fill="currentColor"/><circle cx="6" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><circle cx="18" cy="16" r="1.5" fill="currentColor"/>`
 };
 
 

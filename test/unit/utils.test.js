@@ -378,21 +378,24 @@ describe('Utility Functions Module', () => {
     });
 
     describe('csvEscape()', () => {
-      test('should quote values containing commas', () => {
-        expect(utilsModule.csvEscape('hello, world')).toBe('"hello, world"');
-      });
 
-      test('should quote values containing quotes and escape internal quotes', () => {
-        expect(utilsModule.csvEscape('say "hello"')).toBe('"say ""hello"""');
-      });
-
-      test('should quote values containing newlines', () => {
-        expect(utilsModule.csvEscape('line1\nline2')).toBe('"line1\nline2"');
-      });
-
-      test('should not quote simple values', () => {
+      test('should not quote simple values (NEW BEHAVIOR)', () => {
         expect(utilsModule.csvEscape('simple')).toBe('simple');
         expect(utilsModule.csvEscape('123')).toBe('123');
+        expect(utilsModule.csvEscape('hello world')).toBe('hello world');
+      });
+      
+      test('should quote values containing commas', () => {
+        expect(utilsModule.csvEscape('hello,world')).toBe('"hello,world"');
+      });
+      
+      test('should quote values containing newlines', () => {
+        expect(utilsModule.csvEscape('line1\nline2')).toBe('"line1\nline2"');
+        expect(utilsModule.csvEscape('line1\rline2')).toBe('"line1\rline2"');
+      });
+      
+      test('should quote values containing quotes and escape them', () => {
+        expect(utilsModule.csvEscape('say "hello"')).toBe('"say ""hello"""');
       });
 
       test('should handle empty string', () => {

@@ -459,26 +459,42 @@ export const parseCSVLine = (line) => {
 };
 
 /**
- * Escape a string for safe inclusion in CSV format
+ * Escape a string for safe inclusion in CSV format following RFC 4180
  * 
- * Wraps the string in double quotes and escapes any existing double quotes
- * by doubling them. This ensures the field can contain commas, newlines,
- * and quotes without breaking the CSV structure.
+ * Only quotes fields that contain special characters (commas, quotes, newlines, carriage returns).
+ * This ensures proper CSV compliance and prevents unnecessary quoting of simple values.
  * 
- * @param {string} str - String to escape (will be converted to string if not)
- * @returns {string} CSV-safe quoted string
+ * RFC 4180 Compliance:
+ * - Fields containing commas, quotes, or line breaks must be quoted
+ * - Quotes within quoted fields are escaped by doubling ("")
+ * - Fields without special characters don't need quoting
+ * 
+ * @param {any} str - Value to escape (will be converted to string if not)
+ * @returns {string} CSV-safe field value (quoted only if necessary)
  * 
  * @example
  * csvEscape('Hello, world');
- * // Result: '"Hello, world"'
+ * // Result: '"Hello, world"' (quoted because of comma)
  * 
  * csvEscape('He said "Hi"');
- * // Result: '"He said ""Hi"""'
+ * // Result: '"He said ""Hi"""' (quoted because of quotes)
  * 
  * csvEscape('Simple text');
- * // Result: '"Simple text"'
+ * // Result: 'Simple text' (not quoted - no special characters)
+ * 
+ * csvEscape('Line1\nLine2');
+ * // Result: '"Line1\nLine2"' (quoted because of newline)
  */
-export const csvEscape = (str) => `"${String(str).replace(/"/g, '""')}"`;
+export const csvEscape = (str) => {
+  const value = String(str || '');
+  
+  // Only quote if the value contains special CSV characters
+  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  
+  return value;
+};
 
 // =============================================================================
 // DATE AND TIME UTILITIES
