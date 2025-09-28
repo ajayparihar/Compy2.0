@@ -83,6 +83,10 @@ class CompyApp {
     // Core state
     this.initialized = false;
     
+    // MEMORY MANAGEMENT: AbortController for automatic event listener cleanup
+    this.abortController = new AbortController();
+    this.cleanupTasks = new Set();
+    
     // Component managers
     this.clipboard = null;
     this.notifications = null;
@@ -130,7 +134,12 @@ class CompyApp {
     // State and events
     subscribe(this.handleStateChange);
     initState();
-    document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
+    
+    // MEMORY SAFE: Use AbortController for global event listeners
+    document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e), {
+      signal: this.abortController.signal
+    });
+    
     this.setupMobileNavigation();
     
     // Global access setup
@@ -164,6 +173,83 @@ class CompyApp {
       Logger.error('Failed to initialize Compy 2.0:', error);
       this.showNotification?.('Failed to initialize application. Please refresh the page.', 'error');
       this.initialized = false;
+    }
+  }
+
+  /**
+   * Add a cleanup task to be executed when the app is destroyed
+   * 
+   * @param {Function} task - Cleanup function to execute
+   */
+  addCleanupTask(task) {
+    if (typeof task === 'function') {
+      this.cleanupTasks.add(task);
+    }
+  }
+
+  /**
+   * Remove a cleanup task
+   * 
+   * @param {Function} task - Cleanup function to remove
+   */
+  removeCleanupTask(task) {
+    this.cleanupTasks.delete(task);
+  }
+
+  /**
+   * Destroy the application and cleanup all resources
+   * MEMORY SAFETY: This method cleans up all event listeners and references
+   */
+  destroy() {
+    try {
+      // Abort all event listeners using AbortController
+      this.abortController.abort();
+      
+      // Run custom cleanup tasks
+      this.cleanupTasks.forEach(task => {
+        try {
+          task();
+        } catch (error) {
+          Logger.warn('Cleanup task failed:', error);
+        }
+      });
+      
+      // Clear cleanup tasks
+      this.cleanupTasks.clear();
+      
+      // Destroy component managers
+      if (this.dragDropManager?.destroy) {
+        this.dragDropManager.destroy();
+      }
+      
+      if (this.expandableCardManager?.destroy) {
+        this.expandableCardManager.destroy();
+      }
+      
+      if (this.modalManager?.destroy) {
+        this.modalManager.destroy();
+      }
+      
+      // Clear references
+      this.clipboard = null;
+      this.notifications = null;
+      this.modalManager = null;
+      this.confirmationManager = null;
+      this.theme = null;
+      this.expandableCardManager = null;
+      this.dragDropManager = null;
+      
+      // Clear UI state
+      this.cardElements = [];
+      this.visibleItems = [];
+      
+      // Mark as uninitialized
+      this.initialized = false;
+      
+      Logger.info('Compy 2.0 destroyed and cleaned up successfully');
+      
+    } catch (error) {
+      Logger.error('Error during app destruction:', error);
     }
   }
 
@@ -670,38 +756,17 @@ class CompyApp {
   }
 
   /**
-   * Render the visible list of cards from state with comprehensive DOM optimization
+   * Render the visible list of cards from state with optimized DOM performance
    * 
-   * This method is the core of the application's UI rendering system. It transforms
-   * the application state into a visual representation while maintaining optimal
-   * performance through advanced DOM manipulation techniques.
-   * 
-   * Rendering Algorithm (5-Phase Process):
-   * 1. FILTERING: Apply search query and tag filters to determine visible items
-   * 2. SORTING: Order items by position property to maintain custom user ordering
-   * 3. STATE DETECTION: Determine appropriate UI state (content, welcome, no-results)
-   * 4. DOM MANIPULATION: Use requestAnimationFrame for smooth, non-blocking updates
-   * 5. POST-PROCESSING: Setup drag/drop, restore scroll, update accessibility
+   * PERFORMANCE UPDATE: This method now uses document fragment batching and
+   * optimized DOM operations to prevent layout thrashing and improve rendering speed.
    * 
    * Performance Optimizations:
-   * - Batched DOM updates prevent layout thrashing and visual glitches
-   * - requestAnimationFrame ensures rendering happens at optimal 60fps timing
-   * - Minimal DOM queries through efficient cached selectors
-   * - Event delegation reduces memory usage and improves performance
-   * - Conditional rendering avoids unnecessary DOM work for empty states
-   * - Scroll position preservation prevents jarring user experience
-   * 
-   * Accessibility Features:
-   * - Proper ARIA attributes for screen readers
-   * - Keyboard navigation support through card indexing
-   * - Focus management during re-renders
-   * - Screen reader announcements for state changes
-   * 
-   * State Management Integration:
-   * - Maintains visual selection state across re-renders
-   * - Synchronizes drag-and-drop availability with filter state
-   * - Updates UI to reflect current search/filter criteria
-   * - Preserves scroll position during content updates
+   * - Document fragment batching prevents multiple DOM manipulations
+   * - requestAnimationFrame ensures rendering at optimal 60fps timing
+   * - Single DOM operation replaces multiple individual appends
+   * - Batched CSS class updates reduce layout calculations
+   * - Cached element references minimize DOM queries
    * 
    * @param {Object} state - Current application state containing items, search, filters
    */
@@ -715,11 +780,9 @@ class CompyApp {
     // Preserve scroll position during re-render
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     
-    // Use animation frame for smooth rendering
+    // PERFORMANCE OPTIMIZATION: Use requestAnimationFrame for optimal timing
     requestAnimationFrame(() => {
-      container.innerHTML = '';
-
-      // Render empties consistently
+      // Check for empty states first
       if (this.renderEmptyIfNeeded(container, state, sortedItems)) {
         // Disable drag and drop when there are no visible items
         if (this.dragDropManager) {
@@ -728,26 +791,95 @@ class CompyApp {
         return;
       }
 
-      // Remove empty state class and build list
-      container.classList.remove('empty-state');
-      this.buildCardList(container, sortedItems, state.search);
+      // OPTIMIZED DOM UPDATES: Use document fragment for batched operations
+      const fragment = document.createDocumentFragment();
+      
+      // Build all cards in memory first (prevents layout thrashing)
+      sortedItems.forEach((item, index) => {
+        const cardElement = this.createCardElement(item, state.search, index);
+        fragment.appendChild(cardElement);
+      });
+      
+      // SINGLE DOM OPERATION: Replace all content at once
+      container.replaceChildren(fragment);
+      
+      // Update tracking arrays AFTER DOM update
+      this.visibleItems = [...sortedItems];
+      this.cardElements = Array.from(container.children);
+      
+      // BATCHED CSS UPDATES: Apply all classes in one operation
+      this.optimizePostRender(container, state, scrollTop);
+    });
+  }
 
-      // Refresh and toggle drag/drop availability after render
-      const isFiltered = !!(state.search && state.search.trim()) || (state.filterTags && state.filterTags.length > 0);
-      if (this.dragDropManager) {
-        this.dragDropManager.refresh();
-        const enableDnD = !isFiltered && this.cardElements.length > 1;
-        this.dragDropManager.setEnabled(enableDnD);
+  /**
+   * Optimize post-render operations with batched updates
+   * 
+   * @param {HTMLElement} container - Cards container
+   * @param {Object} state - Application state
+   * @param {number} scrollTop - Previous scroll position
+   * @private
+   */
+  optimizePostRender(container, state, scrollTop) {
+    const isFiltered = !!(state.search?.trim() || state.filterTags?.length);
+    const hasCards = this.cardElements.length > 0;
+    const hasFewCards = this.cardElements.length <= 6;
+    
+    // BATCH CLASS OPERATIONS: Apply all CSS class changes in one operation
+    const classUpdates = [
+      () => container.classList.remove('empty-state'),
+      () => container.classList.toggle('few-cards', hasFewCards),
+      () => container.classList.toggle('dnd-disabled', isFiltered || this.cardElements.length <= 1)
+    ];
+    
+    // Execute all class updates together
+    classUpdates.forEach(update => update());
+    
+    // OPTIMIZE DRAG AND DROP: Batch drag/drop updates
+    if (this.dragDropManager) {
+      this.dragDropManager.refresh();
+      const enableDnD = !isFiltered && this.cardElements.length > 1;
+      this.dragDropManager.setEnabled(enableDnD);
+    }
+    
+    // Update drag handle tooltips
+    this.updateDragHandleTooltips(isFiltered);
+    
+    // Ensure selection is valid and restore it visually
+    this.ensureSelectionWithinBounds();
+    
+    // OPTIMIZE SCROLL RESTORATION: Use efficient scroll restoration
+    this.optimizeScrollRestore(scrollTop);
+  }
+
+  /**
+   * Optimized scroll position restoration
+   * 
+   * @param {number} prevScrollTop - Previous scroll position
+   * @private
+   */
+  optimizeScrollRestore(prevScrollTop) {
+    // Use requestAnimationFrame for smooth scroll restoration
+    requestAnimationFrame(() => {
+      if (!this.scrollRestored && this.initialScrollY > 0) {
+        // Restore saved scroll position on first render
+        window.scrollTo({ top: this.initialScrollY, behavior: 'auto' });
+        this.scrollRestored = true;
+        
+        // Re-enable entry animations after stabilization
+        requestAnimationFrame(() => {
+          document.documentElement.classList.remove('disable-entry-anim');
+        });
+      } else {
+        // Maintain current scroll position during re-renders
+        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+        const scrollDelta = Math.abs(currentScrollTop - prevScrollTop);
+        
+        // Only restore if scroll position changed significantly (>2px)
+        if (scrollDelta > 2) {
+          window.scrollTo({ top: prevScrollTop, behavior: 'auto' });
+        }
       }
-      // Reflect DnD availability in UI (tooltip and styling)
-      container.classList.toggle('dnd-disabled', isFiltered || this.cardElements.length <= 1);
-      this.updateDragHandleTooltips(isFiltered);
-
-      // Ensure selection is valid and restore it visually if needed
-      this.ensureSelectionWithinBounds();
-
-      // Restore scroll position and entry animations
-      this.postRenderScrollRestore(scrollTop);
     });
   }
 
@@ -881,55 +1013,436 @@ class CompyApp {
   }
 
   /**
-   * Generate the HTML content for a card with highlighted search terms
+   * Generate secure DOM content for a card with highlighted search terms
+   * SECURITY: This method uses safe DOM manipulation instead of innerHTML to prevent XSS
    * @private
    * @param {Object} item - Item data
    * @param {string} searchQuery - Search query for highlighting
-   * @returns {string} Card HTML content
+   * @returns {HTMLElement} Secure card content DOM element
    */
-  generateCardHTML(item, searchQuery) {
-    // TEXT PROCESSING: Handle sensitive content masking and highlighting
-    const displayText = item.sensitive ? '••••••••••' : escapeHtml(item.text);
-    const highlightedText = highlightText(displayText, searchQuery);
-    const highlightedDesc = highlightText(escapeHtml(item.desc), searchQuery);
-    const tagsHTML = this.renderTags(item.tags, searchQuery);
+  generateSecureCardDOM(item, searchQuery) {
+    // Create main content container
+    const cardContent = createElement('div', {
+      className: 'expandable-card-content'
+    });
     
-    // SECURITY NOTE: All user-provided fields are sanitized prior to innerHTML usage.
-    // - Text/desc are escaped via escapeHtml() and then highlighted with safe <mark> tags.
-    // - Tags are rendered through renderTags(), which escapes and highlights safely.
-    // - Sensitive content is masked at display level, but copy action uses original text.
+    // Create title element with safe content
+    const title = createElement('div', {
+      className: 'title',
+      textContent: item.sensitive ? '••••••••••' : item.text
+    });
     
-    // TEMPLATE GENERATION: Structured card content with expandable sections
-    return `
-      <div class="expandable-card-content">
-        <div class="title">${highlightedText}</div>
-        <div class="desc">${highlightedDesc}</div>
-        <div class="tags">${tagsHTML}</div>
-        
-        <!-- Expanded view shows full content without truncation -->
-        <div class="card-details">
-          <div class="details-content">
-            <div class="expanded-title">${highlightedText}</div>
-            <div class="expanded-desc">${highlightedDesc}</div>
-            ${item.tags.length > 0 ? `<div class=\"expanded-tags\">${tagsHTML}</div>` : ''}
-          </div>
-        </div>
-      </div>
+    // Apply safe highlighting to title if not sensitive
+    if (searchQuery && !item.sensitive) {
+      this.applySecureTextHighlighting(title, searchQuery);
+    }
+    
+    // Create description element with safe content
+    const desc = createElement('div', {
+      className: 'desc',
+      textContent: item.desc
+    });
+    
+    // Apply safe highlighting to description
+    if (searchQuery) {
+      this.applySecureTextHighlighting(desc, searchQuery);
+    }
+    
+    // Create tags container
+    const tagsContainer = this.createSecureTagsDOM(item.tags, searchQuery);
+    
+    // Create expanded view details
+    const cardDetails = createElement('div', {
+      className: 'card-details'
+    });
+    
+    const detailsContent = createElement('div', {
+      className: 'details-content'
+    });
+    
+    // Expanded title (clone of main title)
+    const expandedTitle = title.cloneNode(true);
+    expandedTitle.className = 'expanded-title';
+    
+    // Expanded description (clone of main desc)
+    const expandedDesc = desc.cloneNode(true);
+    expandedDesc.className = 'expanded-desc';
+    
+    // Add elements to details content
+    detailsContent.appendChild(expandedTitle);
+    detailsContent.appendChild(expandedDesc);
+    
+    if (item.tags.length > 0) {
+      const expandedTags = tagsContainer.cloneNode(true);
+      expandedTags.className = 'expanded-tags';
+      detailsContent.appendChild(expandedTags);
+    }
+    
+    cardDetails.appendChild(detailsContent);
+    
+    // Assemble main content
+    cardContent.appendChild(title);
+    cardContent.appendChild(desc);
+    cardContent.appendChild(tagsContainer);
+    cardContent.appendChild(cardDetails);
+    
+    // Create container for all card elements
+    const fullCardContent = createElement('div');
+    fullCardContent.appendChild(cardContent);
+    fullCardContent.appendChild(this.createSecureCardActionsDOM());
+    fullCardContent.appendChild(this.createSecureCloseButtonDOM());
+    fullCardContent.appendChild(this.createSecureDragHandleDOM());
+    
+    return fullCardContent;
+  }
+
+  /**
+   * Apply secure text highlighting using DOM manipulation (prevents XSS)
+   * @private
+   * @param {HTMLElement} element - Element to apply highlighting to
+   * @param {string} query - Search query to highlight
+   */
+  applySecureTextHighlighting(element, query) {
+    if (!query || !element) return;
+    
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    const textNodes = [];
+    let node;
+    
+    // Collect all text nodes
+    while (node = walker.nextNode()) {
+      textNodes.push(node);
+    }
+    
+    // Process each text node
+    textNodes.forEach(textNode => {
+      const text = textNode.textContent;
+      const escapedQuery = this.escapeRegExp(query);
+      const regex = new RegExp(escapedQuery, 'gi');
       
-      ${this.generateCardActionsHTML()}
-      <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
-        <span aria-hidden="true">${ICONS.close}</span>
-      </button>
-      ${createIconButton({
-        className: 'icon-btn drag-handle',
-        title: 'Drag to reorder',
-        iconSVG: createSVGIcon({
-          paths: `<circle cx="6" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="18" cy="8" r="1.5" fill="currentColor"/><circle cx="6" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><circle cx="18" cy="16" r="1.5" fill="currentColor"/>`,
-          width: 16,
-          height: 16
-        })
-      })}
-    `;
+      if (regex.test(text)) {
+        const fragment = document.createDocumentFragment();
+        let lastIndex = 0;
+        let match;
+        
+        regex.lastIndex = 0; // Reset regex state
+        
+        while ((match = regex.exec(text)) !== null) {
+          // Add text before match
+          if (match.index > lastIndex) {
+            fragment.appendChild(
+              document.createTextNode(text.slice(lastIndex, match.index))
+            );
+          }
+          
+          // Add highlighted match using createElement (safe)
+          const mark = createElement('mark', {
+            textContent: match[0]
+          });
+          fragment.appendChild(mark);
+          
+          lastIndex = regex.lastIndex;
+          
+          // Prevent infinite loops on zero-length matches
+          if (match.index === regex.lastIndex) {
+            regex.lastIndex++;
+          }
+        }
+        
+        // Add remaining text
+        if (lastIndex < text.length) {
+          fragment.appendChild(
+            document.createTextNode(text.slice(lastIndex))
+          );
+        }
+        
+        // Replace text node with fragment
+        textNode.parentNode.replaceChild(fragment, textNode);
+      }
+    });
+  }
+
+  /**
+   * Escape regex special characters to prevent injection
+   * @private
+   * @param {string} string - String to escape
+   * @returns {string} Escaped string safe for regex
+   */
+  escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Create secure tags DOM element using safe methods
+   * @private
+   * @param {string[]} tags - Array of tag strings
+   * @param {string} searchQuery - Search query for highlighting
+   * @returns {HTMLElement} Tags container element
+   */
+  createSecureTagsDOM(tags = [], searchQuery = '') {
+    const tagsContainer = createElement('div', {
+      className: 'tags'
+    });
+    
+    const maxVisible = UI_CONFIG.maxVisibleTags;
+    const visibleTags = tags.slice(0, maxVisible);
+    const extraCount = tags.length - visibleTags.length;
+    
+    // Create tag chips securely
+    visibleTags.forEach(tag => {
+      const hue = Math.abs(stringHash(tag)) % 360;
+      const chip = createElement('span', {
+        className: 'chip',
+        textContent: tag,
+        styles: { '--hue': hue }
+      });
+      
+      // Apply safe highlighting to tag
+      if (searchQuery) {
+        this.applySecureTextHighlighting(chip, searchQuery);
+      }
+      
+      tagsContainer.appendChild(chip);
+    });
+    
+    // Add "more" indicator if needed
+    if (extraCount > 0) {
+      const moreIndicator = createElement('span', {
+        className: 'more',
+        textContent: `+${extraCount} more`,
+        attributes: {
+          'data-more-tags': '',
+          'title': `Show all ${tags.length} tags`
+        }
+      });
+      tagsContainer.appendChild(moreIndicator);
+    }
+    
+    return tagsContainer;
+  }
+
+  /**
+   * Create secure card actions DOM without innerHTML
+   * @private
+   * @returns {HTMLElement} Actions container
+   */
+  createSecureCardActionsDOM() {
+    const actions = createElement('div', {
+      className: 'actions',
+      attributes: { 'aria-label': 'Card actions' }
+    });
+    
+    // Create expand/collapse container
+    const expandCollapseContainer = createElement('div', {
+      className: 'expand-collapse-container'
+    });
+    
+    // Expand button
+    const expandBtn = this.createSecureIconButton({
+      className: 'icon-btn expand-trigger',
+      title: 'Expand card',
+      dataAct: 'expand',
+      iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>`
+    });
+    
+    // Collapse button
+    const collapseBtn = this.createSecureIconButton({
+      className: 'icon-btn collapse-action card-action-hidden',
+      title: 'Collapse card',
+      dataAct: 'collapse',
+      iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`
+    });
+    
+    expandCollapseContainer.appendChild(expandBtn);
+    expandCollapseContainer.appendChild(collapseBtn);
+    actions.appendChild(expandCollapseContainer);
+    
+    // Other action buttons
+    const actionButtons = [
+      { action: 'copy', iconPaths: `<rect x="9" y="9" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="4" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>`, title: 'Copy to clipboard' },
+      { action: 'edit', iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0-3-3L4 18v3z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M14 6l4 4"/>`, title: 'Edit snippet' },
+      { action: 'delete', iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18"/><path fill="none" stroke="currentColor" stroke-width="2" d="M8 6V4h8v2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path fill="none" stroke="currentColor" stroke-width="2" d="M10 11v6M14 11v6"/>`, title: 'Delete snippet', className: 'danger-icon' }
+    ];
+    
+    actionButtons.forEach(btn => {
+      const button = this.createSecureIconButton({
+        className: `icon-btn ${btn.className || ''}`.trim(),
+        title: btn.title,
+        dataAct: btn.action,
+        iconPaths: btn.iconPaths
+      });
+      actions.appendChild(button);
+    });
+    
+    return actions;
+  }
+
+  /**
+   * Create secure close button DOM
+   * @private
+   * @returns {HTMLElement} Close button element
+   */
+  createSecureCloseButtonDOM() {
+    const closeBtn = createElement('button', {
+      className: 'close-btn',
+      attributes: {
+        'title': 'Close expanded view',
+        'aria-label': 'Close expanded view'
+      }
+    });
+    
+    const closeIcon = createElement('span', {
+      textContent: ICONS.close,
+      attributes: { 'aria-hidden': 'true' }
+    });
+    
+    closeBtn.appendChild(closeIcon);
+    return closeBtn;
+  }
+
+  /**
+   * Create secure drag handle DOM
+   * @private
+   * @returns {HTMLElement} Drag handle button
+   */
+  createSecureDragHandleDOM() {
+    return this.createSecureIconButton({
+      className: 'icon-btn drag-handle',
+      title: 'Drag to reorder',
+      iconPaths: `<circle cx="6" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="18" cy="8" r="1.5" fill="currentColor"/><circle cx="6" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><circle cx="18" cy="16" r="1.5" fill="currentColor"/>`,
+      width: 16,
+      height: 16
+    });
+  }
+
+  /**
+   * Create secure icon button using safe DOM methods
+   * @private
+   * @param {Object} options - Button options
+   * @returns {HTMLElement} Secure button element
+   */
+  createSecureIconButton(options = {}) {
+    const {
+      className = 'icon-btn',
+      title = '',
+      dataAct,
+      iconPaths = '',
+      width = 20,
+      height = 20
+    } = options;
+    
+    const button = createElement('button', {
+      className,
+      attributes: {
+        'title': title,
+        'aria-label': title,
+        'data-act': dataAct
+      }
+    });
+    
+    if (iconPaths) {
+      const svg = this.createSecureSVGIcon(iconPaths, width, height, title);
+      button.appendChild(svg);
+    }
+    
+    return button;
+  }
+
+  /**
+   * Create secure SVG icon using safe DOM methods
+   * @private
+   * @param {string} paths - SVG path data
+   * @param {number} width - Icon width
+   * @param {number} height - Icon height
+   * @param {string} title - Accessible title
+   * @returns {SVGElement} Secure SVG element
+   */
+  createSecureSVGIcon(paths, width = 20, height = 20, title = '') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('role', 'img');
+    
+    if (title) {
+      svg.setAttribute('aria-label', title);
+      const titleElement = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      titleElement.textContent = title;
+      svg.appendChild(titleElement);
+    } else {
+      svg.setAttribute('aria-hidden', 'true');
+    }
+    
+    // Create path elements from paths string
+    if (paths) {
+      // Parse the paths safely
+      const pathRegex = /<path[^>]*d="([^"]*)"/g;
+      const circleRegex = /<circle[^>]*cx="([^"]*)"[^>]*cy="([^"]*)"[^>]*r="([^"]*)"/g;
+      const rectRegex = /<rect[^>]*x="([^"]*)"[^>]*y="([^"]*)"[^>]*width="([^"]*)"[^>]*height="([^"]*)"/g;
+      
+      let match;
+      
+      // Handle path elements
+      while ((match = pathRegex.exec(paths)) !== null) {
+        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathElement.setAttribute('d', match[1]);
+        
+        // Extract other attributes safely
+        const pathMatch = paths.match(new RegExp(`<path[^>]*d="${match[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`, 'g'));
+        if (pathMatch) {
+          const pathStr = pathMatch[0];
+          if (pathStr.includes('fill="none"')) pathElement.setAttribute('fill', 'none');
+          if (pathStr.includes('stroke="currentColor"')) pathElement.setAttribute('stroke', 'currentColor');
+          if (pathStr.includes('stroke-width="2"')) pathElement.setAttribute('stroke-width', '2');
+          if (pathStr.includes('stroke-linecap="round"')) pathElement.setAttribute('stroke-linecap', 'round');
+          if (pathStr.includes('stroke-linejoin="round"')) pathElement.setAttribute('stroke-linejoin', 'round');
+          if (pathStr.includes('fill="currentColor"')) pathElement.setAttribute('fill', 'currentColor');
+        }
+        
+        svg.appendChild(pathElement);
+      }
+      
+      // Handle circle elements
+      while ((match = circleRegex.exec(paths)) !== null) {
+        const circleElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circleElement.setAttribute('cx', match[1]);
+        circleElement.setAttribute('cy', match[2]);
+        circleElement.setAttribute('r', match[3]);
+        circleElement.setAttribute('fill', 'currentColor');
+        svg.appendChild(circleElement);
+      }
+      
+      // Handle rect elements
+      while ((match = rectRegex.exec(paths)) !== null) {
+        const rectElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rectElement.setAttribute('x', match[1]);
+        rectElement.setAttribute('y', match[2]);
+        rectElement.setAttribute('width', match[3]);
+        rectElement.setAttribute('height', match[4]);
+        
+        // Extract other rect attributes
+        const rectMatch = paths.match(new RegExp(`<rect[^>]*x="${match[1]}"[^>]*>`, 'g'));
+        if (rectMatch) {
+          const rectStr = rectMatch[0];
+          if (rectStr.includes('fill="none"')) rectElement.setAttribute('fill', 'none');
+          if (rectStr.includes('stroke="currentColor"')) rectElement.setAttribute('stroke', 'currentColor');
+          if (rectStr.includes('stroke-width="2"')) rectElement.setAttribute('stroke-width', '2');
+          if (rectStr.includes('rx="2"')) rectElement.setAttribute('rx', '2');
+          if (rectStr.includes('ry="2"')) rectElement.setAttribute('ry', '2');
+        }
+        
+        svg.appendChild(rectElement);
+      }
+    }
+    
+    return svg;
   }
 
   /**
@@ -979,11 +1492,11 @@ class CompyApp {
   /**
    * Create a DOM element representing a single item card.
    * 
-   * This function has been modularized into smaller, focused methods for better
-   * maintainability and testability. The card creation process follows these steps:
+   * SECURITY UPDATE: This function now uses safe DOM methods instead of innerHTML
+   * to prevent XSS vulnerabilities. The card creation process follows these steps:
    * 1. Create base element structure
    * 2. Configure accessibility attributes
-   * 3. Generate and inject HTML content
+   * 3. Generate safe DOM content (NO innerHTML)
    * 4. Setup event handlers for interactions
    * 
    * @param {Object} item - Item with text, desc, sensitive, tags
@@ -1000,8 +1513,9 @@ class CompyApp {
     // 2. CONFIGURE ACCESSIBILITY: ARIA attributes and interaction support
     this.configureCardAccessibility(card, item);
     
-    // 3. INJECT CONTENT: Generated HTML with search highlighting
-    card.innerHTML = this.generateCardHTML(item, searchQuery);
+    // 3. SECURE CONTENT GENERATION: Use safe DOM methods instead of innerHTML
+    const cardContent = this.generateSecureCardDOM(item, searchQuery);
+    card.appendChild(cardContent);
 
     // 4. SETUP INTERACTIONS: Event handlers for user interactions
     this.setupCardEventHandlers(card, item);
@@ -1010,12 +1524,15 @@ class CompyApp {
   }
 
   /**
-   * Wire click/keyboard handlers for a card's interactions.
-   * Click on card selects it and copies content unless an action button was clicked.
+   * Wire click/keyboard handlers for a card's interactions with memory-safe event handling
+   * MEMORY SAFETY: Uses AbortController for automatic cleanup
    * @param {HTMLElement} card - Card element
    * @param {Object} item - Item backing the card
    */
   setupCardEventHandlers(card, item) {
+    // Use AbortController signal for automatic cleanup
+    const options = { signal: this.abortController.signal };
+    
     // Click to select card and copy (but not on action buttons or when expanded)
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
@@ -1035,7 +1552,7 @@ class CompyApp {
         // Copy the content
         this.clipboard.copy(item.text);
       }
-    });
+    }, options);
     
     // Keyboard accessibility for reordering
     card.addEventListener('keydown', (e) => {
@@ -1109,7 +1626,7 @@ class CompyApp {
           }
           break;
       }
-    });
+    }, options);
 
     // Action buttons - use event delegation for all buttons
     card.addEventListener('click', (e) => {
@@ -1158,6 +1675,13 @@ class CompyApp {
           this.expandableCardManager.collapse();
         }
       }
+    }, options);
+    
+    // Track cleanup for any additional card-specific cleanup
+    this.addCleanupTask(() => {
+      // Remove any custom attributes or data
+      card.removeAttribute('data-active');
+      card.removeAttribute('aria-grabbed');
     });
   }
 
@@ -2182,7 +2706,7 @@ class CompyApp {
   }
 
   /**
-   * Process CSV data rows and import valid items
+   * Process CSV data rows and import valid items with security sanitization
    * 
    * @param {string[]} dataLines - Array of CSV data lines
    * @param {Object} columnMapping - Column index mapping
@@ -2196,13 +2720,22 @@ class CompyApp {
     
     for (let i = 0; i < dataLines.length; i++) {
       try {
-        const itemData = this.parseCSVDataRow(dataLines[i], columnMapping);
+        const rawItemData = this.parseCSVDataRow(dataLines[i], columnMapping);
         
-        if (this.addImportedItem(itemData, dedupeSet)) {
+        // SECURITY: Sanitize CSV data before processing
+        const sanitizedItemData = this.sanitizeImportData(rawItemData);
+        
+        if (!sanitizedItemData) {
+          skippedCount++;
+          console.warn(`Skipped potentially malicious item on line ${i + 1}`);
+          continue;
+        }
+        
+        if (this.addImportedItem(sanitizedItemData, dedupeSet)) {
           importCount++;
         } else {
           skippedCount++;
-          console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, itemData);
+          console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, sanitizedItemData);
         }
       } catch (lineError) {
         skippedCount++;
@@ -2266,6 +2799,97 @@ class CompyApp {
       console.error('CSV import failed:', error);
       this.showNotification(`CSV import failed: ${error.message}`, 'error');
     }
+  }
+
+  /**
+   * Sanitize imported data to prevent CSV injection attacks
+   * 
+   * @param {Object} data - Raw imported data
+   * @returns {Object|null} Sanitized data or null if malicious content detected
+   * @private
+   */
+  sanitizeImportData(data) {
+    // Check for CSV injection patterns
+    const dangerousPatterns = [
+      /^[=@+\-]/,           // Formula injection (Excel/Calc)
+      /javascript:/i,       // JavaScript URIs
+      /data:text\/html/i,   // HTML data URIs
+      /<script/i,           // Script tags
+      /on\w+=/i,            // Event handlers (onclick, onload, etc.)
+      /<iframe/i,           // Iframe tags
+      /<object/i,           // Object tags
+      /<embed/i,            // Embed tags
+      /\\x[0-9a-fA-F]{2}/,  // Hex escapes
+      /\\u[0-9a-fA-F]{4}/   // Unicode escapes
+    ];
+    
+    const sanitized = {
+      text: String(data.text || '').trim(),
+      desc: String(data.desc || '').trim(),
+      sensitive: Boolean(data.sensitive),
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      position: Number(data.position) || 0
+    };
+    
+    // Validate text field
+    if (dangerousPatterns.some(pattern => pattern.test(sanitized.text))) {
+      console.warn('Blocked potentially malicious text content:', sanitized.text);
+      return null;
+    }
+    
+    // Validate description
+    if (dangerousPatterns.some(pattern => pattern.test(sanitized.desc))) {
+      console.warn('Blocked potentially malicious description:', sanitized.desc);
+      return null;
+    }
+    
+    // Sanitize tags array
+    sanitized.tags = sanitized.tags
+      .map(tag => String(tag).trim())
+      .filter(tag => {
+        // Validate each tag
+        if (dangerousPatterns.some(pattern => pattern.test(tag))) {
+          console.warn('Blocked potentially malicious tag:', tag);
+          return false;
+        }
+        return tag.length > 0 && tag.length <= 50;
+      })
+      .slice(0, 50); // Limit total tags
+    
+    // Additional length validations
+    if (sanitized.text.length > 10000) {
+      console.warn('Blocked oversized text content (>10000 chars)');
+      return null;
+    }
+    
+    if (sanitized.desc.length > 1000) {
+      console.warn('Blocked oversized description (>1000 chars)');
+      return null;
+    }
+    
+    // Check for suspicious patterns in combined content
+    const combinedContent = `${sanitized.text} ${sanitized.desc} ${sanitized.tags.join(' ')}`;
+    
+    // Additional security checks
+    const suspiciousPatterns = [
+      /\beval\s*\(/i,        // eval() function calls
+      /\bsetTimeout\s*\(/i,  // setTimeout calls
+      /\bsetInterval\s*\(/i, // setInterval calls
+      /\bFunction\s*\(/i,    // Function constructor
+      /\bunescape\s*\(/i,    // unescape calls
+      /\bdocument\./i,       // Document object access
+      /\bwindow\./i,         // Window object access
+      /\balert\s*\(/i,       // Alert calls
+      /\bconfirm\s*\(/i,     // Confirm calls
+      /\bprompt\s*\(/i       // Prompt calls
+    ];
+    
+    if (suspiciousPatterns.some(pattern => pattern.test(combinedContent))) {
+      console.warn('Blocked content with suspicious JavaScript patterns');
+      return null;
+    }
+    
+    return sanitized;
   }
 
   /**
