@@ -146,7 +146,9 @@
       <button id="navToggle" class="menu-toggle" aria-label="Open menu" aria-controls="navActions"
         aria-expanded="false">
         <span class="sr-only">Open menu</span>
-        <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+        <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" fill="currentColor"/>
+        </svg>
       </button>
       <button id="brand" class="brand" title="Refresh page" aria-label="Compy - Refresh page">Compy 2.0</button>
       <span id="profileDisplay" class="profile-display" aria-label="Current user profile"></span>
@@ -158,49 +160,84 @@
           <input id="searchInput" type="search" placeholder="Search snippets (Ctrl+F or /)" aria-label="Search snippets"
             autocomplete="off" spellcheck="false" />
           <button id="searchClear" class="icon-btn" title="Clear search" aria-label="Clear search input" tabindex="-1">
-            <span aria-hidden="true">✕</span>
+            <svg class="nav-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" fill="currentColor"/>
+            </svg>
           </button>
         </div>
         <button id="addBtn" class="primary-btn" title="Add new snippet" aria-label="Add new snippet">
-          <span aria-hidden="true"><b>＋</b></span>
+          <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M13,7H11V11H7V13H11V17H13V13H17V11H13V7Z" fill="currentColor"/>
+          </svg>
           <span class="sr-only">Add</span>
         </button>
       </div>
     </div>
     <div id="navActions" class="right">
-      <button id="filterBtn" class="icon-text-btn" title="Filter snippets by tags" aria-label="Filter snippets by tags"
+      <button id="filterBtn" class="icon-btn-with-badge" title="Filter snippets by tags" aria-label="Filter snippets by tags"
         aria-describedby="filterBadge">
-        Filter
+        <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" fill="currentColor"/>
+        </svg>
+        <span class="sr-only">Filter</span>
         <span id="filterBadge" class="badge" hidden aria-label="Active filters count">0</span>
       </button>
-      <button id="themePickerBtn" class="theme-indicator-btn" title="Choose theme" aria-label="Open theme picker">
-        <div id="themeIndicator" class="theme-indicator">
-          <div class="theme-color-ring">
-            <div class="color-segment" data-color="primary"></div>
-            <div class="color-segment" data-color="surface"></div>
-            <div class="color-segment" data-color="text"></div>
-            <div class="color-segment" data-color="bg"></div>
-          </div>
-        </div>
+      <button id="themePickerBtn" class="icon-btn" title="Choose color theme" aria-label="Open theme picker">
+        <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z" fill="currentColor"/>
+        </svg>
+        <span class="sr-only">Themes</span>
       </button>
-      <label class="file-btn" title="Import snippets from file">
+      <label class="file-btn" title="Import snippets from JSON or CSV file">
         <input id="importFile" type="file" accept=".json,.csv" hidden aria-label="Choose file to import snippets" />
-        <span>Import</span>
+        <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z" fill="currentColor"/>
+        </svg>
+        <span class="sr-only">Import</span>
       </label>
       <div class="menu">
-        <button id="exportMenuBtn" class="icon-text-btn with-caret" title="Export options"
+        <button id="exportMenuBtn" class="icon-btn with-caret" title="Export data (JSON, CSV, Backups)"
           aria-label="Export options menu" aria-expanded="false" aria-haspopup="menu">
-          Export
+          <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" fill="currentColor"/>
+          </svg>
+          <span class="sr-only">Export</span>
         </button>
         <div id="exportMenu" class="menu-panel" role="menu" aria-label="Export options">
-          <button role="menuitem" data-export="json" aria-label="Export all snippets as JSON">Export JSON</button>
-          <button role="menuitem" data-export="csv" aria-label="Export all snippets as CSV">Export CSV</button>
-          <button role="menuitem" id="backupsBtn" aria-label="View backup files">Backups</button>
+          <button role="menuitem" data-export="json" aria-label="Export all snippets as JSON">
+            <svg class="menu-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M12,17.56L16.07,16.43L16.62,10.33H9.38L9.2,8.3H16.8L17,6.31H7L7.56,12.32H14.45L14.22,14.9L12,15.5L9.78,14.9L9.64,13.24H7.64L7.93,16.43L12,17.56Z" fill="currentColor"/>
+            </svg>
+            <span>Export JSON</span>
+          </button>
+          <button role="menuitem" data-export="csv" aria-label="Export all snippets as CSV">
+            <svg class="menu-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19Z" fill="currentColor"/>
+              <path d="M6.5,7.5H17.5V9H6.5V7.5M6.5,10.5H17.5V12H6.5V10.5M6.5,13.5H17.5V15H6.5V13.5M6.5,16.5H14V18H6.5V16.5Z" fill="currentColor"/>
+            </svg>
+            <span>Export CSV</span>
+          </button>
+          <button role="menuitem" id="backupsBtn" aria-label="View backup files">
+            <svg class="menu-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M12,3A9,9 0 0,1 21,12A9,9 0 0,1 12,21A9,9 0 0,1 3,12A9,9 0 0,1 12,3M12,5A7,7 0 0,0 5,12A7,7 0 0,0 12,19A7,7 0 0,0 19,12A7,7 0 0,0 12,5M7.5,11L10,13.5L16.5,7L18,8.5L10,16.5L6,12.5L7.5,11Z" fill="currentColor"/>
+            </svg>
+            <span>Backups</span>
+          </button>
         </div>
       </div>
-      <button id="profileEditBtn" class="icon-text-btn" title="Edit your profile"
-        aria-label="Edit your profile">Profile</button>
-      <button id="aboutBtn" class="icon-text-btn" title="About Compy 2.0" aria-label="About Compy 2.0">About</button>
+      <button id="profileEditBtn" class="icon-btn" title="Edit profile settings"
+        aria-label="Edit your profile and settings">
+        <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" fill="currentColor"/>
+        </svg>
+        <span class="sr-only">Settings</span>
+      </button>
+      <button id="aboutBtn" class="icon-btn" title="About & Help" aria-label="About this application and help">
+        <svg class="nav-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+          <path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" fill="currentColor"/>
+        </svg>
+        <span class="sr-only">About</span>
+      </button>
     </div>
   </header>
   <div id="navBackdrop" class="nav-backdrop" hidden></div>
