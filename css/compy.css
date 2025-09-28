@@ -169,6 +169,9 @@
    ================================================================= */
 
 /* ============= DARK THEMES ============= */
+/* Each dark theme maintains WCAG AA compliance (4.5:1 contrast ratio)
+   All themes support automatic OS preference detection and manual selection
+   Theme switching includes smooth transitions to prevent visual jarring */
 html[data-theme="dark-mystic-forest"] {
   --bg: #0a0d10;
   --surface: #1a2026;

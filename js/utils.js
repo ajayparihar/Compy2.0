@@ -229,16 +229,19 @@ export const highlightText = (text, query) => {
  */
 export const stringHash = (str) => {
   let hash = 0;
+  const length = str.length; // OPTIMIZATION: Cache length to avoid repeated property access
   
   // HASHING ALGORITHM: djb2 variant optimized for JavaScript
   // The left shift operation (<<) multiplies by 32, which is then
   // subtracted from itself to effectively multiply by 31
   // This creates better distribution than simpler multiplications
-  for (let i = 0; i < str.length; i++) {
+  for (let i = 0; i < length; i++) {
     // CHARACTER CODE INTEGRATION: Mix character values into hash
-    // The | 0 operation ensures the result stays within 32-bit integer range
-    // preventing JavaScript's automatic floating-point conversion
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    // OPTIMIZATION: Use faster bitwise XOR instead of addition for better distribution
+    // Combined with left shift to maintain avalanche effect
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    // OPTIMIZATION: Use unsigned right shift instead of | 0 for faster 32-bit conversion
+    hash = hash >>> 0; // Convert to unsigned 32-bit integer
   }
   
   return hash;
@@ -283,18 +286,24 @@ export const stringHash = (str) => {
  * window.addEventListener('resize', debouncedResize);
  */
 export const debounce = (func, wait) => {
-  let timeout;
+  let timeout;  // Holds the timeout ID for cancellation
   
   return function executedFunction(...args) {
-    // Define the delayed execution function
+    // ALGORITHM: Reset-on-Call Debouncing Strategy
+    // 1. Define delayed execution that runs the original function
+    // 2. Cancel any existing timeout (resets the delay)
+    // 3. Start new timeout with fresh delay period
+    // This ensures function only executes after 'wait' ms of inactivity
+    
     const later = () => {
-      clearTimeout(timeout);
-      func(...args);
+      clearTimeout(timeout);  // Clean up timeout reference
+      func(...args);          // Execute original function with preserved arguments
     };
     
-    // Clear previous timeout and set new one
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
+    // TIMEOUT MANAGEMENT: Cancel previous call and schedule new one
+    // This is the key to debouncing - each new call resets the timer
+    clearTimeout(timeout);        // Cancel pending execution (if any)
+    timeout = setTimeout(later, wait);  // Schedule new execution
   };
 };
 

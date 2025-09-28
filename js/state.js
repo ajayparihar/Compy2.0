@@ -194,9 +194,14 @@ const notifyListeners = () => {
  */
 export const loadState = () => {
   try {
-    // LOCALSTORAGE API INTERACTION: Retrieve stored application data
-    // getItem() returns string value or null if key doesn't exist
-    // This is a synchronous operation that can throw SecurityError in private mode
+    // WEB STORAGE API INTEGRATION: localStorage interface
+    // - Part of Web Storage API specification (HTML5)
+    // - Synchronous key-value storage with string values only
+    // - Domain-scoped, persistent across browser sessions
+    // - Storage limit: ~5-10MB depending on browser
+    // - getItem() returns string or null if key doesn't exist
+    // - Can throw SecurityError in private browsing modes
+    // - QuotaExceededError when storage limit reached
     const rawItems = localStorage.getItem(STORAGE_KEYS.items);        // Main snippet data
     const rawFilters = localStorage.getItem(STORAGE_KEYS.filters);    // Active filter preferences
     const rawProfile = localStorage.getItem(STORAGE_KEYS.profile);    // User profile information
@@ -206,18 +211,21 @@ export const loadState = () => {
     if (rawItems) {
       const parsedItems = JSON.parse(rawItems);
       if (Array.isArray(parsedItems)) {
-        // Validate item structure and filter out invalid items
+        // COMPLEX VALIDATION ALGORITHM: Multi-step item structure verification
+        // Step 1: Filter out items with invalid/missing required fields
+        // Step 2: Map over valid items to ensure backwards compatibility
         items = parsedItems.filter(item => 
           item && 
-          typeof item.id === 'string' &&
-          typeof item.text === 'string' &&
-          typeof item.desc === 'string' &&
-          typeof item.sensitive === 'boolean' &&
-          Array.isArray(item.tags)
+          typeof item.id === 'string' &&      // Unique identifier validation
+          typeof item.text === 'string' &&    // Content must be string (not number/object)
+          typeof item.desc === 'string' &&    // Description validation
+          typeof item.sensitive === 'boolean' && // Security flag validation
+          Array.isArray(item.tags)            // Tags must be array (even if empty)
         ).map((item, index) => {
-          // Ensure position field exists for backwards compatibility
+          // BACKWARDS COMPATIBILITY: Add position field for items saved before v2.0
+          // This ensures drag-and-drop reordering works with legacy data
           if (typeof item.position !== 'number') {
-            item.position = index;
+            item.position = index; // Use array index as default position
           }
           return item;
         });

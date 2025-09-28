@@ -676,10 +676,15 @@ class CompyApp {
         return;
       }
 
-      // Respect reduced motion preference
-      // Respect OS/browser reduced-motion preference for accessibility.
-      // Animations are disabled when the user requests reduced motion.
-      const prefersReducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // ACCESSIBILITY COMPLIANCE: Reduced Motion Preference
+      // CSS Media Query: prefers-reduced-motion detects user's OS-level motion settings
+      // Business Rules:
+      // - Users with vestibular disorders may request reduced motion
+      // - Setting disabled: animations = 200ms (smooth transitions)
+      // - Setting enabled: animations = 0ms (instant, no motion)
+      // - Fallback: if matchMedia unavailable, assume motion is okay (200ms)
+      const prefersReducedMotion = typeof window.matchMedia === 'function' && 
+                                   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const animMs = prefersReducedMotion ? 0 : 200;
 
       // Create drag and drop manager
@@ -702,14 +707,34 @@ class CompyApp {
     }
   }
 
-  // Helper: return true if reordering should be disabled (search/filters active or not enough cards)
+  // EXTRACTED METHOD: Reduce code duplication for reorder disabled notifications
+  notifyReorderDisabled() {
+    this.showNotification('Reordering disabled while search or filters are active', 'info');
+  }
+
+  // BUSINESS LOGIC: Drag/Drop Availability Rules
+  // Reordering is disabled when search/filters are active because:
+  // 1. Users would expect to reorder the filtered view, not the full dataset
+  // 2. Hidden cards would be affected in unexpected ways
+  // 3. UX becomes confusing when some cards are not visible
+  // 4. Position changes would be lost when filters are cleared
   isReorderDisabled() {
     try {
       const s = getState();
+      // SEARCH CHECK: Active search query disables reordering
+      // Trimmed check prevents whitespace-only strings from counting as searches
       const hasSearch = !!(s.search && s.search.trim());
+      
+      // FILTER CHECK: Any active tag filters disable reordering
+      // Array validation prevents crashes from malformed state
       const hasFilters = Array.isArray(s.filterTags) && s.filterTags.length > 0;
+      
+      // CARD COUNT CHECK: Need at least 2 cards to make reordering meaningful
       return hasSearch || hasFilters || this.cardElements.length <= 1;
-    } catch (e) { return this.cardElements.length <= 1; }
+    } catch (e) { 
+      // FALLBACK: If state access fails, only disable when insufficient cards
+      return this.cardElements.length <= 1; 
+    }
   }
 
   // Helper: update drag handle tooltips based on disabled state
@@ -1647,7 +1672,7 @@ class CompyApp {
             // Ctrl/Cmd + Up to move card up
             e.preventDefault();
             if (this.isReorderDisabled()) {
-              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              this.notifyReorderDisabled();
               break;
             }
             this.moveCardUp(cardIndex);
@@ -1659,7 +1684,7 @@ class CompyApp {
             // Ctrl/Cmd + Down to move card down
             e.preventDefault();
             if (this.isReorderDisabled()) {
-              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              this.notifyReorderDisabled();
               break;
             }
             this.moveCardDown(cardIndex);
@@ -1671,7 +1696,7 @@ class CompyApp {
             // Ctrl/Cmd + Home to move to top
             e.preventDefault();
             if (this.isReorderDisabled()) {
-              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              this.notifyReorderDisabled();
               break;
             }
             this.moveCardToPosition(cardIndex, 0);
@@ -1683,7 +1708,7 @@ class CompyApp {
             // Ctrl/Cmd + End to move to bottom
             e.preventDefault();
             if (this.isReorderDisabled()) {
-              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              this.notifyReorderDisabled();
               break;
             }
             this.moveCardToPosition(cardIndex, this.visibleItems.length - 1);

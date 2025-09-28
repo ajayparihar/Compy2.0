@@ -199,6 +199,11 @@ document.addEventListener('DOMContentLoaded', async () => {
  * This handler catches any promises that reject without being handled,
  * preventing them from causing silent failures or browser console errors.
  * 
+ * BROWSER API INTEGRATION: PromiseRejectionEvent
+ * - Modern browsers fire 'unhandledrejection' events for uncaught Promise rejections
+ * - This provides a global safety net for async errors that escape try/catch blocks
+ * - Allows graceful handling instead of silent failures or console spam
+ * 
  * Browser API Dependencies:
  * - Window.unhandledrejection event (Chrome 49+, Firefox 69+, Safari 11+)
  * - PromiseRejectionEvent interface for event details
@@ -235,6 +240,20 @@ window.addEventListener('unhandledrejection', (event) => {
  * 
  * Catches any uncaught JavaScript errors and provides graceful error handling
  * to prevent the application from completely breaking.
+ * 
+ * ERROR HANDLING STRATEGY DOCUMENTATION:
+ * The application uses a multi-layered error handling approach:
+ * 
+ * Layer 1: Function-level try-catch blocks for specific error handling
+ * Layer 2: Component-level error boundaries for graceful feature degradation
+ * Layer 3: Global handlers (this function) for uncaught errors and promise rejections
+ * Layer 4: User-friendly notifications instead of technical error messages
+ * 
+ * VALIDATION PATTERNS:
+ * - Input validation at function entry points with informative error messages
+ * - Type checking using typeof and Array.isArray() for safety
+ * - Null/undefined checks with logical OR operators for graceful defaults
+ * - Range validation for numeric inputs with Math.max/Math.min clamping
  * 
  * @param {ErrorEvent} event - JavaScript error event
  */

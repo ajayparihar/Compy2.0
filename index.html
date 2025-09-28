@@ -1,8 +1,38 @@
 <!doctype html>
+<!-- 
+  COMPY 2.0 - MAIN APPLICATION DOCUMENT
+  
+  This HTML document serves as the primary interface for the Compy 2.0 clipboard and snippet
+  management application. It provides a complete, offline-first web application with:
+  
+  - Semantic HTML5 structure for accessibility and SEO
+  - Progressive enhancement with JavaScript modules
+  - Comprehensive ARIA attributes for screen reader support
+  - Advanced theme system with 26+ accessibility-compliant themes
+  - Responsive design optimized for desktop, tablet, and mobile
+  - Performance-optimized resource loading with preload hints
+  
+  Architecture:
+  - Single Page Application (SPA) with modal-based interactions
+  - Modular JavaScript with ES6+ module system
+  - CSS custom properties for dynamic theming
+  - LocalStorage for offline data persistence
+  - Web Clipboard API for seamless copy/paste functionality
+  
+  Browser Support:
+  - Chrome 60+ (full feature support)
+  - Firefox 60+ (full feature support) 
+  - Safari 12+ (full feature support)
+  - Edge 79+ (full feature support)
+  - Graceful degradation for older browsers
+-->
 <html lang="en" data-theme="dark-mystic-forest">
 
 <head>
+  <!-- DOCUMENT ENCODING AND VIEWPORT -->
+  <!-- UTF-8 ensures proper character rendering for international users -->
   <meta charset="utf-8" />
+  <!-- Responsive viewport settings for optimal mobile experience -->
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description"
     content="Compy 2.0 - A lightweight, offline-first clipboard and snippet manager. Save, organize, and search text snippets with tags." />
@@ -13,7 +43,9 @@
 
   <title>Compy 2.0</title>
 
-  <!-- Set persisted theme ASAP to avoid flash of default theme -->
+  <!-- CRITICAL THEME INITIALIZATION SCRIPT -->
+  <!-- This script runs immediately to prevent FOUC (Flash of Unstyled Content)
+       by applying the user's saved theme before any content renders. -->
   <script>
     (function () {
       try {
@@ -56,7 +88,8 @@
       }
     })();
   </script>
-  <!-- Disable browser auto scroll restore; we'll handle it manually to avoid jumps -->
+  <!-- SCROLL RESTORATION CONTROL -->
+  <!-- Disable browser auto scroll restore to avoid jumpy behavior; handled manually in JS -->
   <script>
     try {
       if ('scrollRestoration' in history) {
@@ -77,19 +110,37 @@
   <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
   <link rel="manifest" href="favicon_io/site.webmanifest">
 
-  <!-- Preload critical resources -->
+  <!-- PERFORMANCE OPTIMIZATION -->
+  <!-- Preload critical resources for faster rendering -->
   <link rel="preload" href="css/compy.css?v=2.0.9&t=5617" as="style" />
   <link rel="modulepreload" href="js/main.js?v=2.0.2" />
   
-  <!-- SortableJS for drag and drop functionality -->
+  <!-- EXTERNAL LIBRARY DEPENDENCIES -->
+  <!-- 
+    SortableJS v1.15.0+ Integration:
+    - Provides accessible drag-and-drop functionality for card reordering
+    - Handles touch/mouse/keyboard interactions automatically
+    - ARIA-compliant drag operations with screen reader support
+    - Zero dependencies, works with vanilla JavaScript
+    - License: MIT (compatible with this application)
+    
+    Browser API Integration:
+    - Uses HTML5 Drag and Drop API internally
+    - Fallback support for touch events on mobile
+    - Respects prefers-reduced-motion for accessibility
+    - Custom ghost elements for visual feedback
+  -->
   <script src="js/lib/Sortable.min.js"></script>
 </head>
 
 <body>
-  <!-- Skip Links for Keyboard Navigation -->
+  <!-- ACCESSIBILITY SKIP NAVIGATION -->
+  <!-- Skip links allow keyboard users to bypass repetitive navigation -->
   <a href="#main" class="skip-link">Skip to main content</a>
   <a href="#searchInput" class="skip-link">Skip to search</a>
   
+  <!-- MAIN NAVIGATION HEADER -->
+  <!-- Contains brand, search, and primary action buttons -->
   <header class="navbar" role="banner">
     <div class="left">
       <button id="navToggle" class="menu-toggle" aria-label="Open menu" aria-controls="navActions"
@@ -154,25 +205,37 @@
   </header>
   <div id="navBackdrop" class="nav-backdrop" hidden></div>
 
+  <!-- PRIMARY CONTENT AREA -->
+  <!-- Contains the main snippet cards grid and accessibility announcements -->
   <main id="main" role="main">
+    <!-- SNIPPET CARDS CONTAINER -->
+    <!-- Dynamically populated with user's saved snippets -->
     <section id="cards" class="cards" aria-label="Snippet cards" role="region">
       <!-- Cards injected here; skeletons shown initially -->
     </section>
 
-    <!-- Live region for announcements -->
+    <!-- SCREEN READER ANNOUNCEMENTS -->
+    <!-- Live region for accessibility notifications without visual disruption -->
     <div id="liveRegion" class="sr-only" aria-live="polite" aria-atomic="false"></div>
   </main>
 
-  <!-- Floating Add Button (mobile) -->
+  <!-- MOBILE FLOATING ACTION BUTTON -->
+  <!-- Quick add button for mobile users when navbar is collapsed -->
   <button id="fabAdd" class="fab-add" aria-label="Add new snippet" title="Add new snippet">
     <svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" role="img">
       <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
     </svg>
   </button>
 
-  <!-- Expandable Card Backdrop -->
+  <!-- EXPANDABLE CARD BACKDROP -->
+  <!-- Overlay backdrop for expanded card view interactions -->
   <div class="expandable-card-backdrop" hidden></div>
 
+  <!-- MODAL DIALOGS SYSTEM -->
+  <!-- Collection of modal dialogs for various application features -->
+  
+  <!-- ADD/EDIT SNIPPET MODAL -->
+  <!-- Primary modal for creating and editing snippet content -->
   <!-- Add/Edit Modal -->
   <div id="itemModal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="itemModalTitle"
     aria-describedby="itemModalDesc">
@@ -237,7 +300,8 @@
     </div>
   </div>
 
-  <!-- Filter Modal -->
+  <!-- TAG FILTER MODAL -->
+  <!-- Interface for filtering snippets by selected tags -->
   <div id="filterModal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="filterModalTitle"
     aria-describedby="filterModalDesc">
     <div class="modal-content small">
@@ -464,10 +528,12 @@
     </div>
   </div>
 
-  <!-- Toast notifications -->
+  <!-- NOTIFICATION SYSTEM -->
+  <!-- Accessible toast notifications for user feedback -->
   <div id="snackbar" class="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- JavaScript -->
+  <!-- APPLICATION JAVASCRIPT -->
+  <!-- Main application entry point with ES6 module system -->
   <script type="module" src="js/main.js?v=2.0.2" defer></script>
 
 </body>
