@@ -2939,6 +2939,39 @@ textarea:focus {
   box-shadow: 0 0 0 1px var(--primary);
 }
 
+/* Filter tag list - horizontal layout */
+#filterTagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+/* Adjust list-row for horizontal display in filter modal */
+#filterTagList .list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-light);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+#filterTagList .list-row:hover {
+  background: var(--hover-overlay);
+  border-color: var(--border-interactive);
+}
+
+#filterTagList .list-row input[type="checkbox"] {
+  margin: 0;
+  width: 14px;
+  height: 14px;
+}
+
 /* Avoid double border/glow inside tags input */
 .tags-input input,
 .tags-input input:focus {
