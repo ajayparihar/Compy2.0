@@ -271,67 +271,6 @@ export class ClipboardManager {
     return textarea;
   }
 
-  /**
-   * Validate text content for clipboard operations with comprehensive checks
-   * 
-   * Performs thorough validation of text content before attempting clipboard operations.
-   * This prevents various edge cases and provides clear feedback for invalid inputs.
-   * 
-   * Validation Rules:
-   * - Must be a non-empty string after trimming
-   * - Must not exceed reasonable length limits (100KB)
-   * - Must not contain only whitespace characters
-   * - Must be a valid string type (not null, undefined, or other types)
-   * 
-   * @param {any} text - Text content to validate
-   * @returns {{isValid: boolean, error?: string, processedText?: string}} Validation result
-   * 
-   * @private
-   */
-  validateClipboardText(text) {
-    // TYPE VALIDATION: Ensure input is a string or can be converted to one
-    if (text === null || text === undefined) {
-      return {
-        isValid: false,
-        error: 'Text cannot be null or undefined'
-      };
-    }
-
-    // CONVERT TO STRING: Handle non-string inputs safely
-    let textString;
-    try {
-      textString = String(text);
-    } catch (error) {
-      return {
-        isValid: false,
-        error: 'Text cannot be converted to string'
-      };
-    }
-
-    // LENGTH VALIDATION: Check for reasonable size limits
-    const maxLength = 100000; // 100KB limit for clipboard operations
-    if (textString.length > maxLength) {
-      return {
-        isValid: false,
-        error: `Text is too long (${textString.length} characters, maximum ${maxLength})`
-      };
-    }
-
-    // CONTENT VALIDATION: Ensure text has meaningful content
-    const trimmedText = textString.trim();
-    if (trimmedText.length === 0) {
-      return {
-        isValid: false,
-        error: 'Text is empty or contains only whitespace'
-      };
-    }
-
-    // SUCCESS: Text passes all validation checks
-    return {
-      isValid: true,
-      processedText: textString // Return original text (not trimmed)
-    };
-  }
 
   /**
    * Check if clipboard functionality is available

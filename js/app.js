@@ -80,107 +80,63 @@ class CompyApp {
    * Binds handlers to maintain context when used as event listeners.
    */
   constructor() {
+    // Core state
     this.initialized = false;
+    
+    // Component managers
     this.clipboard = null;
     this.notifications = null;
     this.modalManager = null;
     this.confirmationManager = null;
     this.theme = null;
-    this.search = null;
-    this.cards = null;
-    this.tagAutocomplete = null;
-    this.mobileNavigation = null;
-    this.themePicker = null;
     this.expandableCardManager = null;
     this.dragDropManager = null;
     
-    // Manual scroll restoration across refreshes
-    this.initialScrollY = 0;     // saved scroll position from previous session load (sessionStorage)
-    this.scrollRestored = false; // whether we've already restored scroll after first render
-    
-    // Filter modal transient state and handler guard
-    this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
-    this.filterHandlersBound = false;
-    
-    // Card selection state for keyboard navigation
+    // UI state tracking
+    this.initialScrollY = 0;
+    this.scrollRestored = false;
     this.selectedCardIndex = -1;
     this.cardElements = [];
     this.visibleItems = [];
     
-    // Bind methods to maintain context
+    // Bind only essential methods that are used as event listeners
     this.handleStateChange = this.handleStateChange.bind(this);
-    this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
-    this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
     this.removeItem = this.removeItem.bind(this);
-    this.setupMobileNavigation = this.setupMobileNavigation.bind(this);
-    this.setupResponsiveNavbar = this.setupResponsiveNavbar.bind(this);
-    
-    // Card navigation methods
-    this.selectCard = this.selectCard.bind(this);
-    this.selectNextCard = this.selectNextCard.bind(this);
-    this.selectPreviousCard = this.selectPreviousCard.bind(this);
-    this.selectCardUp = this.selectCardUp.bind(this);
-    this.selectCardDown = this.selectCardDown.bind(this);
-    this.selectCardLeft = this.selectCardLeft.bind(this);
-    this.selectCardRight = this.selectCardRight.bind(this);
-    this.clearCardSelection = this.clearCardSelection.bind(this);
-    this.handleCardKeyboardShortcuts = this.handleCardKeyboardShortcuts.bind(this);
-    this.calculateGridColumns = this.calculateGridColumns.bind(this);
   }
 
   /**
-   * Initialize core application components in proper order
+   * Initialize all application components in optimal order
    * @private
    */
-  initCoreComponents() {
+  initializeComponents() {
+    // Core systems first
     this.initClipboard();
     this.initNotifications();
     this.initModals();
     this.initTheme();
+    
+    // UI components
     this.initSearch();
     this.initCards();
     this.initExpandableCards();
     this.initDragAndDrop();
-  }
-
-  /**
-   * Initialize user interface components
-   * @private
-   */
-  initUIComponents() {
+    
+    // User features
     this.initProfile();
     this.initExport();
     this.initImport();
     this.initEventHandlers();
-  }
-
-  /**
-   * Initialize state management and event listeners
-   * @private
-   */
-  initStateAndEvents() {
-    // Subscribe to state changes before initializing state
+    
+    // State and events
     subscribe(this.handleStateChange);
-    
-    // Initialize state management (this will trigger initial render)
     initState();
-    
-    // Setup keyboard shortcuts
-    document.addEventListener('keydown', this.handleKeyboardShortcuts);
-    
-    // Setup mobile navigation menu
+    document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
     this.setupMobileNavigation();
-  }
-
-  /**
-   * Setup global application access for components
-   * @private
-   */
-  setupGlobalAccess() {
+    
+    // Global access setup
     if (typeof window !== 'undefined') {
       window.app = {
         showNotification: this.showNotification.bind(this),
-        removeCardsByText: this.removeCardsByText.bind(this),
         instance: this
       };
     }
@@ -188,62 +144,25 @@ class CompyApp {
 
   /**
    * Initialize the application UI and services.
-   *
-   * Main initialization method that coordinates all subsystem startup
-   * in the correct order for optimal performance and user experience.
-   *
    * @returns {Promise<void>}
    */
   async init() {
-    // IDEMPOTENCY CHECK: Prevent double initialization
     if (this.initialized) return;
 
     try {
-      // INITIALIZATION SEQUENCE: Ordered initialization following dependency requirements
-      // 
-      // BEST PRACTICES COMPLIANCE:
-      // ✅ Separation of Concerns: Each init method has a single responsibility
-      // ✅ Dependency Management: Components are initialized in proper order
-      // ✅ Error Boundaries: Each phase is wrapped in comprehensive error handling
-      // ✅ Performance: Non-blocking initialization with minimal main thread impact
-      // ✅ Accessibility: All components include ARIA support and keyboard navigation
-      // ✅ Security: Input validation and XSS prevention throughout
-      // ✅ Memory Management: Proper cleanup and resource management
-      // ✅ Browser Compatibility: Graceful degradation and feature detection
+      // Initialize foundational systems
+      this.initScrollPersistence();
+      this.setupResponsiveNavbar();
       
-      // PHASE 1: Foundational Systems (No Dependencies)
-      this.initScrollPersistence();     // Manual scroll restoration system
-      this.setupResponsiveNavbar();     // Responsive navigation handling
+      // Initialize all components in dependency order
+      this.initializeComponents();
       
-      // PHASE 2: Core Application Components (Depends on DOM)
-      this.initCoreComponents();        // Clipboard, notifications, modals, theme
-      
-      // PHASE 3: User Interface Components (Depends on Core)
-      this.initUIComponents();          // Profile, import/export, event handlers
-      
-      // PHASE 4: State Management and Events (Depends on UI)
-      this.initStateAndEvents();        // State subscriptions and keyboard handling
-      
-      // PHASE 5: Global Access Setup (Final Phase)
-      this.setupGlobalAccess();         // Window.app for component integration
-      
-      // SUCCESS CONFIRMATION: Mark as initialized and log success
       this.initialized = true;
-      Logger.info('Compy 2.0 initialized successfully - All systems operational');
+      Logger.info('Compy 2.0 initialized successfully');
       
     } catch (error) {
-      // COMPREHENSIVE ERROR HANDLING: Detailed logging and user notification
-      Logger.error('Failed to initialize Compy 2.0:', {
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent
-      });
-      
-      // USER-FRIENDLY ERROR COMMUNICATION
-      this.showNotification('Failed to initialize application. Please refresh the page.', 'error');
-      
-      // RECOVERY ATTEMPT: Reset initialization state for potential retry
+      Logger.error('Failed to initialize Compy 2.0:', error);
+      this.showNotification?.('Failed to initialize application. Please refresh the page.', 'error');
       this.initialized = false;
     }
   }
@@ -469,93 +388,41 @@ class CompyApp {
    * Persists user choice in localStorage and applies smooth transitions.
    */
   initTheme() {
-    // Enhanced theme manager with smooth transitions
+    // Simplified theme manager
     this.theme = {
       apply: (themeName) => {
+        if (!themeName || typeof themeName !== 'string') return;
+        
         try {
-          // Validate theme name
-          if (!themeName || typeof themeName !== 'string') {
-            throw new Error('Invalid theme name provided');
-          }
-          
-          // Apply theme to DOM
           document.documentElement.setAttribute('data-theme', themeName);
           document.documentElement.setAttribute('data-theme-source', 'js');
+          localStorage.setItem(STORAGE_KEYS.theme, themeName);
           
-          // Persist to localStorage with error handling
-          try {
-            localStorage.setItem(STORAGE_KEYS.theme, themeName);
-          } catch (storageError) {
-            Logger.warn('Failed to save theme to localStorage:', storageError);
-            // Continue without storage - theme will still work for current session
-          }
+          // Smooth transition
+          const docEl = document.documentElement;
+          docEl.classList.add('theme-switching');
+          setTimeout(() => docEl.classList.remove('theme-switching'), 300);
           
-          // Add transition class for smooth theme switching
-          document.documentElement.classList.add('theme-switching');
-          setTimeout(() => {
-            document.documentElement.classList.remove('theme-switching');
-          }, 300);
-          
-          // Update theme picker if available
-          if (this.themePicker && this.themePicker.updateSelectedTheme) {
-            this.themePicker.updateSelectedTheme(themeName);
-          }
-          
-          Logger.debug('Theme applied successfully:', themeName);
+          this.themePicker?.updateSelectedTheme?.(themeName);
         } catch (error) {
-          Logger.error('Failed to apply theme:', error);
-          this.showNotification('Failed to apply theme', 'error');
-          
-          // Try to recover with default theme
-          try {
-            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
-            document.documentElement.setAttribute('data-theme-source', 'fallback');
-          } catch (fallbackError) {
-            Logger.error('Failed to apply fallback theme:', fallbackError);
-          }
+          Logger.error('Theme application failed:', error);
+          document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
         }
       },
       
       load: () => {
+        const themeSource = document.documentElement.getAttribute('data-theme-source');
+        if (themeSource === 'html' || themeSource === 'html-fallback') return;
+        
         try {
-          // Check if theme was already applied by HTML head script
-          const themeSource = document.documentElement.getAttribute('data-theme-source');
-          const currentTheme = document.documentElement.getAttribute('data-theme');
-          
-          if (themeSource === 'html' || themeSource === 'html-fallback') {
-            // Theme already applied by HTML, just sync with our state
-            Logger.debug('Theme already applied by HTML:', currentTheme);
-            return;
-          }
-          
-          // No theme applied yet, load from storage
-          let savedTheme = DEFAULT_THEME;
-          try {
-            const stored = localStorage.getItem(STORAGE_KEYS.theme);
-            if (stored && typeof stored === 'string') {
-              savedTheme = stored;
-            }
-          } catch (storageError) {
-            Logger.warn('Failed to read theme from localStorage:', storageError);
-            // Continue with default theme
-          }
-          
+          const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || DEFAULT_THEME;
           this.theme.apply(savedTheme);
         } catch (error) {
-          Logger.error('Failed to load theme:', error);
-          // Apply default theme as last resort
-          try {
-            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
-            document.documentElement.setAttribute('data-theme-source', 'error-fallback');
-          } catch (fallbackError) {
-            Logger.error('Critical theme system failure:', fallbackError);
-          }
+          document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
         }
       },
       
-      getCurrentTheme: () => {
-        return document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
-      }
+      getCurrentTheme: () => document.documentElement.getAttribute('data-theme') || DEFAULT_THEME
     };
 
     // Load saved theme (respecting HTML head application)
@@ -615,15 +482,9 @@ class CompyApp {
     const searchInput = $('#searchInput');
     const searchClear = $('#searchClear');
     
-    this.search = {
-      focus: () => {
-        searchInput.focus();
-      },
-      
-      clear: () => {
-        searchInput.value = '';
-        updateSearch('');
-      }
+    const clearSearch = () => {
+      searchInput.value = '';
+      updateSearch('');
     };
 
     // Handle search input
@@ -632,7 +493,10 @@ class CompyApp {
     }, 150));
 
     // Handle clear button
-    searchClear.addEventListener('click', this.search.clear);
+    searchClear.addEventListener('click', clearSearch);
+    
+    // Store clear function for use in empty state handlers
+    this.clearSearch = clearSearch;
   }
 
   /**
@@ -650,26 +514,6 @@ class CompyApp {
    * Initialize card rendering helpers and the Add button handler.
    */
   initCards() {
-    const cardsContainer = $('#cards');
-    
-    this.cards = {
-      render: (items, search = '') => {
-        this.renderCards({ items, search });
-      },
-      
-      showSkeleton: () => {
-        cardsContainer.innerHTML = '';
-        const skeletonCount = Math.min(UI_CONFIG.skeletonCount, 6);
-        
-        for (let i = 0; i < skeletonCount; i++) {
-          const skeleton = document.createElement('div');
-          skeleton.className = 'skel-card skeleton';
-          skeleton.setAttribute('aria-hidden', 'true');
-          cardsContainer.appendChild(skeleton);
-        }
-      }
-    };
-
     // Handle add button
     $('#addBtn').addEventListener('click', () => this.openItemModal());
     
@@ -1073,133 +917,64 @@ class CompyApp {
       </div>
       
       ${this.generateCardActionsHTML()}
-      ${this.generateCardCloseButtonHTML()}
-      ${this.generateDragHandleHTML()}
+      <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
+        <span aria-hidden="true">${ICONS.close}</span>
+      </button>
+      ${createIconButton({
+        className: 'icon-btn drag-handle',
+        title: 'Drag to reorder',
+        iconSVG: createSVGIcon({
+          paths: `<circle cx="6" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="18" cy="8" r="1.5" fill="currentColor"/><circle cx="6" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><circle cx="18" cy="16" r="1.5" fill="currentColor"/>`,
+          width: 16,
+          height: 16
+        })
+      })}
     `;
   }
 
   /**
-   * Generate HTML for card action buttons using DRY principles
+   * Generate HTML for card action buttons
    * @private
    * @returns {string} Action buttons HTML
    */
   generateCardActionsHTML() {
-    // APPLY DRY PRINCIPLES: Define button configurations for consistent generation
-    const buttonConfigs = [
-      {
-        action: 'expand',
-        className: 'icon-btn expand-trigger',
-        title: 'Expand card',
-        iconSVG: ICONS.expand
-      },
-      {
-        action: 'delete',
-        className: 'icon-btn danger-icon',
-        title: 'Delete snippet',
-        iconSVG: ICONS.delete
-      },
-      {
-        action: 'copy',
-        title: 'Copy to clipboard',
-        iconSVG: ICONS.copy
-      },
-      {
-        action: 'edit',
-        title: 'Edit snippet',
-        iconSVG: ICONS.edit
-      }
-    ];
-    
-    // GENERATE COLLAPSE BUTTON: Special handling for collapse with custom SVG
-    const collapseIconSVG = createSVGIcon({
-      paths: `
-        <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/>
-        <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>
-      `,
+    const collapseIcon = createSVGIcon({
+      paths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`,
       title: 'Collapse card'
     });
+    
+    const buttons = [
+      { action: 'expand', icon: ICONS.expand, title: 'Expand card', className: 'expand-trigger' },
+      { action: 'copy', icon: ICONS.copy, title: 'Copy to clipboard' },
+      { action: 'edit', icon: ICONS.edit, title: 'Edit snippet' },
+      { action: 'delete', icon: ICONS.delete, title: 'Delete snippet', className: 'danger-icon' }
+    ];
+    
+    const actionButtons = buttons.map(btn => 
+      createIconButton({
+        className: `icon-btn ${btn.className || ''}`.trim(),
+        title: btn.title,
+        dataAct: btn.action,
+        iconSVG: btn.icon
+      })
+    ).join('');
     
     const collapseButton = createIconButton({
       className: 'icon-btn collapse-action card-action-hidden',
       title: 'Collapse card',
       dataAct: 'collapse',
-      iconSVG: collapseIconSVG
+      iconSVG: collapseIcon
     });
     
-    // GENERATE ACTION BUTTONS: Use consistent generation pattern
-    const actionButtons = buttonConfigs.map(config => 
-      createIconButton({
-        className: config.className || 'icon-btn',
-        title: config.title,
-        dataAct: config.action,
-        iconSVG: config.iconSVG
-      })
-    ).join('\n        ');
-    
-    return `
-      <div class="actions" aria-label="Card actions">
-        <div class="expand-collapse-container">
-          ${buttonConfigs[0] ? createIconButton({
-            className: buttonConfigs[0].className,
-            title: buttonConfigs[0].title,
-            dataAct: buttonConfigs[0].action,
-            iconSVG: buttonConfigs[0].iconSVG
-          }) : ''}
-          ${collapseButton}
-        </div>
-        ${buttonConfigs.slice(1).map(config => 
-          createIconButton({
-            className: config.className || 'icon-btn',
-            title: config.title,
-            dataAct: config.action,
-            iconSVG: config.iconSVG
-          })
-        ).join('\n        ')}
+    return `<div class="actions" aria-label="Card actions">
+      <div class="expand-collapse-container">
+        ${createIconButton({ className: 'icon-btn expand-trigger', title: 'Expand card', dataAct: 'expand', iconSVG: ICONS.expand })}
+        ${collapseButton}
       </div>
-    `;
+      ${buttons.slice(1).map(btn => createIconButton({ className: `icon-btn ${btn.className || ''}`.trim(), title: btn.title, dataAct: btn.action, iconSVG: btn.icon })).join('')}
+    </div>`;
   }
 
-  /**
-   * Generate HTML for card close button using DRY utilities
-   * @private
-   * @returns {string} Close button HTML
-   */
-  generateCardCloseButtonHTML() {
-    // USE STANDARDIZED CLOSE SYMBOL: Apply consistent destructive icon standards
-    return `
-      <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
-        <span aria-hidden="true">${ICONS.close}</span>
-      </button>
-    `;
-  }
-
-  /**
-   * Generate HTML for card drag handle using DRY utilities
-   * @private
-   * @returns {string} Drag handle HTML
-   */
-  generateDragHandleHTML() {
-    // APPLY DRY PRINCIPLES: Use createIconButton utility for consistency
-    const dragIconSVG = createSVGIcon({
-      paths: `
-        <circle cx="6" cy="8" r="1.5" fill="currentColor"/>
-        <circle cx="12" cy="8" r="1.5" fill="currentColor"/>
-        <circle cx="18" cy="8" r="1.5" fill="currentColor"/>
-        <circle cx="6" cy="16" r="1.5" fill="currentColor"/>
-        <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
-        <circle cx="18" cy="16" r="1.5" fill="currentColor"/>
-      `,
-      width: 16,
-      height: 16,
-      title: 'Drag to reorder'
-    });
-    
-    return createIconButton({
-      className: 'icon-btn drag-handle',
-      title: 'Drag to reorder',
-      iconSVG: dragIconSVG
-    });
-  }
 
   /**
    * Create a DOM element representing a single item card.
@@ -1531,20 +1306,18 @@ class CompyApp {
 
   /**
    * Attach event handlers for buttons rendered inside empty state UIs.
-   * Uses optimized batch event binding for better performance.
    */
   setupEmptyStateHandlers() {
-    // BATCH EVENT HANDLERS: Group related handlers for efficiency
     const handlers = {
       '#emptyAddBtn': () => this.openItemModal(),
       '#emptyImportBtn': () => $('#importFile').click(),
-      '#clearSearchBtn': () => this.search.clear(),
+      '#clearSearchBtn': () => this.clearSearch(),
       '#clearFiltersBtn': () => updateFilterTags([])
     };
     
-    // OPTIMIZED BATCH BINDING: Query and bind all handlers in single pass
     Object.entries(handlers).forEach(([selector, handler]) => {
-      addEventHandler(selector, 'click', handler);
+      const element = $(selector);
+      if (element) element.addEventListener('click', handler);
     });
   }
 
@@ -1688,10 +1461,7 @@ class CompyApp {
         }
         
         profileInput.value = state.profileName || '';
-        
-        // Clear any existing profile form errors
-        this.clearProfileFormErrors();
-        
+        this.setProfileFieldState(false); // Clear any existing errors
         this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
       } catch (error) {
         Logger.error('Failed to open profile editor:', error);
@@ -1714,87 +1484,48 @@ class CompyApp {
   }
 
   /**
-   * Clear profile form errors
+   * Handle profile field validation state
    * @private
    */
-  clearProfileFormErrors() {
+  setProfileFieldState(hasError, errorMessage = '') {
     const field = $('#profileNameInput');
-    if (field) {
-      field.removeAttribute('aria-invalid');
-      field.classList.remove('error');
-      
-      // Remove existing error message
-      const existingError = $('#profile-name-error');
-      if (existingError) {
-        existingError.remove();
-        
-        // Clean up aria-describedby
-        const currentDescribedBy = field.getAttribute('aria-describedby') || '';
-        const newDescribedBy = currentDescribedBy
-          .replace('profile-name-error', '')
-          .trim();
-        
-        if (newDescribedBy) {
-          field.setAttribute('aria-describedby', newDescribedBy);
-        } else {
-          field.removeAttribute('aria-describedby');
-        }
-      }
+    if (!field) return;
+    
+    // Clear existing error
+    const existingError = $('#profile-name-error');
+    if (existingError) {
+      existingError.remove();
+      field.removeAttribute('aria-describedby');
     }
-  }
-  
-  /**
-   * Display profile validation error with ARIA support
-   * @private
-   * @param {string} errorMessage - Error message to display
-   */
-  displayProfileError(errorMessage) {
-    const field = $('#profileNameInput');
-    if (field) {
-      // Set aria-invalid
-      field.setAttribute('aria-invalid', 'true');
-      field.classList.add('error');
-      
-      // Create error message
+    
+    field.classList.toggle('error', hasError);
+    field.setAttribute('aria-invalid', hasError.toString());
+    
+    if (hasError && errorMessage) {
+      // Create and display error
       const errorElement = document.createElement('div');
       errorElement.id = 'profile-name-error';
       errorElement.className = 'error-message';
       errorElement.textContent = errorMessage;
       errorElement.setAttribute('role', 'alert');
-      errorElement.setAttribute('aria-live', 'polite');
       
-      // Insert error message after the field container
       const fieldContainer = field.closest('.field');
       if (fieldContainer) {
         fieldContainer.appendChild(errorElement);
       }
       
-      // Associate error message with field
-      const currentDescribedBy = field.getAttribute('aria-describedby') || '';
-      const newDescribedBy = currentDescribedBy 
-        ? `${currentDescribedBy} profile-name-error`
-        : 'profile-name-error profileNameHelp';
-      field.setAttribute('aria-describedby', newDescribedBy);
-      
-      // Focus the field
+      field.setAttribute('aria-describedby', 'profile-name-error profileNameHelp');
       setTimeout(() => field.focus(), 100);
     }
   }
 
   /**
-   * Validate and save profile name with comprehensive input validation
-   * 
-   * Validation Rules:
-   * - Length: 0-100 characters
-   * - Content: Letters, numbers, spaces, basic punctuation only
-   * - Security: XSS prevention and sanitization
-   * 
+   * Validate and save profile name
    * @private
    */
   saveProfileWithValidation() {
     try {
-      // Clear any previous errors
-      this.clearProfileFormErrors();
+      this.setProfileFieldState(false); // Clear previous errors
       
       const profileInput = $('#profileNameInput');
       if (!profileInput) {
@@ -1804,49 +1535,38 @@ class CompyApp {
       
       const rawName = profileInput.value || '';
       
-      // Validate length
+      // Validate input
       if (rawName.length > 100) {
-        this.displayProfileError('Profile name cannot exceed 100 characters');
+        this.setProfileFieldState(true, 'Profile name cannot exceed 100 characters');
         this.showNotification('Profile name too long', 'error');
-        this.announceToScreenReader('Profile name validation failed');
         return;
       }
       
       const trimmedName = rawName.trim();
-      
-      // Additional content validation for profile names
       const safePattern = /^[a-zA-Z0-9\s\-_.,']*$/;
+      
       if (trimmedName.length > 0 && !safePattern.test(trimmedName)) {
-        this.displayProfileError('Profile name contains invalid characters. Only letters, numbers, spaces, and basic punctuation allowed.');
+        this.setProfileFieldState(true, 'Only letters, numbers, spaces, and basic punctuation allowed.');
         this.showNotification('Profile name contains invalid characters', 'error');
-        this.announceToScreenReader('Profile name validation failed');
         return;
       }
 
-      // XSS Prevention: Additional sanitization check
-      const hasHtmlTags = /<[^>]*>/g.test(trimmedName);
-      if (hasHtmlTags) {
-        this.displayProfileError('Profile name cannot contain HTML tags');
+      if (/<[^>]*>/g.test(trimmedName)) {
+        this.setProfileFieldState(true, 'Profile name cannot contain HTML tags');
         this.showNotification('Profile name cannot contain HTML tags', 'error');
-        this.announceToScreenReader('Profile name validation failed');
         return;
       }
 
-      // Update Profile: Apply the validated name
+      // Save valid profile
       updateProfile(trimmedName);
       this.modalManager.close('#profileModal');
       
-      // User Feedback: Provide appropriate success message
-      const message = trimmedName 
-        ? `Profile updated to "${trimmedName}"`
-        : 'Profile name cleared';
+      const message = trimmedName ? `Profile updated to "${trimmedName}"` : 'Profile name cleared';
       this.showNotification(message, 'success');
-      this.announceToScreenReader(`Profile ${trimmedName ? 'updated' : 'cleared'} successfully`);
       
     } catch (error) {
       Logger.error('Profile save failed:', error);
       this.showNotification('Failed to save profile', 'error');
-      this.announceToScreenReader('Profile save failed');
     }
   }
 
@@ -1921,94 +1641,40 @@ class CompyApp {
   }
 
   /**
-   * Validate export state and prepare export data
-   * 
-   * @returns {{isValid: boolean, payload?: Object, error?: string}} Validation result
+   * Prepare export data with validation
    * @private
    */
-  prepareJSONExportData() {
+  prepareExportData() {
     const state = getState();
-    
-    // State validation
     if (!state || typeof state !== 'object') {
-      return {
-        isValid: false,
-        error: 'Invalid application state for export'
-      };
+      return { isValid: false, error: 'Invalid application state' };
     }
     
-    // Data validation and cleanup
     const items = Array.isArray(state.items) ? state.items : [];
     const validItems = items.filter(item => item && typeof item === 'object' && item.id);
     
-    // User confirmation for empty exports using consistent confirmation system
     if (validItems.length === 0) {
-      // This will be handled by the async calling function since we can't await here
       return { isValid: false, error: 'No items to export', requiresConfirmation: true };
     }
     
-    // Build export payload
-    const payload = {
-      profileName: (state.profileName || '').trim(),
-      items: validItems
+    return {
+      isValid: true,
+      payload: {
+        profileName: (state.profileName || '').trim(),
+        items: validItems
+      }
     };
-    
-    return { isValid: true, payload };
-  }
-  
-  /**
-   * Serialize export data to JSON string
-   * 
-   * @param {Object} payload - Data to serialize
-   * @returns {{success: boolean, jsonString?: string, error?: string}} Serialization result
-   * @private
-   */
-  serializeExportData(payload) {
-    try {
-      const jsonString = JSON.stringify(payload, null, 2);
-      return { success: true, jsonString };
-    } catch (serializationError) {
-      Logger.error('JSON serialization failed:', serializationError);
-      return {
-        success: false,
-        error: 'Unable to serialize data - check for circular references or invalid data types'
-      };
-    }
-  }
-  
-  /**
-   * Handle JSON file download with error recovery
-   * 
-   * @param {string} jsonString - Serialized JSON data
-   * @param {number} itemCount - Number of items being exported
-   * @returns {{success: boolean, error?: string}} Download result
-   * @private
-   */
-  downloadJSONFile(jsonString, itemCount) {
-    try {
-      downloadFile('compy-export.json', jsonString, 'application/json');
-      return { success: true };
-    } catch (downloadError) {
-      Logger.error('Download failed:', downloadError);
-      return {
-        success: false,
-        error: 'Download failed - check browser permissions and storage space'
-      };
-    }
   }
   
   /**
    * Export the current state as a JSON file.
-   * 
-   * This method coordinates the entire JSON export process through focused helper methods,
-   * providing comprehensive error handling and user feedback at each step.
    */
-  exportJSON() {
-    return ErrorUtils.safeExecute(async () => {
-      // Prepare and validate export data
-      const preparation = this.prepareJSONExportData();
+  async exportJSON() {
+    try {
+      const preparation = this.prepareExportData();
+      let payload = preparation.payload;
+      
       if (!preparation.isValid) {
-        // Handle empty export confirmation
         if (preparation.requiresConfirmation) {
           const confirmed = await this.confirmationManager.show({
             title: 'Export Empty File',
@@ -2018,223 +1684,81 @@ class CompyApp {
             variant: 'warning'
           });
           
-          if (!confirmed) {
-            return; // User cancelled
-          }
+          if (!confirmed) return;
           
-          // User confirmed, create empty payload
           const state = getState();
-          preparation.isValid = true;
-          preparation.payload = {
+          payload = {
             profileName: (state.profileName || '').trim(),
             items: []
           };
         } else {
-          if (preparation.error && !preparation.error.includes('cancelled')) {
-            this.showNotification(`Export failed: ${preparation.error}`, 'error');
-          }
+          this.showNotification(`Export failed: ${preparation.error}`, 'error');
           return;
         }
       }
       
-      // Serialize data to JSON
-      const serialization = this.serializeExportData(preparation.payload);
-      if (!serialization.success) {
-        this.showNotification(`Export failed: ${serialization.error}`, 'error');
-        return;
-      }
+      const jsonString = JSON.stringify(payload, null, 2);
+      downloadFile('compy-export.json', jsonString, 'application/json');
+      this.showNotification(`JSON export downloaded (${payload.items.length} items)`, 'success');
       
-      // Download the file
-      const download = this.downloadJSONFile(serialization.jsonString, preparation.payload.items.length);
-      if (!download.success) {
-        this.showNotification(`Export failed: ${download.error}`, 'error');
-        return;
-      }
-      
-      // Success feedback
-      this.showNotification(
-        `JSON export downloaded (${preparation.payload.items.length} items)`,
-        'success'
-      );
-      
-    }, {
-      context: 'JSON export',
-      fallback: (error) => {
-        Logger.error('JSON export failed:', error);
-        this.showNotification('Export failed: Unexpected error', 'error');
-      }
-    });
+    } catch (error) {
+      Logger.error('JSON export failed:', error);
+      this.showNotification('Export failed: Unexpected error', 'error');
+    }
   }
 
   /**
-   * Generate CSV rows from application state with comprehensive data processing
-   * 
-   * This method transforms the application state into a structured CSV format that includes
-   * both metadata (profile information) and item data. The CSV structure follows RFC 4180
-   * standards for maximum compatibility with spreadsheet applications.
-   * 
-   * CSV Structure Generated:
-   * 1. Metadata Section:
-   *    - Row 1: "profileName" (header)
-   *    - Row 2: Actual profile name (escaped)
-   *    - Row 3: Empty row (visual separator)
-   * 
-   * 2. Data Section:
-   *    - Row 4: Column headers (text, desc, sensitive, tags, position)
-   *    - Row 5+: Item data rows with proper escaping
-   * 
-   * Data Processing Features:
-   * - Validates state structure before processing to prevent runtime errors
-   * - Filters out invalid items that lack required properties (id, text, desc)
-   * - Properly escapes special characters using csvEscape utility function
-   * - Converts boolean sensitive flag to "1"/"0" for cross-platform compatibility
-   * - Joins tags array with pipe separator for compact representation
-   * - Preserves positional ordering through position field
-   * 
-   * Error Handling:
-   * - Validates application state object before processing
-   * - Gracefully handles missing or malformed item properties
-   * - Returns detailed error information for debugging
-   * - Catches and logs any unexpected processing errors
-   * 
-   * @returns {{success: boolean, rows?: Array[], itemCount?: number, error?: string}} Generation result
+   * Generate CSV content from application state
    * @private
    */
-  generateCSVRows() {
-    // STATE VALIDATION: Ensure we have valid state to work with
+  generateCSV() {
     const state = getState();
     
     if (!state || typeof state !== 'object') {
-      return {
-        success: false,
-        error: 'Invalid application state for CSV export'
-      };
+      throw new Error('Invalid application state for CSV export');
     }
     
-    // DATA EXTRACTION AND FILTERING: Get valid items for export
-    // Only include items that have the required structure to prevent CSV corruption
     const items = Array.isArray(state.items) ? state.items : [];
     const validItems = items.filter(item => 
       item && 
       typeof item === 'object' && 
-      item.id &&           // Must have unique identifier
-      typeof item.text === 'string' &&   // Must have snippet content
-      typeof item.desc === 'string'      // Must have description
+      item.id &&
+      typeof item.text === 'string' &&
+      typeof item.desc === 'string'
     );
     
-    try {
-      // CSV STRUCTURE GENERATION: Build the complete CSV row structure
-      const rows = [
-        // METADATA SECTION: Profile information block
-        // This allows users to identify which profile the export came from
-        ['profileName'],  // Header row for profile metadata
-        [csvEscape(state.profileName || '')],  // Actual profile name (escaped for safety)
-        [''],            // Empty row separator for visual clarity
-        
-        // DATA SECTION HEADERS: Column definitions for import compatibility
-        // These headers must match the import parsing logic exactly
-        ['text', 'desc', 'sensitive', 'tags', 'position'],
-        
-        // DATA ROWS: Transform each valid item into CSV row format
-        ...validItems.map(item => [
-          // SNIPPET CONTENT: Main text content with CSV escaping
-          csvEscape(item.text || ''),
-          
-          // DESCRIPTION: User-provided description with CSV escaping
-          csvEscape(item.desc || ''),
-          
-          // SENSITIVITY FLAG: Convert boolean to string for cross-platform compatibility
-          // Using "1"/"0" format as it's universally recognized in spreadsheet apps
-          item.sensitive ? '1' : '0',
-          
-          // TAGS: Join array into pipe-separated string for compact storage
-          // Pipe separator (|) is chosen as it's rarely used in tag names
-          csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : ''),
-          
-          // POSITION: Ordering information for maintaining snippet sequence
-          // Fallback to 0 if position is not set (for backwards compatibility)
-          item.position || 0
-        ])
-      ];
-      
-      // SUCCESS RESULT: Return structured data with metadata
-      return {
-        success: true,
-        rows,                        // Complete CSV row structure ready for conversion
-        itemCount: validItems.length // Number of items included in export
-      };
-      
-    } catch (error) {
-      // ERROR HANDLING: Log detailed error information for debugging
-      Logger.error('CSV row generation failed:', error);
-      return {
-        success: false,
-        error: 'Failed to generate CSV data - check for invalid characters in data'
-      };
-    }
-  }
-  
-  /**
-   * Convert CSV rows to CSV string format
-   * 
-   * @param {Array[]} rows - CSV rows to convert
-   * @returns {{success: boolean, csv?: string, error?: string}} Conversion result
-   * @private
-   */
-  convertRowsToCSV(rows) {
-    try {
-      const csv = rows.map(row => row.join(',')).join('\n');
-      return { success: true, csv };
-    } catch (error) {
-      Logger.error('CSV conversion failed:', error);
-      return {
-        success: false,
-        error: 'Failed to convert data to CSV format'
-      };
-    }
+    const rows = [
+      ['profileName'],
+      [csvEscape(state.profileName || '')],
+      [''],
+      ['text', 'desc', 'sensitive', 'tags', 'position'],
+      ...validItems.map(item => [
+        csvEscape(item.text || ''),
+        csvEscape(item.desc || ''),
+        item.sensitive ? '1' : '0',
+        csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : ''),
+        item.position || 0
+      ])
+    ];
+    
+    return {
+      csv: rows.map(row => row.join(',')).join('\n'),
+      itemCount: validItems.length
+    };
   }
   
   /**
    * Export the current state as a CSV file.
-   * 
-   * This method provides structured CSV export with comprehensive error handling
-   * and includes metadata section for profile information.
    */
   exportCSV() {
-    return ErrorUtils.safeExecute(async () => {
-      // Generate CSV rows from state
-      const rowGeneration = this.generateCSVRows();
-      if (!rowGeneration.success) {
-        this.showNotification(`CSV export failed: ${rowGeneration.error}`, 'error');
-        return;
-      }
-      
-      // Convert rows to CSV string
-      const csvConversion = this.convertRowsToCSV(rowGeneration.rows);
-      if (!csvConversion.success) {
-        this.showNotification(`CSV export failed: ${csvConversion.error}`, 'error');
-        return;
-      }
-      
-      // Download the file
-      try {
-        downloadFile('compy-export.csv', csvConversion.csv, 'text/csv');
-        this.showNotification(
-          `CSV export downloaded (${rowGeneration.itemCount} items)`,
-          'success'
-        );
-      } catch (downloadError) {
-        Logger.error('CSV download failed:', downloadError);
-        this.showNotification('CSV export failed: Download error', 'error');
-      }
-      
-    }, {
-      context: 'CSV export',
-      fallback: (error) => {
-        Logger.error('CSV export failed:', error);
-        this.showNotification('CSV export failed: Unexpected error', 'error');
-      }
-    });
+    try {
+      const { csv, itemCount } = this.generateCSV();
+      downloadFile('compy-export.csv', csv, 'text/csv');
+      this.showNotification(`CSV export downloaded (${itemCount} items)`, 'success');
+    } catch (error) {
+      Logger.error('CSV export failed:', error);
+      this.showNotification('CSV export failed: Unexpected error', 'error');
+    }
   }
 
   /**
