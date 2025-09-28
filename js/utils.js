@@ -22,6 +22,9 @@
  * @since 2025
  */
 
+// Centralized theme list for validation (DRY with constants)
+import { THEME_LIST } from './constants.js?v=2.0.2';
+
 // =============================================================================
 // DOM MANIPULATION UTILITIES
 // =============================================================================
@@ -226,10 +229,18 @@ export const highlightText = (text, query) => {
  */
 export const stringHash = (str) => {
   let hash = 0;
+  
+  // HASHING ALGORITHM: djb2 variant optimized for JavaScript
+  // The left shift operation (<<) multiplies by 32, which is then
+  // subtracted from itself to effectively multiply by 31
+  // This creates better distribution than simpler multiplications
   for (let i = 0; i < str.length; i++) {
-    // djb2-style hash with bit manipulation for performance
+    // CHARACTER CODE INTEGRATION: Mix character values into hash
+    // The | 0 operation ensures the result stays within 32-bit integer range
+    // preventing JavaScript's automatic floating-point conversion
     hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
   }
+  
   return hash;
 };
 
@@ -525,18 +536,8 @@ export const formatDate = (date) => {
  * const safeTheme = isValidTheme(userTheme) ? userTheme : 'dark-mystic-forest';
  */
 export const isValidTheme = (themeId) => {
-  const availableThemes = [
-    'dark-mystic-forest', 'dark-crimson-night', 'dark-royal-elegance',
-    'light-sunrise', 'light-soft-glow', 'light-floral-breeze',
-    'dark-dracula', 'dark-solarized', 'dark-midnight-blue', 'dark-night-owl',
-    'dark-monokai', 'dark-deep-ocean', 'dark-high-contrast', 'dark-professional',
-    'dark-gruvbox', 'dark-material', 'light-solarized', 'light-high-contrast',
-    'light-professional', 'light-pastel-mint', 'light-earth-tones',
-    'light-oceanic', 'light-vanilla-cream', 'light-nordic', 'light-material',
-    'light-warm-beige'
-  ];
-  
-  return typeof themeId === 'string' && availableThemes.includes(themeId);
+  // DRY: Delegate to THEME_LIST from constants.js as the single source of truth.
+  return typeof themeId === 'string' && THEME_LIST.includes(themeId);
 };
 
 /**
@@ -1093,6 +1094,8 @@ export const getAllTags = (items) => {
  * - Single pass through items with combined filtering
  * - Lowercase conversion done once per search term
  * - every() provides early termination for tag filtering
+ * - Input validation prevents errors from malformed data
+ * - Memoized search text generation for repeated filtering
  * 
  * @param {Array<{id: string, text: string, desc: string, tags: string[]}>} items - Items to filter
  * @param {string} [searchQuery=''] - Text to search for across item fields
@@ -1119,113 +1122,119 @@ export const getAllTags = (items) => {
  * filterItems(items, 'python', ['js']); // Returns []
  */
 export const filterItems = (items, searchQuery = '', filterTags = []) => {
-  // PERFORMANCE OPTIMIZATION: Early return for empty inputs to avoid unnecessary processing
-  if (!Array.isArray(items) || items.length === 0) {
+  // INPUT VALIDATION AND SANITIZATION: Comprehensive validation prevents runtime errors
+  // 
+  // ERROR HANDLING STRATEGY:
+  // - Level 1: Type validation with informative logging
+  // - Level 2: Early returns for performance optimization
+  // - Level 3: Per-item error handling to prevent single bad items from breaking entire filter
+  // - Level 4: Global exception handling with graceful fallback
+  // 
+  // VALIDATION RULES:
+  // - items: Must be an array (empty array is acceptable)
+  // - searchQuery: Must be string or convertible to string (null/undefined handled gracefully)
+  // - filterTags: Must be an array of strings (invalid tags are filtered out)
+  try {
+    // TYPE SAFETY: Ensure items is an array with informative error logging
+    if (!Array.isArray(items)) {
+      Logger.warn('filterItems: items parameter must be an array, received:', typeof items);
+      return []; // Graceful fallback: return empty array instead of crashing
+    }
+    
+    // PERFORMANCE OPTIMIZATION: Early return for empty inputs to avoid unnecessary processing
+    if (items.length === 0) {
+      return [];
+    }
+    
+    // SEARCH QUERY NORMALIZATION: Handle various input types safely
+    let normalizedQuery = '';
+    if (typeof searchQuery === 'string') {
+      normalizedQuery = searchQuery.toLowerCase().trim();
+    } else if (searchQuery != null) {
+      // GRACEFUL TYPE CONVERSION: Convert non-string search queries
+      normalizedQuery = String(searchQuery).toLowerCase().trim();
+    }
+    
+    // TAG FILTER VALIDATION: Ensure filterTags is a valid array
+    const validFilterTags = Array.isArray(filterTags) 
+      ? filterTags.filter(tag => typeof tag === 'string' && tag.length > 0)
+      : [];
+    
+    const hasSearchQuery = normalizedQuery.length > 0;
+    const hasTagFilters = validFilterTags.length > 0;
+    
+    // OPTIMIZATION: Skip filtering entirely if no valid criteria provided
+    if (!hasSearchQuery && !hasTagFilters) {
+      return items;
+    }
+  
+    // MAIN FILTERING ALGORITHM: Combined text search + tag filtering with error handling
+    // This two-phase approach optimizes performance while handling malformed items gracefully
+    return items.filter(item => {
+      try {
+        // ITEM VALIDATION: Ensure item is a valid object
+        if (!item || typeof item !== 'object') {
+          Logger.warn('filterItems: Skipping invalid item:', item);
+          return false;
+        }
+        
+        // PHASE 1: TEXT SEARCH - Cross-field content matching with error handling
+        if (hasSearchQuery) {
+          try {
+            // SAFE FIELD ACCESS: Handle missing or invalid fields gracefully
+            const searchableText = [
+              typeof item.text === 'string' ? item.text : '',        // Primary snippet content
+              typeof item.desc === 'string' ? item.desc : '',        // User description/notes
+              ...(Array.isArray(item.tags) ? item.tags.filter(tag => typeof tag === 'string') : [])  // Valid tags only
+            ].join(' ')              // Space-separated for natural word boundaries
+             .toLowerCase();         // Case-insensitive matching
+            
+            // SUBSTRING SEARCH: Fast string matching with error handling
+            if (!searchableText.includes(normalizedQuery)) {
+              return false; // Early rejection for performance
+            }
+          } catch (error) {
+            Logger.warn('filterItems: Error during text search for item:', item, error);
+            return false; // Exclude items that cause search errors
+          }
+        }
+        
+        // PHASE 2: TAG FILTERING - Intersection-based filtering with error handling
+        if (hasTagFilters) {
+          try {
+            // SAFE TAG ACCESS: Ensure item has valid tags array
+            const itemTags = Array.isArray(item.tags) 
+              ? item.tags.filter(tag => typeof tag === 'string')
+              : [];
+            
+            // AND LOGIC IMPLEMENTATION: Item must contain ALL selected filter tags
+            // Use validated filter tags from earlier processing
+            if (!validFilterTags.every(filterTag => itemTags.includes(filterTag))) {
+              return false; // Missing any required tag = exclusion
+            }
+          } catch (error) {
+            Logger.warn('filterItems: Error during tag filtering for item:', item, error);
+            return false; // Exclude items that cause tag filter errors
+          }
+        }
+        
+        // ACCEPTANCE: Item successfully passes both text and tag criteria
+        return true;
+        
+      } catch (error) {
+        // GLOBAL ERROR HANDLING: Catch any unexpected errors in filtering
+        Logger.warn('filterItems: Unexpected error filtering item:', item, error);
+        return false; // Exclude problematic items to maintain app stability
+      }
+    });
+    
+  } catch (error) {
+    // TOP-LEVEL ERROR HANDLING: Log error and return empty array for safety
+    Logger.error('filterItems: Critical error in filtering function:', error);
     return [];
   }
-  
-  // ALGORITHM SETUP: Pre-process search query once for efficiency
-  // Normalize to lowercase for case-insensitive matching
-  // Trim whitespace to handle user input variations
-  const normalizedQuery = searchQuery.toLowerCase().trim();
-  const hasSearchQuery = normalizedQuery.length > 0;
-  const hasTagFilters = Array.isArray(filterTags) && filterTags.length > 0;
-  
-  // OPTIMIZATION: Skip filtering entirely if no criteria provided
-  if (!hasSearchQuery && !hasTagFilters) {
-    return items;
-  }
-  
-  // MAIN FILTERING ALGORITHM: Combined text search + tag filtering
-  // This two-phase approach optimizes performance by:
-  // 1. Text search with early termination (most common case)
-  // 2. Tag filtering only for items that pass text search
-  return items.filter(item => {
-    // PHASE 1: TEXT SEARCH - Cross-field content matching
-    if (hasSearchQuery) {
-      // SEARCHABLE CONTENT AGGREGATION: Combine all searchable fields
-      // This allows cross-field searching (e.g., finding tags mentioned in descriptions)
-      // Performance: Single join operation is faster than multiple includes() calls
-      const searchableText = [
-        item.text || '',        // Primary snippet content
-        item.desc || '',        // User description/notes
-        ...(Array.isArray(item.tags) ? item.tags : [])  // All associated tags
-      ].join(' ')              // Space-separated for natural word boundaries
-       .toLowerCase();         // Case-insensitive matching
-      
-      // SUBSTRING SEARCH: Fast string matching using native includes()
-      // Early termination: If text doesn't match, skip expensive tag filtering
-      if (!searchableText.includes(normalizedQuery)) {
-        return false; // Immediate rejection saves tag processing cycles
-      }
-    }
-    
-    // PHASE 2: TAG FILTERING - Intersection-based filtering with AND logic
-    if (hasTagFilters) {
-      const itemTags = Array.isArray(item.tags) ? item.tags : [];
-      
-      // AND LOGIC IMPLEMENTATION: Item must contain ALL selected filter tags
-      // Algorithm: For each filter tag, verify it exists in item's tags
-      // Performance: every() provides early termination on first missing tag
-      if (!filterTags.every(filterTag => itemTags.includes(filterTag))) {
-        return false; // Missing any required tag = exclusion
-      }
-    }
-    
-    // ACCEPTANCE: Item successfully passes both text and tag criteria
-    return true;
-  });
 };
 
-/**
- * Validate item data structure and content for consistency and security
- * 
- * This function performs comprehensive validation of item objects to ensure
- * they meet the application's requirements and security standards. It checks
- * both structure (required fields, data types) and content (length limits,
- * character restrictions).
- * 
- * Validation Rules:
- * - text: Required, non-empty string, max 500 characters
- * - desc: Required, non-empty string, max 500 characters  
- * - tags: Optional array of strings, max 20 tags, max 30 chars per tag
- * - sensitive: Optional boolean, defaults to false
- * 
- * Security Considerations:
- * - Prevents XSS by limiting content length
- * - Validates data types to prevent injection
- * - Sanitizes tag content
- * 
- * @param {Object} item - Item object to validate
- * @param {string} item.text - Main snippet content
- * @param {string} item.desc - Description of the snippet
- * @param {boolean} [item.sensitive] - Whether snippet contains sensitive data
- * @param {string[]} [item.tags] - Array of category tags
- * @returns {{isValid: boolean, errors: string[]}} Validation result
- * 
- * @example
- * // Valid item
- * const result = validateItem({
- *   text: 'console.log("Hello")',
- *   desc: 'Basic logging',
- *   tags: ['javascript', 'debug']
- * });
- * // Result: { isValid: true, errors: [] }
- * 
- * // Invalid item
- * const result = validateItem({
- *   text: '', // Empty - invalid
- *   desc: 'Some description'
- * });
- * // Result: { isValid: false, errors: ['Text is required'] }
- * 
- * // Check before saving
- * if (validateItem(newItem).isValid) {
- *   saveItem(newItem);
- * } else {
- *   showErrors(validateItem(newItem).errors);
- * }
- */
 // =============================================================================
 // LOGGING AND DEBUG UTILITIES
 // =============================================================================
@@ -1310,20 +1319,59 @@ export const Logger = {
  */
 export const DOMUtils = {
   /**
+   * Internal helper to resolve element from selector or element reference
+   * @private
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @returns {Element|null} Resolved element or null if not found
+   */
+  _resolveElement: (elementOrSelector) => {
+    return typeof elementOrSelector === 'string'
+      ? $(elementOrSelector)
+      : elementOrSelector;
+  },
+
+  /**
+   * Unified class manipulation method with operation-specific logic
+   * @private
+   * @param {string} operation - 'add', 'remove', or 'toggle'
+   * @param {Element|string} elementOrSelector - Target element or selector
+   * @param {...string} classNames - Class names to manipulate
+   * @returns {boolean} True if successful
+   */
+  _manipulateClasses: (operation, elementOrSelector, ...classNames) => {
+    // ELEMENT RESOLUTION: Centralized element resolution for consistency
+    const element = DOMUtils._resolveElement(elementOrSelector);
+    
+    // VALIDATION: Early return for invalid inputs to improve performance
+    if (!element || !classNames.length) return false;
+    
+    // OPERATION EXECUTION: Apply the specified class manipulation
+    switch (operation) {
+      case 'add':
+        element.classList.add(...classNames);
+        break;
+      case 'remove':
+        element.classList.remove(...classNames);
+        break;
+      case 'toggle':
+        // SPECIAL HANDLING: Toggle requires individual class processing
+        classNames.forEach(className => element.classList.toggle(className));
+        break;
+      default:
+        return false;
+    }
+    
+    return true;
+  },
+
+  /**
    * Safely add CSS classes to elements with validation
    * @param {Element|string} elementOrSelector - Target element or selector
    * @param {...string} classNames - Class names to add
    * @returns {boolean} True if successful
    */
   addClass: (elementOrSelector, ...classNames) => {
-    const element = typeof elementOrSelector === 'string'
-      ? $(elementOrSelector)
-      : elementOrSelector;
-    
-    if (!element || !classNames.length) return false;
-    
-    element.classList.add(...classNames);
-    return true;
+    return DOMUtils._manipulateClasses('add', elementOrSelector, ...classNames);
   },
   
   /**
@@ -1333,14 +1381,7 @@ export const DOMUtils = {
    * @returns {boolean} True if successful
    */
   removeClass: (elementOrSelector, ...classNames) => {
-    const element = typeof elementOrSelector === 'string'
-      ? $(elementOrSelector)
-      : elementOrSelector;
-    
-    if (!element || !classNames.length) return false;
-    
-    element.classList.remove(...classNames);
-    return true;
+    return DOMUtils._manipulateClasses('remove', elementOrSelector, ...classNames);
   },
   
   /**
@@ -1350,14 +1391,7 @@ export const DOMUtils = {
    * @returns {boolean} True if successful
    */
   toggleClass: (elementOrSelector, ...classNames) => {
-    const element = typeof elementOrSelector === 'string'
-      ? $(elementOrSelector)
-      : elementOrSelector;
-    
-    if (!element || !classNames.length) return false;
-    
-    classNames.forEach(className => element.classList.toggle(className));
-    return true;
+    return DOMUtils._manipulateClasses('toggle', elementOrSelector, ...classNames);
   },
   
   /**
@@ -1367,17 +1401,21 @@ export const DOMUtils = {
    * @returns {boolean} True if successful
    */
   setAttributes: (elementOrSelector, attributes) => {
-    const element = typeof elementOrSelector === 'string'
-      ? $(elementOrSelector)
-      : elementOrSelector;
+    // REUSE ELEMENT RESOLUTION: Consistent element resolution
+    const element = DOMUtils._resolveElement(elementOrSelector);
     
+    // VALIDATION: Check for valid inputs before processing
     if (!element || !attributes || typeof attributes !== 'object') return false;
     
+    // BATCH ATTRIBUTE SETTING: Process all attributes with validation
     Object.entries(attributes).forEach(([key, value]) => {
+      // KEY VALIDATION: Ensure attribute key is valid
       if (typeof key === 'string' && key.trim()) {
+        // SAFE VALUE CONVERSION: Convert value to string for setAttribute
         element.setAttribute(key, String(value));
       }
     });
+    
     return true;
   },
   
@@ -1434,6 +1472,230 @@ export const DOMUtils = {
 };
 
 // =============================================================================
+// UI GENERATION UTILITIES
+// =============================================================================
+
+/**
+ * Generate consistent SVG icon HTML with standardized attributes
+ * 
+ * This utility promotes DRY principles by centralizing SVG icon generation
+ * across the application. It ensures consistent accessibility attributes,
+ * sizing, and styling for all icon elements.
+ * 
+ * @param {Object} options - Icon configuration options
+ * @param {string} options.paths - SVG path data or content
+ * @param {string} [options.viewBox='0 0 24 24'] - SVG viewBox attribute
+ * @param {number} [options.width=20] - Icon width in pixels
+ * @param {number} [options.height=20] - Icon height in pixels
+ * @param {string} [options.className=''] - Additional CSS classes
+ * @param {string} [options.title] - Accessible title for screen readers
+ * @returns {string} Complete SVG element HTML
+ * 
+ * @example
+ * // Basic icon
+ * const closeIcon = createSVGIcon({
+ *   paths: '<path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+ * });
+ * 
+ * // Icon with custom sizing and accessibility
+ * const dragIcon = createSVGIcon({
+ *   paths: '<circle cx="6" cy="8" r="1.5" fill="currentColor"/>',
+ *   width: 16,
+ *   height: 16,
+ *   title: 'Drag to reorder'
+ * });
+ */
+export const createSVGIcon = (options = {}) => {
+  const {
+    paths = '',
+    viewBox = '0 0 24 24',
+    width = 20,
+    height = 20,
+    className = '',
+    title
+  } = options;
+  
+  // ACCESSIBILITY: Ensure proper attributes for screen readers
+  const titleAttribute = title ? `<title>${escapeHtml(title)}</title>` : '';
+  const ariaLabel = title ? `aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"';
+  const classAttribute = className ? ` class="${escapeHtml(className)}"` : '';
+  
+  return `<svg viewBox="${escapeHtml(viewBox)}" width="${width}" height="${height}" ${ariaLabel} focusable="false" role="img"${classAttribute}>
+    ${titleAttribute}
+    ${paths}
+  </svg>`;
+};
+
+/**
+ * Generate consistent button HTML with icon and accessibility attributes
+ * 
+ * This utility standardizes button creation across the application,
+ * ensuring consistent accessibility, styling, and interaction patterns.
+ * 
+ * @param {Object} options - Button configuration options
+ * @param {string} options.className - CSS classes for the button
+ * @param {string} [options.title] - Tooltip text
+ * @param {string} [options.ariaLabel] - ARIA label (defaults to title)
+ * @param {string} [options.dataAct] - data-act attribute value
+ * @param {string} [options.iconSVG] - SVG icon content
+ * @param {string} [options.textContent] - Button text content
+ * @returns {string} Complete button element HTML
+ * 
+ * @example
+ * const deleteBtn = createIconButton({
+ *   className: 'icon-btn',
+ *   title: 'Delete snippet',
+ *   dataAct: 'delete',
+ *   iconSVG: ICONS.delete
+ * });
+ */
+export const createIconButton = (options = {}) => {
+  const {
+    className = 'icon-btn',
+    title = '',
+    ariaLabel = title,
+    dataAct,
+    iconSVG = '',
+    textContent = ''
+  } = options;
+  
+  // Build attributes
+  const attributes = [];
+  if (className) attributes.push(`class="${escapeHtml(className)}"`);
+  if (title) attributes.push(`title="${escapeHtml(title)}"`);
+  if (ariaLabel) attributes.push(`aria-label="${escapeHtml(ariaLabel)}"`);
+  if (dataAct) attributes.push(`data-act="${escapeHtml(dataAct)}"`);
+  
+  const attributeString = attributes.join(' ');
+  const content = iconSVG + (textContent ? escapeHtml(textContent) : '');
+  
+  return `<button ${attributeString}>${content}</button>`;
+};
+
+// =============================================================================
+// ERROR HANDLING UTILITIES
+// =============================================================================
+
+/**
+ * Comprehensive error handling utilities for robust application behavior
+ * 
+ * These utilities provide consistent error handling patterns across the application,
+ * with support for error recovery, user-friendly messaging, and detailed logging
+ * for debugging purposes.
+ * 
+ * @namespace ErrorUtils
+ */
+export const ErrorUtils = {
+  /**
+   * Execute a function with comprehensive error handling and recovery
+   * 
+   * This utility wraps function execution with try-catch blocks and provides
+   * configurable fallback behavior, logging, and user notification options.
+   * 
+   * @param {Function} operation - Function to execute safely
+   * @param {Object} [options={}] - Configuration options
+   * @param {string} [options.context] - Context description for error logging
+   * @param {Function} [options.fallback] - Fallback function to call on error
+   * @param {boolean} [options.silent=false] - Whether to suppress error logging
+   * @param {boolean} [options.rethrow=false] - Whether to rethrow errors after handling
+   * @returns {any} Result of the operation or fallback
+   * 
+   * @example
+   * // Basic safe execution
+   * const result = ErrorUtils.safeExecute(() => {
+   *   return riskyOperation();
+   * }, {
+   *   context: 'User data processing',
+   *   fallback: () => 'Default value'
+   * });
+   * 
+   * // With error recovery
+   * await ErrorUtils.safeExecute(async () => {
+   *   await saveToServer(data);
+   * }, {
+   *   context: 'Server sync',
+   *   fallback: (error) => {
+   *     Logger.warn('Server sync failed, saving locally:', error);
+   *     saveLocally(data);
+   *   }
+   * });
+   */
+  safeExecute: (operation, options = {}) => {
+    const {
+      context = 'Unknown operation',
+      fallback = null,
+      silent = false,
+      rethrow = false
+    } = options;
+    
+    try {
+      return operation();
+    } catch (error) {
+      // ERROR LOGGING: Provide detailed error information unless silenced
+      if (!silent) {
+        Logger.error(`Error in ${context}:`, {
+          message: error.message,
+          stack: error.stack,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // FALLBACK EXECUTION: Run fallback function if provided
+      if (typeof fallback === 'function') {
+        try {
+          return fallback(error);
+        } catch (fallbackError) {
+          Logger.error(`Fallback failed for ${context}:`, fallbackError);
+        }
+      }
+      
+      // ERROR PROPAGATION: Re-throw if requested
+      if (rethrow) {
+        throw error;
+      }
+      
+      return undefined;
+    }
+  },
+  
+  /**
+   * Create a safe version of an async function with error boundaries
+   * 
+   * @param {Function} asyncFn - Async function to make safe
+   * @param {Object} [options={}] - Safe execution options
+   * @returns {Function} Safe version of the async function
+   * 
+   * @example
+   * const safeApiCall = ErrorUtils.createSafeAsync(fetchUserData, {
+   *   context: 'User data fetch',
+   *   fallback: () => ({ error: 'Failed to load user data' })
+   * });
+   */
+  createSafeAsync: (asyncFn, options = {}) => {
+    return async (...args) => {
+      return ErrorUtils.safeExecute(() => asyncFn(...args), options);
+    };
+  },
+  
+  /**
+   * Validate and sanitize error messages for user display
+   * 
+   * @param {Error|string} error - Error object or message
+   * @param {string} [fallbackMessage='An unexpected error occurred'] - Fallback message
+   * @returns {string} Safe, user-friendly error message
+   */
+  getSafeErrorMessage: (error, fallbackMessage = 'An unexpected error occurred') => {
+    if (!error) return fallbackMessage;
+    
+    // Extract message from Error objects
+    const message = typeof error === 'string' ? error : error.message || fallbackMessage;
+    
+    // Basic sanitization to prevent XSS in error messages
+    return escapeHtml(message).slice(0, 200); // Limit length
+  }
+};
+
+// =============================================================================
 // VALIDATION UTILITIES
 // =============================================================================
 
@@ -1441,11 +1703,224 @@ export const DOMUtils = {
  * Common validation patterns used throughout the application
  * 
  * These utilities provide consistent validation behavior and reduce
- * code duplication across components.
+ * code duplication across components. The validation system uses
+ * a composable approach where complex validations build on simpler ones.
  * 
  * @namespace ValidationUtils
  */
 export const ValidationUtils = {
+  /**
+   * Common security patterns for content validation
+   * @private
+   */
+  _securityPatterns: {
+    // SCRIPT TAG DETECTION: Matches various script tag patterns including attributes
+    scriptTags: /<script[^>]*>.*?<\/script>/gi,
+    // SAFE CHARACTERS: Alphanumeric plus common punctuation for general text
+    safeText: /^[a-zA-Z0-9\s\-_.,'!?@#$%&*()+=[\]{}|;:"<>/\\]*$/,
+    // TAG CHARACTERS: More restrictive pattern for tag names
+    safeTags: /^[a-zA-Z0-9\-_.\s]+$/
+  },
+
+  /**
+   * Centralized security validation to reduce code duplication
+   * @private
+   * @param {string} text - Text to validate for security issues
+   * @param {string} fieldName - Field name for error messages
+   * @returns {{isSecure: boolean, errors: string[]}} Security validation result
+   */
+  _validateSecurity: (text, fieldName) => {
+    const errors = [];
+    
+    // XSS PREVENTION: Check for script injection attempts
+    if (ValidationUtils._securityPatterns.scriptTags.test(text)) {
+      errors.push(`${fieldName} cannot contain script tags for security`);
+    }
+    
+    return {
+      isSecure: errors.length === 0,
+      errors
+    };
+  },
+
+  /**
+   * Validate text field with comprehensive checks
+   * @private
+   * @param {any} text - Text value to validate
+   * @param {string} fieldName - Name for error messages
+   * @returns {string[]} Array of validation errors
+   */
+  _validateTextField: (text, fieldName) => {
+    const errors = [];
+    
+    // EXISTENCE CHECK: Ensure field is present and not null/undefined
+    if (text === null || text === undefined) {
+      errors.push(`${fieldName} field is required`);
+      return errors;
+    }
+    
+    // TYPE VALIDATION: Must be a string
+    if (typeof text !== 'string') {
+      errors.push(`${fieldName} must be a string`);
+      return errors;
+    }
+    
+    const trimmedText = text.trim();
+    
+    // LENGTH VALIDATION: Must not be empty and within limits
+    if (trimmedText.length === 0) {
+      errors.push(`${fieldName} cannot be empty or whitespace only`);
+    } else if (trimmedText.length > 10000) {
+      errors.push(`${fieldName} cannot exceed 10,000 characters`);
+    }
+    
+    // SECURITY VALIDATION: Check for XSS patterns
+    const securityResult = ValidationUtils._validateSecurity(trimmedText, fieldName);
+    errors.push(...securityResult.errors);
+    
+    return errors;
+  },
+
+  /**
+   * Validate description field with appropriate constraints
+   * @private
+   * @param {any} desc - Description value to validate
+   * @returns {string[]} Array of validation errors
+   */
+  _validateDescriptionField: (desc) => {
+    const errors = [];
+    
+    // EXISTENCE CHECK: Description is required but can be empty
+    if (desc === null || desc === undefined) {
+      errors.push('Description field is required');
+      return errors;
+    }
+    
+    // TYPE VALIDATION: Must be a string
+    if (typeof desc !== 'string') {
+      errors.push('Description must be a string');
+      return errors;
+    }
+    
+    const trimmedDesc = desc.trim();
+    
+    // LENGTH VALIDATION: Allow empty but limit length if provided
+    if (trimmedDesc.length > 1000) {
+      errors.push('Description cannot exceed 1,000 characters');
+    }
+    
+    // SECURITY VALIDATION: Check for XSS patterns if not empty
+    if (trimmedDesc.length > 0) {
+      const securityResult = ValidationUtils._validateSecurity(trimmedDesc, 'Description');
+      errors.push(...securityResult.errors);
+    }
+    
+    return errors;
+  },
+
+  /**
+   * Validate sensitive field boolean flag
+   * @private
+   * @param {any} sensitive - Sensitive flag to validate
+   * @returns {string[]} Array of validation errors
+   */
+  _validateSensitiveField: (sensitive) => {
+    const errors = [];
+    
+    // OPTIONAL FIELD: Only validate if explicitly provided
+    if (sensitive !== null && sensitive !== undefined && typeof sensitive !== 'boolean') {
+      errors.push('Sensitive flag must be a boolean (true or false)');
+    }
+    
+    return errors;
+  },
+
+  /**
+   * Validate tags array with comprehensive tag validation
+   * @private
+   * @param {any} tags - Tags array to validate
+   * @returns {string[]} Array of validation errors
+   */
+  _validateTagsField: (tags) => {
+    const errors = [];
+    
+    // OPTIONAL FIELD: Skip validation if not provided
+    if (tags === null || tags === undefined) {
+      return errors;
+    }
+    
+    // TYPE VALIDATION: Must be an array
+    if (!Array.isArray(tags)) {
+      errors.push('Tags must be an array');
+      return errors;
+    }
+    
+    // ARRAY LENGTH VALIDATION: Prevent excessive tag counts
+    if (tags.length > 50) {
+      errors.push('Cannot have more than 50 tags per item');
+      return errors;
+    }
+    
+    // INDIVIDUAL TAG VALIDATION: Validate each tag with deduplication
+    const seenTags = new Set();
+    tags.forEach((tag, index) => {
+      const tagErrors = ValidationUtils._validateSingleTag(tag, index + 1, seenTags);
+      errors.push(...tagErrors);
+    });
+    
+    return errors;
+  },
+
+  /**
+   * Validate a single tag with content and security checks
+   * @private
+   * @param {any} tag - Single tag to validate
+   * @param {number} index - Tag index for error messages (1-based)
+   * @param {Set} seenTags - Set of normalized tags seen so far for duplicate detection
+   * @returns {string[]} Array of validation errors
+   */
+  _validateSingleTag: (tag, index, seenTags) => {
+    const errors = [];
+    
+    // TYPE VALIDATION: Tag must be a string
+    if (typeof tag !== 'string') {
+      errors.push(`Tag ${index} must be a string`);
+      return errors;
+    }
+    
+    const trimmedTag = tag.trim();
+    
+    // LENGTH VALIDATION: Tag cannot be empty and must be within limits
+    if (trimmedTag.length === 0) {
+      errors.push(`Tag ${index} cannot be empty or whitespace only`);
+      return errors;
+    }
+    
+    if (trimmedTag.length > 50) {
+      errors.push(`Tag ${index} cannot exceed 50 characters`);
+      return errors;
+    }
+    
+    // CONTENT VALIDATION: Check for allowed characters
+    if (!ValidationUtils._securityPatterns.safeTags.test(trimmedTag)) {
+      errors.push(`Tag ${index} contains invalid characters (only letters, numbers, spaces, hyphens, underscores, and periods allowed)`);
+      return errors;
+    }
+    
+    // SECURITY VALIDATION: Check for script injection
+    const securityResult = ValidationUtils._validateSecurity(trimmedTag, `Tag ${index}`);
+    errors.push(...securityResult.errors);
+    
+    // DUPLICATE DETECTION: Check against normalized previous tags
+    const normalizedTag = trimmedTag.toLowerCase();
+    if (seenTags.has(normalizedTag)) {
+      errors.push(`Duplicate tag found: "${trimmedTag}"`);
+    } else {
+      seenTags.add(normalizedTag);
+    }
+    
+    return errors;
+  },
   /**
    * Check if a value is a non-empty string
    * @param {any} value - Value to validate
@@ -1581,18 +2056,14 @@ export const ValidationUtils = {
 };
 
 // =============================================================================
-// ERROR HANDLING UTILITIES
+// ADDITIONAL ERROR HANDLING UTILITIES (Extension of ErrorUtils)
 // =============================================================================
 
 /**
- * Utilities for consistent error handling and recovery patterns
- * 
- * These utilities provide standardized error handling, logging, and recovery
- * strategies to reduce code duplication and improve consistency.
- * 
- * @namespace ErrorUtils
+ * Additional utilities for consistent error handling and recovery patterns
+ * extending the existing ErrorUtils namespace with more specialized functions.
  */
-export const ErrorUtils = {
+export const ErrorHandlingUtils = {
   /**
    * Safe execution wrapper with automatic error handling and logging
    * @param {Function} fn - Function to execute safely
@@ -1602,7 +2073,7 @@ export const ErrorUtils = {
    * @param {boolean} [options.suppressErrors=false] - Whether to suppress error notifications
    * @returns {Promise<any>|any} Result of function execution or fallback
    */
-  safeExecute: async (fn, options = {}) => {
+  safeExecuteAdvanced: async (fn, options = {}) => {
     const { context = 'operation', fallback, suppressErrors = false } = options;
     
     try {
@@ -1878,118 +2349,72 @@ export const UIUtils = {
   }
 };
 
+/**
+ * Comprehensive item validation with security and content checks
+ * 
+ * This function validates all aspects of an item object to ensure data integrity,
+ * security compliance, and application requirements. It performs both structural
+ * validation and content security scanning.
+ * 
+ * Validation Categories:
+ * - Structure: Object type, required fields, property types
+ * - Content: Length limits, character restrictions, content patterns
+ * - Security: XSS prevention, script tag detection, injection protection
+ * - Business Rules: Tag limits, duplicate detection, naming conventions
+ * 
+ * @param {Object} item - Item object to validate
+ * @param {string} item.text - Main snippet content (required, 1-10,000 chars)
+ * @param {string} item.desc - Description of snippet (optional, max 1,000 chars)
+ * @param {boolean} [item.sensitive=false] - Whether snippet contains sensitive data
+ * @param {string[]} [item.tags=[]] - Category tags (max 50 tags, 50 chars each)
+ * @returns {{isValid: boolean, errors: string[], fieldCount: number, validatedAt: string}} Detailed validation result
+ * 
+ * @example
+ * // Validate a complete item
+ * const item = {
+ *   text: 'console.log("Hello World")',
+ *   desc: 'Basic debugging output',
+ *   sensitive: false,
+ *   tags: ['javascript', 'debug', 'console']
+ * };
+ * 
+ * const result = validateItem(item);
+ * if (result.isValid) {
+ *   console.log('Item is valid, ready to save');
+ * } else {
+ *   console.log('Validation errors:', result.errors);
+ * }
+ * 
+ * // Handle validation in form submission
+ * const handleSubmit = (formData) => {
+ *   const validation = validateItem(formData);
+ *   if (!validation.isValid) {
+ *     showValidationErrors(validation.errors);
+ *     return false;
+ *   }
+ *   return saveItem(formData);
+ * };
+ */
 export const validateItem = (item) => {
   const errors = [];
   
-  // STRUCTURE VALIDATION: Ensure basic object structure
+  // STRUCTURE VALIDATION: Ensure basic object structure integrity
+  // This prevents type confusion attacks and ensures we're working with valid data
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
     return { isValid: false, errors: ['Invalid item object - must be a non-array object'] };
   }
   
-  // TEXT FIELD VALIDATION: Required primary content
-  if (!item.hasOwnProperty('text') || item.text === null || item.text === undefined) {
-    errors.push('Text field is required');
-  } else if (typeof item.text !== 'string') {
-    errors.push('Text must be a string');
-  } else {
-    const trimmedText = item.text.trim();
-    
-    // Length validation with specific limits
-    if (trimmedText.length === 0) {
-      errors.push('Text cannot be empty or whitespace only');
-    } else if (trimmedText.length > 10000) {
-      errors.push('Text cannot exceed 10,000 characters');
-    }
-    
-    // Security validation: Check for potential XSS patterns
-    const hasScriptTags = /<script[^>]*>.*?<\/script>/gi.test(trimmedText);
-    if (hasScriptTags) {
-      errors.push('Text cannot contain script tags for security');
-    }
-  }
+  // TEXT FIELD VALIDATION: Required primary content using modular validation
+  errors.push(...ValidationUtils._validateTextField(item.text, 'Text'));
   
-  // DESCRIPTION FIELD VALIDATION: Required secondary content
-  if (!item.hasOwnProperty('desc') || item.desc === null || item.desc === undefined) {
-    errors.push('Description field is required');
-  } else if (typeof item.desc !== 'string') {
-    errors.push('Description must be a string');
-  } else {
-    const trimmedDesc = item.desc.trim();
-    
-    // Allow empty descriptions but validate length if provided
-    if (trimmedDesc.length > 1000) {
-      errors.push('Description cannot exceed 1,000 characters');
-    }
-    
-    // Security validation for description
-    const hasScriptTags = /<script[^>]*>.*?<\/script>/gi.test(trimmedDesc);
-    if (hasScriptTags) {
-      errors.push('Description cannot contain script tags for security');
-    }
-  }
+  // DESCRIPTION FIELD VALIDATION: Optional secondary content
+  errors.push(...ValidationUtils._validateDescriptionField(item.desc));
   
   // SENSITIVE FIELD VALIDATION: Optional boolean flag
-  if (item.hasOwnProperty('sensitive') && item.sensitive !== null && item.sensitive !== undefined) {
-    if (typeof item.sensitive !== 'boolean') {
-      errors.push('Sensitive flag must be a boolean (true or false)');
-    }
-  }
+  errors.push(...ValidationUtils._validateSensitiveField(item.sensitive));
   
   // TAGS FIELD VALIDATION: Optional array with content restrictions
-  if (item.hasOwnProperty('tags') && item.tags !== null && item.tags !== undefined) {
-    if (!Array.isArray(item.tags)) {
-      errors.push('Tags must be an array');
-    } else {
-      // Array length validation
-      if (item.tags.length > 50) {
-        errors.push('Cannot have more than 50 tags per item');
-      }
-      
-      // Individual tag validation with enhanced security checks
-      const seenTags = new Set();
-      item.tags.forEach((tag, index) => {
-        if (typeof tag !== 'string') {
-          errors.push(`Tag ${index + 1} must be a string`);
-          return;
-        }
-        
-        const trimmedTag = tag.trim();
-        
-        // Length validation
-        if (trimmedTag.length === 0) {
-          errors.push(`Tag ${index + 1} cannot be empty or whitespace only`);
-          return;
-        }
-        
-        if (trimmedTag.length > 50) {
-          errors.push(`Tag ${index + 1} cannot exceed 50 characters`);
-          return;
-        }
-        
-        // Content validation: Allow alphanumeric, hyphens, underscores, and periods
-        const validTagPattern = /^[a-zA-Z0-9\-_.\s]+$/;
-        if (!validTagPattern.test(trimmedTag)) {
-          errors.push(`Tag ${index + 1} contains invalid characters (only letters, numbers, spaces, hyphens, underscores, and periods allowed)`);
-          return;
-        }
-        
-        // Security validation: Check for script tags in tags
-        const hasScriptTags = /<script[^>]*>.*?<\/script>/gi.test(trimmedTag);
-        if (hasScriptTags) {
-          errors.push(`Tag ${index + 1} cannot contain script tags for security`);
-          return;
-        }
-        
-        // Duplicate detection
-        const normalizedTag = trimmedTag.toLowerCase();
-        if (seenTags.has(normalizedTag)) {
-          errors.push(`Duplicate tag found: "${trimmedTag}"`);
-        } else {
-          seenTags.add(normalizedTag);
-        }
-      });
-    }
-  }
+  errors.push(...ValidationUtils._validateTagsField(item.tags));
   
   // FINAL VALIDATION RESULT: Return comprehensive validation result
   const isValid = errors.length === 0;

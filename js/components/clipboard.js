@@ -115,77 +115,162 @@ export class ClipboardManager {
   }
 
   /**
-   * Legacy clipboard copy method using execCommand
+   * Legacy clipboard copy method using execCommand with enhanced error handling
    * 
-   * This method provides clipboard functionality for older browsers or
-   * contexts where the modern Clipboard API is not available. It creates
-   * a temporary textarea element to hold the text and uses document.execCommand
-   * to copy it.
+   * This method provides clipboard functionality for older browsers or contexts where 
+   * the modern Clipboard API is not available. It creates a temporary textarea element 
+   * to hold the text and uses the deprecated but widely-supported document.execCommand 
+   * to perform the copy operation.
+   * 
+   * Implementation Details:
+   * - Creates invisible textarea element positioned off-screen
+   * - Handles mobile device selection limitations with setSelectionRange
+   * - Provides comprehensive cleanup to prevent DOM pollution
+   * - Uses defensive programming to handle various failure modes
+   * 
+   * Browser Compatibility:
+   * - Works in browsers that don't support Clipboard API (IE, older Safari)
+   * - Functions in HTTP contexts where Clipboard API is restricted
+   * - Handles mobile browsers with limited text selection capabilities
+   * - Graceful fallback when execCommand is disabled or unavailable
+   * 
+   * Security Considerations:
+   * - Temporary element is created with minimal privileges (readonly)
+   * - Element is immediately removed after use to prevent memory leaks
+   * - No persistent DOM modifications or security vulnerabilities
    * 
    * @param {string} text - Text to copy using legacy method
-   * @returns {boolean} True if copy was successful
+   * @returns {boolean} True if copy was successful, false otherwise
    * 
    * @private
    */
   fallbackCopy(text) {
+    // VALIDATION: Ensure we have valid text to copy
+    if (!text || typeof text !== 'string') {
+      this.notifications.show('Invalid text for clipboard operation', 'error');
+      return false;
+    }
+
+    let textarea = null;
+    
     try {
-      // Create temporary textarea for the copy operation
-      const textarea = this.createTempTextarea(text);
+      // ELEMENT CREATION: Create temporary textarea for copy operation
+      textarea = this.createTempTextarea(text);
       
-      // Add to DOM, select, and copy
+      // DOM INSERTION: Add element to document for selection
+      // Element must be in the DOM for execCommand to work properly
       document.body.appendChild(textarea);
-      textarea.select();
-      textarea.setSelectionRange(0, 99999); // For mobile devices
       
-      // Attempt to copy using execCommand
-      const successful = document.execCommand('copy');
+      // FOCUS AND SELECTION: Prepare textarea for copy operation
+      textarea.focus(); // Focus is required for selection in some browsers
+      textarea.select(); // Select all text in the textarea
       
-      // Clean up temporary element
-      document.body.removeChild(textarea);
+      // MOBILE COMPATIBILITY: Ensure selection works on mobile devices
+      // Mobile browsers often have different selection behavior
+      textarea.setSelectionRange(0, text.length);
       
-      if (successful) {
+      // COPY OPERATION: Attempt to copy selected text using execCommand
+      // This is a synchronous operation that returns boolean success status
+      const copySuccessful = document.execCommand('copy');
+      
+      if (copySuccessful) {
+        // SUCCESS: Notify user and return success status
         this.notifications.show('Copied to clipboard');
         return true;
       } else {
+        // EXECCOMMAND FAILURE: Command failed for unknown reason
         this.notifications.show('Copy failed - please try manually', 'error');
         return false;
       }
+      
     } catch (error) {
-      console.error('Fallback copy also failed:', error);
+      // EXCEPTION HANDLING: Handle any unexpected errors during copy process
+      console.error('Fallback copy encountered error:', {
+        error: error.message,
+        stack: error.stack,
+        textLength: text ? text.length : 0,
+        hasTextarea: !!textarea
+      });
+      
+      // USER FEEDBACK: Provide clear guidance for manual copying
       this.notifications.show('Copy not supported - please copy manually', 'error');
       return false;
+      
+    } finally {
+      // CLEANUP: Always remove temporary element to prevent DOM pollution
+      // This runs regardless of success or failure to ensure no memory leaks
+      if (textarea && textarea.parentNode) {
+        try {
+          document.body.removeChild(textarea);
+        } catch (cleanupError) {
+          // Log cleanup issues but don't throw - cleanup failures shouldn't affect UX
+          console.warn('Failed to clean up clipboard textarea:', cleanupError);
+        }
+      }
     }
   }
 
   /**
-   * Create a temporary textarea element for fallback copying
+   * Create a temporary textarea element for fallback copying with enhanced configuration
    * 
-   * The textarea is positioned off-screen to avoid visual disruption
-   * while still being selectable for the copy operation.
+   * This method creates a properly configured textarea element that's invisible to users
+   * but still functional for text selection and copying. The element is carefully styled
+   * to avoid any visual disruption while maintaining accessibility for screen readers.
    * 
-   * @param {string} text - Text to place in textarea
-   * @returns {HTMLTextAreaElement} Configured textarea element
+   * Positioning Strategy:
+   * - Uses fixed positioning to remove from document flow
+   * - Places element far off-screen (-9999px) to ensure invisibility
+   * - Uses opacity and pointer-events to prevent interaction
+   * - Sets negative z-index to ensure element stays behind all content
+   * 
+   * Accessibility Considerations:
+   * - Marked as aria-hidden since it's a temporary utility element
+   * - Set to readonly to prevent accidental text modification
+   * - Maintains focusability required for text selection APIs
+   * 
+   * Cross-browser Compatibility:
+   * - Works consistently across all modern browsers
+   * - Handles mobile browsers with different selection behaviors
+   * - Avoids browser-specific styling quirks and limitations
+   * 
+   * @param {string} text - Text content to place in textarea
+   * @returns {HTMLTextAreaElement} Properly configured textarea element ready for use
    * 
    * @private
    */
   createTempTextarea(text) {
+    // ELEMENT CREATION: Create textarea with proper type validation
     const textarea = document.createElement('textarea');
-    textarea.value = text;
+    textarea.value = String(text); // Ensure text is always a string
     
-    // Style to keep it invisible but accessible
+    // POSITIONING: Make element invisible but functional for copy operations
+    // Using fixed positioning ensures element doesn't affect page layout
     textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    textarea.style.top = '-9999px';
-    textarea.style.opacity = '0';
-    textarea.style.pointerEvents = 'none';
-    textarea.style.zIndex = '-1';
+    textarea.style.left = '-9999px';      // Far off-screen horizontally  
+    textarea.style.top = '-9999px';       // Far off-screen vertically
+    textarea.style.width = '1px';         // Minimal width to avoid layout issues
+    textarea.style.height = '1px';        // Minimal height to avoid layout issues
     
-    // Ensure it's focusable for selection
-    textarea.setAttribute('readonly', '');
-    textarea.setAttribute('aria-hidden', 'true');
+    // VISIBILITY: Additional layers of invisibility for comprehensive hiding
+    textarea.style.opacity = '0';         // Transparent to prevent visual flash
+    textarea.style.pointerEvents = 'none'; // Prevent mouse interaction
+    textarea.style.zIndex = '-9999';      // Behind all other elements
+    textarea.style.border = 'none';       // Remove default border
+    textarea.style.outline = 'none';      // Remove focus outline
+    textarea.style.background = 'transparent'; // Transparent background
+    
+    // FUNCTIONALITY: Configure element for proper copy operation behavior
+    textarea.setAttribute('readonly', '');     // Prevent text modification
+    textarea.setAttribute('aria-hidden', 'true'); // Hide from screen readers
+    textarea.setAttribute('tabindex', '-1');   // Remove from tab navigation
+    
+    // PERFORMANCE: Disable features not needed for copy operation
+    textarea.setAttribute('autocomplete', 'off'); // Disable autocomplete
+    textarea.setAttribute('spellcheck', 'false'); // Disable spellcheck
     
     return textarea;
   }
+
 
   /**
    * Check if clipboard functionality is available

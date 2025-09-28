@@ -275,17 +275,31 @@ export class ModalManager {
   }
 
   /**
-   * Check if an element is visible
-   * 
+   * Check if an element is visible and can receive focus
    * @param {HTMLElement} element - Element to check
-   * @returns {boolean} True if element is visible
+   * @returns {boolean} True if element is visible and focusable
    * @private
    */
   isVisible(element) {
-    const style = window.getComputedStyle(element);
-    return style.display !== 'none' && 
-           style.visibility !== 'hidden' && 
-           style.opacity !== '0';
+    if (!element?.nodeType) return false;
+
+    try {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      
+      return !(
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.opacity === '0' ||
+        rect.width === 0 ||
+        rect.height === 0 ||
+        element.disabled ||
+        element.getAttribute('aria-hidden') === 'true' ||
+        element.hasAttribute('hidden')
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**

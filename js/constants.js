@@ -111,11 +111,11 @@ export const UI_CONFIG = {
 };
 
 /**
- * SVG Icon Library
+ * SVG Icon Library and Destructive Symbols
  * 
- * Inline SVG icons used throughout the application. These icons are embedded
- * directly in the JavaScript to avoid additional HTTP requests and ensure they
- * are always available, even offline.
+ * Inline SVG icons and standardized Unicode symbols used throughout the application. 
+ * These icons are embedded directly in the JavaScript to avoid additional HTTP requests 
+ * and ensure they are always available, even offline.
  * 
  * Benefits of inline SVG:
  * - No additional network requests
@@ -124,20 +124,28 @@ export const UI_CONFIG = {
  * - Accessible with proper aria-hidden attributes
  * - Works consistently across all browsers
  * 
+ * Destructive Action Standards:
+ * - Close/Cancel: ✕ (U+2715) for modal close, cancel actions
+ * - Remove/Clear: ✕ (U+2715) for field clearing, tag removal
+ * - Delete: SVG trash icon for permanent deletion actions
+ * 
  * @constant {Object} ICONS
  * @property {string} edit - Pencil/edit icon for modifying snippets
  * @property {string} delete - Trash can icon for deleting snippets
  * @property {string} copy - Clipboard icon for copying snippet content
+ * @property {string} expand - Expand/fullscreen icon for expanding cards
+ * @property {string} close - Standardized close symbol for consistent destructive actions
+ * @property {string} remove - Standardized remove symbol for tag/field clearing
  */
 export const ICONS = {
   /** Edit/pencil icon - Used for snippet modification actions */
-  edit: `<svg viewBox="0 0 24 24" aria-hidden="true">
+  edit: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
     <path fill="none" stroke="currentColor" stroke-width="2" d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0-3-3L4 18v3z"/>
     <path fill="none" stroke="currentColor" stroke-width="2" d="M14 6l4 4"/>
   </svg>`,
   
   /** Delete/trash icon - Used for snippet removal actions */
-  delete: `<svg viewBox="0 0 24 24" aria-hidden="true">
+  delete: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
     <path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18"/>
     <path fill="none" stroke="currentColor" stroke-width="2" d="M8 6V4h8v2"/>
     <path fill="none" stroke="currentColor" stroke-width="2" d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -145,18 +153,24 @@ export const ICONS = {
   </svg>`,
   
   /** Copy/clipboard icon - Used for copying snippet content to clipboard */
-  copy: `<svg viewBox="0 0 24 24" aria-hidden="true">
+  copy: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
     <rect x="9" y="9" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>
     <rect x="4" y="4" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>
   </svg>`,
   
   /** Expand/fullscreen icon - Used for expanding cards or entering fullscreen mode */
-  expand: `<svg viewBox="0 0 24 24" aria-hidden="true">
+  expand: `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" role="img">
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/>
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/>
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/>
     <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>
-  </svg>`
+  </svg>`,
+  
+  /** Standardized close symbol - Used for modal close buttons and cancel actions */
+  close: '✕',
+  
+  /** Standardized remove symbol - Used for tag removal and field clearing */
+  remove: '✕'
 };
 
 

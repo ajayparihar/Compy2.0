@@ -141,8 +141,9 @@ export class NotificationManager {
       timestamp: Date.now()
     };
 
-    // Add to queue
-    this.queue.push(notification);
+    // PRIORITY QUEUE INSERTION: Insert notification based on priority level
+    // Higher priority notifications (like errors) should be shown first
+    this.insertByPriority(notification);
 
     // Process queue if no notification is currently shown
     if (!this.currentNotification) {
@@ -287,13 +288,80 @@ export class NotificationManager {
   }
 
   /**
-   * Generate unique notification ID
+   * Generate unique notification ID with enhanced uniqueness guarantees
    * 
-   * @returns {string} Unique notification identifier
+   * Creates a unique identifier for each notification that combines multiple
+   * sources of entropy to prevent collisions even in high-frequency scenarios.
+   * The ID format is designed to be human-readable for debugging purposes.
+   * 
+   * ID Structure: notification-{timestamp}-{counter}-{random}
+   * - timestamp: Current time in milliseconds for chronological ordering
+   * - counter: Sequential counter for same-millisecond notifications  
+   * - random: Base36 random string for additional collision prevention
+   * 
+   * @returns {string} Unique notification identifier guaranteed to be unique
    * @private
    */
   generateNotificationId() {
-    return `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // TIMESTAMP COMPONENT: Provides chronological ordering and primary uniqueness
+    const timestamp = Date.now();
+    
+    // COUNTER COMPONENT: Handle multiple notifications in same millisecond
+    // Static counter persists across instances for global uniqueness
+    if (!NotificationManager._idCounter) {
+      NotificationManager._idCounter = 0;
+    }
+    NotificationManager._idCounter = (NotificationManager._idCounter + 1) % 10000; // Reset after 9999
+    
+    // RANDOM COMPONENT: Additional entropy for collision prevention
+    const randomPart = Math.random().toString(36).substring(2, 8); // 6 character random string
+    
+    // COMBINE COMPONENTS: Create structured, unique identifier
+    return `notification-${timestamp}-${NotificationManager._idCounter.toString().padStart(4, '0')}-${randomPart}`;
+  }
+
+  /**
+   * Insert notification into queue based on priority level
+   * 
+   * Implements a priority queue system where higher priority notifications
+   * (errors, warnings) are shown before lower priority ones (info, success).
+   * This ensures critical messages are seen first.
+   * 
+   * Priority Levels (highest to lowest):
+   * 1. error (priority: 4) - Critical errors that need immediate attention
+   * 2. warning (priority: 3) - Important warnings that should be noticed
+   * 3. success (priority: 2) - Positive feedback for completed actions
+   * 4. info (priority: 1) - General informational messages
+   * 
+   * @param {Object} notification - Notification object to insert
+   * @private
+   */
+  insertByPriority(notification) {
+    // PRIORITY MAPPING: Assign numeric priority based on notification type
+    const priorityMap = {
+      'error': 4,    // Highest priority - critical errors
+      'warning': 3,  // High priority - important warnings
+      'success': 2,  // Medium priority - positive feedback
+      'info': 1      // Lowest priority - general information
+    };
+    
+    // PRIORITY ASSIGNMENT: Add priority property to notification
+    notification.priority = priorityMap[notification.type] || 1;
+    
+    // QUEUE INSERTION: Find correct position based on priority
+    // Higher priority notifications are inserted earlier in the queue
+    let insertIndex = this.queue.length;
+    
+    // INSERTION POINT SEARCH: Find the first notification with lower priority
+    for (let i = 0; i < this.queue.length; i++) {
+      if (this.queue[i].priority < notification.priority) {
+        insertIndex = i;
+        break;
+      }
+    }
+    
+    // INSERT NOTIFICATION: Add to queue at calculated position
+    this.queue.splice(insertIndex, 0, notification);
   }
 
   /**

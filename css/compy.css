@@ -1036,6 +1036,81 @@ html[data-theme^="light-"] textarea {
 }
 
 /* =================================================================
+   ACCESSIBILITY STYLES
+   ================================================================= */
+
+/* Skip Links for Keyboard Navigation */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  padding: 8px 12px;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  z-index: 9999;
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  border: 2px solid transparent;
+  transition: var(--transition-fast);
+}
+
+.skip-link:focus {
+  top: 6px;
+  outline: 2px solid var(--primary-contrast);
+  outline-offset: 2px;
+}
+
+.skip-link:hover {
+  background: var(--primary-hover);
+  transform: translateY(1px);
+}
+
+/* Enhanced Focus Visibility for Better Accessibility */
+.js-focus-visible :focus:not(.focus-visible) {
+  outline: none;
+}
+
+.focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Support for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .snackbar {
+    transition: none !important;
+  }
+  
+  .modal {
+    transition: none !important;
+  }
+  
+  .expandable-card {
+    transition: none !important;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: rgba(255, 255, 255, 0.3);
+    --border-strong: rgba(255, 255, 255, 0.5);
+    --text-muted: #ffffff;
+  }
+}
+
+/* =================================================================
    BASE STYLES
    ================================================================= */
 
@@ -1625,8 +1700,8 @@ select:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 12px;
-  padding-bottom: 24px;
-  position: relative;
+  padding-bottom: 48px; /* Increased padding to make room for buttons */
+  position: relative !important;
   min-height: 48px;
   cursor: pointer;
   transition: background-color var(--duration-normal) var(--ease-out),
@@ -1634,16 +1709,14 @@ select:focus-visible {
               box-shadow var(--duration-normal) var(--ease-out);
   /* Remove browser focus outline - we use custom selection */
   outline: none;
+  overflow: visible;
 }
 
-@media (hover: hover) {
-  /* Hover effect for cards — mirrors toolbar button hover */
+@media (any-hover: hover) {
+  /* Hover effect for cards — matches toolbar button hover */
 .card:hover {
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
-  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
-  /* Thin ring like selection but subtle */
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent),
-              0 2px 8px color-mix(in srgb, var(--primary) 18%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
 }
 }
 
@@ -1704,43 +1777,76 @@ select:focus-visible {
 
 /* Hover actions */
 .card .actions {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
+  position: absolute !important;
+  right: 8px !important;
+  bottom: 8px !important;
+  left: auto !important;
+  top: auto !important;
   display: none;
-  gap: clamp(4px, 1.8vw, 8px);
+  width: max-content; /* shrink to fit button row */
+  height: auto;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex-direction: row-reverse;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 10;
+  pointer-events: auto;
 }
+
 .card .actions .icon-btn {
-  width: clamp(26px, 8vw, 34px);
-  height: clamp(26px, 8vw, 34px);
+  width: 32px;
+  height: 32px;
   padding: 0;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: var(--transition-colors);
+  flex-shrink: 0;
+  margin: 0;
 }
 .card .actions .icon-btn svg {
-  width: clamp(14px, 3.8vw, 18px);
-  height: clamp(14px, 3.8vw, 18px);
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  transition: color var(--duration-normal) var(--ease-out);
 }
-.card:hover .actions {
-  display: flex;
+
+.card .actions .icon-btn:hover {
+  background: var(--hover-overlay);
+  border-color: var(--primary);
+  color: var(--primary);
 }
-.card:active .actions {
-  display: flex;
+
+.card .actions .icon-btn:hover svg {
+  color: var(--primary);
 }
-.card:focus-within .actions {
-  display: flex;
+
+.card .actions .icon-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.card:hover .actions,
+.card:active .actions,
+.card:focus-within .actions,
+.card.selected .actions {
+  display: flex !important;
 }
 
 /* Selected card state for keyboard navigation - theme-based highlight */
 .card.selected {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary);
-  background: color-mix(in srgb, var(--primary) 3%, var(--surface));
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 90%, transparent) !important;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface)) !important;
+  transform: translateY(-1px) !important;
+  position: relative !important;
+  z-index: 2 !important;
 }
 
-.card.selected .actions {
-  display: flex;
-}
 
 /* Active press state for all devices — mirrors hover and works on touch */
 .card:active {
@@ -1749,15 +1855,62 @@ select:focus-visible {
   box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
-/* Red hover effect for delete buttons in cards */
+/* Ensure selected ring persists during hover/active */
+.card.selected:hover,
+.card.selected:active {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 90%, transparent), 0 4px 12px color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface)) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Enhanced red destructive styling for delete buttons in cards */
 .card .actions .icon-btn[data-act="delete"]:hover {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  transform: scale(1.05);
+}
+.card .actions .icon-btn[data-act="delete"]:hover svg {
+  color: var(--danger) !important;
 }
 .card .actions .icon-btn[data-act="delete"]:focus-visible {
-  outline: 2px solid var(--danger);
+  outline: 2px solid var(--danger) !important;
   outline-offset: 2px;
+}
+.card .actions .icon-btn[data-act="delete"]:active {
+  transform: scale(0.95);
+  background: color-mix(in srgb, var(--danger) 18%, transparent) !important;
+  color: var(--danger) !important;
+}
+.card .actions .icon-btn[data-act="delete"]:active svg {
+  color: var(--danger) !important;
+}
+
+/* Destructive icon base styling */
+.danger-icon {
+  color: var(--text-muted);
+  border-color: var(--border-interactive);
+}
+
+.danger-icon svg {
+  color: var(--text-muted);
+}
+
+.danger-icon:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  transform: scale(1.05) !important;
+}
+
+.danger-icon:focus-visible {
+  outline: 2px solid var(--danger) !important;
+  outline-offset: 2px !important;
+}
+
+.danger-icon:active {
+  transform: scale(0.95) !important;
+  background: color-mix(in srgb, var(--danger) 18%, transparent) !important;
 }
 
 /* Modal */
@@ -1769,6 +1922,11 @@ select:focus-visible {
   justify-content: center;
   background: rgba(0, 0, 0, 0.5);
   z-index: var(--z-modal);
+}
+
+/* Prevent scrolling when modal is open */
+body.modal-open {
+  overflow: hidden;
 }
 .modal[aria-hidden="false"] {
   display: flex;
@@ -1817,6 +1975,138 @@ button[data-close-modal]:focus-visible,
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* =================================================================
+   STANDARDIZED DESTRUCTIVE ACTION STYLING
+   ================================================================= */
+
+/* Unified destructive button styling for consistency across the app */
+.close-btn,
+.chip .x,
+.clear-field,
+.modal .modal-header .icon-btn,
+.icon-btn[data-act="delete"],
+button[data-close-modal] {
+  /* Base destructive button styles */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-interactive);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  font-size: var(--text-base);
+  line-height: 1;
+  user-select: none;
+}
+
+/* Unified hover states for all destructive actions */
+.close-btn:hover,
+.chip .x:hover,
+.clear-field:hover,
+.modal .modal-header .icon-btn:hover,
+.icon-btn[data-act="delete"]:hover,
+button[data-close-modal]:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  transform: scale(1.05);
+}
+
+/* Unified focus states for all destructive actions */
+.close-btn:focus-visible,
+.chip .x:focus-visible,
+.clear-field:focus-visible,
+.modal .modal-header .icon-btn:focus-visible,
+.icon-btn[data-act="delete"]:focus-visible,
+button[data-close-modal]:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Unified active/pressed states */
+.close-btn:active,
+.chip .x:active,
+.clear-field:active,
+.modal .modal-header .icon-btn:active,
+.icon-btn[data-act="delete"]:active,
+button[data-close-modal]:active {
+  transform: scale(0.95);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+/* Special styling for close buttons in expanded cards */
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  font-size: var(--text-lg);
+}
+
+/* Tag chip remove button specific styling */
+.chip .x {
+  margin-left: var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  min-width: 16px;
+  min-height: 16px;
+}
+
+/* Enhanced danger button styling for modal danger actions */
+.danger-btn,
+.modal-danger-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-interactive);
+  font-weight: var(--font-medium);
+}
+
+.danger-btn:hover,
+.modal-danger-btn:hover {
+  background: var(--danger);
+  color: var(--danger-contrast);
+  border-color: var(--danger);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--danger) 25%, transparent);
+}
+
+.danger-btn:focus-visible,
+.modal-danger-btn:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+/* Accessibility: Ensure sufficient contrast for destructive actions */
+@media (prefers-contrast: high) {
+  .close-btn:hover,
+  .chip .x:hover,
+  .clear-field:hover,
+  .modal .modal-header .icon-btn:hover,
+  .icon-btn[data-act="delete"]:hover,
+  button[data-close-modal]:hover {
+    background: var(--danger);
+    color: var(--danger-contrast);
+    border-color: var(--danger);
+  }
+}
+
+/* Dark theme enhancements for destructive actions */
+@media (prefers-color-scheme: dark) {
+  .close-btn {
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+  }
+}
+
 .modal-content {
   background: var(--surface);
   color: var(--text);
@@ -1969,6 +2259,109 @@ html[data-theme^="light-"] .tag-autocomplete-option:hover,
 html[data-theme^="light-"] .tag-autocomplete-option.selected {
   background: var(--primary);
   color: var(--primary-contrast);
+}
+
+/* =================================================================
+   FORM ERROR STATES AND VALIDATION FEEDBACK
+   ================================================================= */
+
+/* Form Error States */
+input.error,
+textarea.error,
+select.error,
+.tags-input.error {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 15%, transparent) !important;
+  background-color: color-mix(in srgb, var(--danger) 3%, var(--input-bg));
+}
+
+input.error:focus,
+textarea.error:focus,
+select.error:focus,
+.tags-input.error:focus-within {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent) !important;
+}
+
+/* Error Messages */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.error-message::before {
+  content: '⚠️';
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+/* Light theme error adjustments */
+html[data-theme^="light-"] .error-message {
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
+/* Enhanced Focus Indicators for Better Accessibility */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.tags-input:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Ensure sufficient touch target size (minimum 44x44px) */
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.icon-btn,
+.file-btn span {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Exception for small icon buttons in cards - these are secondary actions */
+.card .icon-btn {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 6px;
+}
+
+/* Exception for chip remove buttons */
+.chip .x {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 2px;
+}
+
+/* Screen reader only content with better positioning */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 /* Lists */
@@ -3394,6 +3787,7 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   display: flex;
   gap: var(--space-8);
   justify-content: flex-end;
+  align-items: center;
   margin-top: var(--space-16);
 }
 
@@ -3525,8 +3919,8 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
 /* Close button */
 .expandable-card .close-btn {
   position: absolute;
-  top: var(--space-12);
-  right: var(--space-12);
+  top: 8px; /* tighter, consistent inset */
+  right: 8px;
   background: var(--surface-elevated);
   border: 1px solid var(--border-interactive);
   border-radius: var(--radius-sm);
@@ -3557,24 +3951,21 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   color: var(--danger);
 }
 
-.expandable-card .close-btn:focus-visible {
-  outline: 2px solid var(--danger);
-  outline-offset: 2px;
-}
-
 /* Expanded state */
 .expandable-card.expanded {
   /* Center the card and make it larger */
   position: fixed !important;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) !important;
   width: min(90vw, 600px);
   height: min(85vh, 500px);
   max-height: 85vh;
   cursor: default;
   z-index: var(--z-modal);
   box-shadow: var(--shadow-xl);
+  margin: 0 !important;
+  will-change: transform;
 }
 
 .expandable-card.expanded .expandable-card-content {
@@ -3588,10 +3979,175 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   transform: translateY(0);
 }
 
-.expandable-card.expanded .expand-trigger {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(10px) scale(0.9);
+/* Use flexbox for expanded card actions - more reliable than floats */
+.expandable-card.expanded .actions {
+  position: absolute !important;
+  right: 8px !important;
+  bottom: 8px !important;
+  left: auto !important;
+  top: auto !important;
+  display: flex !important;
+  flex-direction: row-reverse !important;
+  gap: 6px !important;
+  align-items: center !important;
+  justify-content: flex-end !important; /* align row to right edge */
+  width: max-content !important; /* shrink to fit */
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 10 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.expandable-card.expanded .actions .icon-btn {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid var(--border-interactive) !important;
+  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  transition: var(--transition-colors) !important;
+  flex-shrink: 0 !important;
+  float: none !important;
+  margin: 0 !important;
+}
+
+.expandable-card.expanded .actions .icon-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  color: var(--text-muted) !important;
+}
+
+.expandable-card.expanded .actions .icon-btn:hover {
+  background: var(--hover-overlay) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+
+.expandable-card.expanded .actions .icon-btn:hover svg {
+  color: var(--primary) !important;
+}
+
+/* Override for delete buttons in expanded cards - use danger colors on hover like close button */
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  color: var(--danger) !important;
+}
+
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover svg {
+  color: var(--danger) !important;
+}
+
+/* Override for delete buttons in expanded cards */
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  color: var(--danger) !important;
+}
+
+.expandable-card.expanded .actions .icon-btn[data-act="delete"]:hover svg {
+  color: var(--danger) !important;
+}
+
+/* Force expanded cards to always show actions */
+.expandable-card.expanded:hover .actions,
+.expandable-card.expanded:active .actions,
+.expandable-card.expanded:focus-within .actions,
+.expandable-card.expanded .actions {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Expand trigger uses the same class-based visibility system */
+.expandable-card .expand-trigger {
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out),
+              pointer-events var(--duration-normal) var(--ease-out),
+              background-color var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out);
+}
+
+/* Card action button visibility control */
+.card-action-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(0) !important;
+  position: absolute !important;
+  visibility: hidden !important;
+}
+
+/* Expand/Collapse button container for shared positioning */
+.expandable-card .expand-collapse-container {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+/* Both expand and collapse buttons share the same position */
+.expandable-card .expand-trigger,
+.expandable-card .collapse-action {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  margin: 0;
+  
+  /* Default visibility - will be controlled by card-action-hidden class */
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out),
+              visibility var(--duration-normal) var(--ease-out),
+              background-color var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out),
+              color var(--duration-normal) var(--ease-out);
+}
+
+/* Expand/Collapse button hover effects */
+.expandable-card .expand-trigger:hover:not(.card-action-hidden),
+.expandable-card .collapse-action:hover:not(.card-action-hidden) {
+  background: var(--hover-overlay);
+  border-color: var(--primary);
+  transform: scale(1.05);
+}
+
+.expandable-card .expand-trigger:focus-visible,
+.expandable-card .collapse-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.expandable-card .expand-trigger svg,
+.expandable-card .collapse-action svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  transition: color var(--duration-normal) var(--ease-out);
+}
+
+.expandable-card .expand-trigger:hover svg,
+.expandable-card .collapse-action:hover svg {
+  color: var(--primary);
 }
 
 .expandable-card.expanded .close-btn {
@@ -3623,7 +4179,7 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
 }
 
 /* Hover effects (only when not expanded) */
-@media (hover: hover) {
+@media (any-hover: hover) {
   .expandable-card:not(.expanded):hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
@@ -3677,6 +4233,249 @@ html[data-theme^="light-"] .expandable-card {
 
 html[data-theme^="light-"] .expandable-card.expanded {
   box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+/* ============= DRAG AND DROP STYLES ============= */
+/* Drag handle (bottom-left) */
+.card .drag-handle {
+  position: absolute !important;
+  left: 8px !important;
+  bottom: 8px !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: none; /* hidden by default, shown on hover/selected like other actions */
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid var(--border-interactive) !important;
+  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  cursor: grab !important;
+  z-index: 10 !important;
+  transition: var(--transition-colors), transform var(--duration-fast) var(--ease-out) !important;
+  padding: 0 !important;
+}
+.card .drag-handle svg { width: 16px !important; height: 16px !important; }
+.card .drag-handle:hover {
+  background: var(--hover-overlay) !important;
+}
+.card .drag-handle:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+}
+.card.card-chosen .drag-handle,
+.cards.cards-dragging .drag-handle {
+  cursor: grabbing !important;
+}
+
+/* Show drag handle under the same conditions as actions */
+.card:hover .drag-handle,
+.card:active .drag-handle,
+.card:focus-within .drag-handle,
+.card.selected .drag-handle {
+  display: flex !important;
+}
+
+/* Hide drag handle in expanded view */
+.card.expanded .drag-handle {
+  display: none !important;
+}
+
+/* Disabled DnD state styling */
+.cards.dnd-disabled .drag-handle {
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+}
+.cards.dnd-disabled .drag-handle:hover {
+  background: transparent !important;
+}
+
+/* ============= DRAG AND DROP STYLES ============= */
+/* Container state during dragging */
+.cards.cards-dragging {
+  position: relative;
+}
+
+ .cards.cards-dragging::before {
+  content: none;
+}
+
+/* Card states during drag operations */
+.card[draggable="true"] {
+  cursor: grab;
+  transition: var(--transition-transform), var(--transition-colors);
+}
+
+.card[draggable="true"]:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* When actively dragging */
+.card.card-chosen {
+  cursor: grabbing;
+  transform: none;
+  z-index: 1000;
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+/* Ghost element (placeholder during drag) */
+.card.card-ghost {
+  opacity: 0.2;
+  transform: none;
+  background: var(--surface);
+  border: none;
+  box-shadow: none;
+}
+
+.card.card-ghost * {
+  opacity: 0.5;
+}
+
+/* Dragging card appearance */
+.card.card-drag {
+  transform: none;
+  box-shadow: 0 0 0 2px var(--primary);
+  z-index: 1001;
+  background: var(--surface-elevated);
+}
+
+/* Visual feedback for drop zones */
+.cards.cards-dragging .card:not(.card-chosen):not(.card-ghost) {
+  transition: transform var(--duration-fast) var(--ease-out), 
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.cards.cards-dragging .card:not(.card-chosen):not(.card-ghost):hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--card-bg));
+}
+
+/* Accessibility states for drag and drop */
+.card[aria-grabbed="true"] {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.card[aria-grabbed="true"]::after {
+  content: '\2630';
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  color: var(--primary);
+  font-size: var(--text-lg);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Drop indicator line (before/after) */
+.card[data-drop-indicator="before"]::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -1px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+.card[data-drop-indicator="after"]::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+/* Mobile touch improvements */
+@media (hover: none) and (pointer: coarse) {
+  .card[draggable="true"] {
+    cursor: default;
+  }
+  
+  .card[draggable="true"]:active {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .card.card-chosen {
+    transform: scale(1.05) rotate(1deg);
+  }
+  
+  /* Always show drag handle on touch devices for discoverability */
+  .card .drag-handle {
+    display: flex !important;
+  }
+}
+
+/* Reduce visual noise from action buttons during dragging */
+.cards.cards-dragging .card .actions {
+  opacity: 0.15;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+/* Animations for smooth reordering */
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cardSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Disable text selection during drag operations */
+.cards.cards-dragging,
+.cards.cards-dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card.card-ghost {
+    border-color: var(--text);
+    border-width: 3px;
+  }
+  
+  .card.card-chosen {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .card[draggable="true"],
+  .card.card-chosen,
+  .card.card-ghost,
+  .card.card-drag {
+    transform: none;
+    transition: none;
+  }
+  
+  .cards.cards-dragging::before {
+    animation: none;
+  }
 }
 
 /* ============= UTILITY CLASSES =============*/

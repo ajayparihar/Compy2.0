@@ -188,6 +188,8 @@ export class ConfirmationManager {
       // Clear any existing content first
       messageElement.innerHTML = '';
       
+      // TRUST BOUNDARY: Only enable allowHtml when the message content is trusted.
+      // Otherwise, the non-HTML branch escapes and formats safely with <br>.
       if (config.allowHtml) {
         messageElement.innerHTML = config.message;
       } else {

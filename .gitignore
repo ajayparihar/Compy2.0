@@ -208,8 +208,13 @@ chrome_debug.log
 firefox_debug.log
 .vscode/launch.json
 
-# Jest specific
+# Jest specific (enhanced for Compy 2.0)
 jest-coverage/
+test/coverage/
+test/reports/
+test/.cache/
+.babelrc.bak
+babel-debug.log
 
 # npm/yarn files
 .npm
@@ -344,3 +349,43 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+
+# Compy 2.0 specific files
+# User data and backups (contain sensitive snippet data)
+user-data/
+backups/
+exports/
+imports/
+*.backup.json
+*.export.json
+*.import.json
+snippets-backup-*/
+
+# Compy 2.0 generated files
+test-analysis-report.html
+FIX-RECOMMENDATIONS.html
+executive-summary.json
+test-report-*.json
+performance-baseline-*.json
+
+# Browser extension build artifacts (if applicable)
+manifest.json.backup
+extension/dist/
+extension/build/
+chrome-extension/
+firefox-addon/
+
+# Compy 2.0 development files
+dev-snippets.json
+test-data.json
+mock-data/
+prototype/
+drafts/
+
+# Live Server cache
+.live-server/
+
+# Temporary HTML files for testing
+test-*.html
+preview-*.html
+demo-*.html

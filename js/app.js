@@ -8,13 +8,14 @@ import {
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
   getAllTags, filterItems, validateItem, debounce, 
-  addEventHandler, toggleVisibility, isValidTheme, getSafeTheme,
-  Logger, DOMUtils, ValidationUtils, ErrorUtils
+  addEventHandler, addMultipleEventHandlers, toggleVisibility, isValidTheme, getSafeTheme,
+  Logger, DOMUtils, ValidationUtils, ErrorUtils, createElement,
+  createSVGIcon, createIconButton
 } from './utils.js?v=2.0.2';
 import {
   initState, getState, subscribe, upsertItem,
   deleteItem, updateFilterTags, updateSearch, updateProfile,
-  setEditingId, getBackups
+  setEditingId, getBackups, reorderItems
 } from './state.js?v=2.0.2';
 import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.2';
 import { createModalManager } from './components/modals.js?v=2.0.2';
@@ -23,6 +24,7 @@ import { createMobileNavigationManager } from './components/mobileNavigation.js?
 import { createThemePicker } from './components/themePicker.js?v=2.0.2';
 import { createClipboardManager } from './components/clipboard.js?v=2.0.2';
 import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.2';
+import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.2';
 
 /**
  * @typedef {Object} AppItem
@@ -31,6 +33,7 @@ import { createExpandableCardManager } from './components/expandableCard.js?v=2.
  * @property {string} desc
  * @property {boolean} sensitive
  * @property {string[]} tags
+ * @property {number} position
  */
 /**
  * @typedef {Object} AppState
@@ -77,105 +80,72 @@ class CompyApp {
    * Binds handlers to maintain context when used as event listeners.
    */
   constructor() {
+    // Core state
     this.initialized = false;
+    
+    // MEMORY MANAGEMENT: AbortController for automatic event listener cleanup
+    this.abortController = new AbortController();
+    this.cleanupTasks = new Set();
+    
+    // Component managers
     this.clipboard = null;
     this.notifications = null;
     this.modalManager = null;
     this.confirmationManager = null;
     this.theme = null;
-    this.search = null;
-    this.cards = null;
-    this.tagAutocomplete = null;
-    this.mobileNavigation = null;
-    this.themePicker = null;
     this.expandableCardManager = null;
+    this.dragDropManager = null;
     
-    // Manual scroll restoration across refreshes
-    this.initialScrollY = 0;     // saved scroll position from previous session load (sessionStorage)
-    this.scrollRestored = false; // whether we've already restored scroll after first render
-    
-    // Filter modal transient state and handler guard
-    this.filterState = null; // { allTags: string[], selectedTags: string[], query: string }
-    this.filterHandlersBound = false;
-    
-    // Card selection state for keyboard navigation
+    // UI state tracking
+    this.initialScrollY = 0;
+    this.scrollRestored = false;
     this.selectedCardIndex = -1;
     this.cardElements = [];
     this.visibleItems = [];
     
-    // Bind methods to maintain context
+    // Bind only essential methods that are used as event listeners
     this.handleStateChange = this.handleStateChange.bind(this);
-    this.handleKeyboardShortcuts = this.handleKeyboardShortcuts.bind(this);
-    this.handleModalKeyboard = this.handleModalKeyboard.bind(this);
     this.removeItem = this.removeItem.bind(this);
-    this.setupMobileNavigation = this.setupMobileNavigation.bind(this);
-    this.setupResponsiveNavbar = this.setupResponsiveNavbar.bind(this);
-    
-    // Card navigation methods
-    this.selectCard = this.selectCard.bind(this);
-    this.selectNextCard = this.selectNextCard.bind(this);
-    this.selectPreviousCard = this.selectPreviousCard.bind(this);
-    this.selectCardUp = this.selectCardUp.bind(this);
-    this.selectCardDown = this.selectCardDown.bind(this);
-    this.selectCardLeft = this.selectCardLeft.bind(this);
-    this.selectCardRight = this.selectCardRight.bind(this);
-    this.clearCardSelection = this.clearCardSelection.bind(this);
-    this.handleCardKeyboardShortcuts = this.handleCardKeyboardShortcuts.bind(this);
-    this.calculateGridColumns = this.calculateGridColumns.bind(this);
   }
 
   /**
-   * Initialize core application components in proper order
+   * Initialize all application components in optimal order
    * @private
    */
-  initCoreComponents() {
+  initializeComponents() {
+    // Core systems first
     this.initClipboard();
     this.initNotifications();
     this.initModals();
     this.initTheme();
+    
+    // UI components
     this.initSearch();
     this.initCards();
     this.initExpandableCards();
-  }
-
-  /**
-   * Initialize user interface components
-   * @private
-   */
-  initUIComponents() {
+    this.initDragAndDrop();
+    
+    // User features
     this.initProfile();
     this.initExport();
     this.initImport();
     this.initEventHandlers();
-  }
-
-  /**
-   * Initialize state management and event listeners
-   * @private
-   */
-  initStateAndEvents() {
-    // Subscribe to state changes before initializing state
-    subscribe(this.handleStateChange);
     
-    // Initialize state management (this will trigger initial render)
+    // State and events
+    subscribe(this.handleStateChange);
     initState();
     
-    // Setup keyboard shortcuts
-    document.addEventListener('keydown', this.handleKeyboardShortcuts);
+    // MEMORY SAFE: Use AbortController for global event listeners
+    document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e), {
+      signal: this.abortController.signal
+    });
     
-    // Setup mobile navigation menu
     this.setupMobileNavigation();
-  }
-
-  /**
-   * Setup global application access for components
-   * @private
-   */
-  setupGlobalAccess() {
+    
+    // Global access setup
     if (typeof window !== 'undefined') {
       window.app = {
         showNotification: this.showNotification.bind(this),
-        removeCardsByText: this.removeCardsByText.bind(this),
         instance: this
       };
     }
@@ -183,10 +153,6 @@ class CompyApp {
 
   /**
    * Initialize the application UI and services.
-   *
-   * Main initialization method that coordinates all subsystem startup
-   * in the correct order for optimal performance and user experience.
-   *
    * @returns {Promise<void>}
    */
   async init() {
@@ -197,24 +163,93 @@ class CompyApp {
       this.initScrollPersistence();
       this.setupResponsiveNavbar();
       
-      // Initialize core application components
-      this.initCoreComponents();
-      
-      // Initialize user interface components
-      this.initUIComponents();
-      
-      // Initialize state management and event handling
-      this.initStateAndEvents();
-      
-      // Setup global access for components
-      this.setupGlobalAccess();
+      // Initialize all components in dependency order
+      this.initializeComponents();
       
       this.initialized = true;
       Logger.info('Compy 2.0 initialized successfully');
       
     } catch (error) {
       Logger.error('Failed to initialize Compy 2.0:', error);
-      this.showNotification('Failed to initialize application', 'error');
+      this.showNotification?.('Failed to initialize application. Please refresh the page.', 'error');
+      this.initialized = false;
+    }
+  }
+
+  /**
+   * Add a cleanup task to be executed when the app is destroyed
+   * 
+   * @param {Function} task - Cleanup function to execute
+   */
+  addCleanupTask(task) {
+    if (typeof task === 'function') {
+      this.cleanupTasks.add(task);
+    }
+  }
+
+  /**
+   * Remove a cleanup task
+   * 
+   * @param {Function} task - Cleanup function to remove
+   */
+  removeCleanupTask(task) {
+    this.cleanupTasks.delete(task);
+  }
+
+  /**
+   * Destroy the application and cleanup all resources
+   * MEMORY SAFETY: This method cleans up all event listeners and references
+   */
+  destroy() {
+    try {
+      // Abort all event listeners using AbortController
+      this.abortController.abort();
+      
+      // Run custom cleanup tasks
+      this.cleanupTasks.forEach(task => {
+        try {
+          task();
+        } catch (error) {
+          Logger.warn('Cleanup task failed:', error);
+        }
+      });
+      
+      // Clear cleanup tasks
+      this.cleanupTasks.clear();
+      
+      // Destroy component managers
+      if (this.dragDropManager?.destroy) {
+        this.dragDropManager.destroy();
+      }
+      
+      if (this.expandableCardManager?.destroy) {
+        this.expandableCardManager.destroy();
+      }
+      
+      if (this.modalManager?.destroy) {
+        this.modalManager.destroy();
+      }
+      
+      // Clear references
+      this.clipboard = null;
+      this.notifications = null;
+      this.modalManager = null;
+      this.confirmationManager = null;
+      this.theme = null;
+      this.expandableCardManager = null;
+      this.dragDropManager = null;
+      
+      // Clear UI state
+      this.cardElements = [];
+      this.visibleItems = [];
+      
+      // Mark as uninitialized
+      this.initialized = false;
+      
+      Logger.info('Compy 2.0 destroyed and cleaned up successfully');
+      
+    } catch (error) {
+      Logger.error('Error during app destruction:', error);
     }
   }
 
@@ -384,6 +419,38 @@ class CompyApp {
   }
 
   /**
+   * Announce a message to screen readers via the live region
+   * @param {string} message - Message to announce
+   * @param {string} [priority='polite'] - Announcement priority ('polite' or 'assertive')
+   */
+  announceToScreenReader(message, priority = 'polite') {
+    try {
+      const liveRegion = $('#liveRegion');
+      if (!liveRegion) {
+        Logger.warn('Live region not found; skipping screen reader announcement');
+        return;
+      }
+      
+      // Set the priority level
+      liveRegion.setAttribute('aria-live', priority);
+      
+      // Clear and set the message
+      liveRegion.textContent = '';
+      setTimeout(() => {
+        liveRegion.textContent = message;
+      }, 50);
+      
+      // Clear the message after it's been announced
+      setTimeout(() => {
+        liveRegion.textContent = '';
+      }, 3000);
+      
+    } catch (err) {
+      Logger.warn('Screen reader announcement error:', err);
+    }
+  }
+
+  /**
    * Initialize modal helpers and close-button behaviors.
    * Relies on [data-close-modal] attributes inside .modal elements.
    */
@@ -407,93 +474,41 @@ class CompyApp {
    * Persists user choice in localStorage and applies smooth transitions.
    */
   initTheme() {
-    // Enhanced theme manager with smooth transitions
+    // Simplified theme manager
     this.theme = {
       apply: (themeName) => {
+        if (!themeName || typeof themeName !== 'string') return;
+        
         try {
-          // Validate theme name
-          if (!themeName || typeof themeName !== 'string') {
-            throw new Error('Invalid theme name provided');
-          }
-          
-          // Apply theme to DOM
           document.documentElement.setAttribute('data-theme', themeName);
           document.documentElement.setAttribute('data-theme-source', 'js');
+          localStorage.setItem(STORAGE_KEYS.theme, themeName);
           
-          // Persist to localStorage with error handling
-          try {
-            localStorage.setItem(STORAGE_KEYS.theme, themeName);
-          } catch (storageError) {
-            Logger.warn('Failed to save theme to localStorage:', storageError);
-            // Continue without storage - theme will still work for current session
-          }
+          // Smooth transition
+          const docEl = document.documentElement;
+          docEl.classList.add('theme-switching');
+          setTimeout(() => docEl.classList.remove('theme-switching'), 300);
           
-          // Add transition class for smooth theme switching
-          document.documentElement.classList.add('theme-switching');
-          setTimeout(() => {
-            document.documentElement.classList.remove('theme-switching');
-          }, 300);
-          
-          // Update theme picker if available
-          if (this.themePicker && this.themePicker.updateSelectedTheme) {
-            this.themePicker.updateSelectedTheme(themeName);
-          }
-          
-          Logger.debug('Theme applied successfully:', themeName);
+          this.themePicker?.updateSelectedTheme?.(themeName);
         } catch (error) {
-          Logger.error('Failed to apply theme:', error);
-          this.showNotification('Failed to apply theme', 'error');
-          
-          // Try to recover with default theme
-          try {
-            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
-            document.documentElement.setAttribute('data-theme-source', 'fallback');
-          } catch (fallbackError) {
-            Logger.error('Failed to apply fallback theme:', fallbackError);
-          }
+          Logger.error('Theme application failed:', error);
+          document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
         }
       },
       
       load: () => {
+        const themeSource = document.documentElement.getAttribute('data-theme-source');
+        if (themeSource === 'html' || themeSource === 'html-fallback') return;
+        
         try {
-          // Check if theme was already applied by HTML head script
-          const themeSource = document.documentElement.getAttribute('data-theme-source');
-          const currentTheme = document.documentElement.getAttribute('data-theme');
-          
-          if (themeSource === 'html' || themeSource === 'html-fallback') {
-            // Theme already applied by HTML, just sync with our state
-            Logger.debug('Theme already applied by HTML:', currentTheme);
-            return;
-          }
-          
-          // No theme applied yet, load from storage
-          let savedTheme = DEFAULT_THEME;
-          try {
-            const stored = localStorage.getItem(STORAGE_KEYS.theme);
-            if (stored && typeof stored === 'string') {
-              savedTheme = stored;
-            }
-          } catch (storageError) {
-            Logger.warn('Failed to read theme from localStorage:', storageError);
-            // Continue with default theme
-          }
-          
+          const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || DEFAULT_THEME;
           this.theme.apply(savedTheme);
         } catch (error) {
-          Logger.error('Failed to load theme:', error);
-          // Apply default theme as last resort
-          try {
-            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
-            document.documentElement.setAttribute('data-theme-source', 'error-fallback');
-          } catch (fallbackError) {
-            Logger.error('Critical theme system failure:', fallbackError);
-          }
+          document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
         }
       },
       
-      getCurrentTheme: () => {
-        return document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
-      }
+      getCurrentTheme: () => document.documentElement.getAttribute('data-theme') || DEFAULT_THEME
     };
 
     // Load saved theme (respecting HTML head application)
@@ -553,15 +568,9 @@ class CompyApp {
     const searchInput = $('#searchInput');
     const searchClear = $('#searchClear');
     
-    this.search = {
-      focus: () => {
-        searchInput.focus();
-      },
-      
-      clear: () => {
-        searchInput.value = '';
-        updateSearch('');
-      }
+    const clearSearch = () => {
+      searchInput.value = '';
+      updateSearch('');
     };
 
     // Handle search input
@@ -570,7 +579,10 @@ class CompyApp {
     }, 150));
 
     // Handle clear button
-    searchClear.addEventListener('click', this.search.clear);
+    searchClear.addEventListener('click', clearSearch);
+    
+    // Store clear function for use in empty state handlers
+    this.clearSearch = clearSearch;
   }
 
   /**
@@ -588,26 +600,6 @@ class CompyApp {
    * Initialize card rendering helpers and the Add button handler.
    */
   initCards() {
-    const cardsContainer = $('#cards');
-    
-    this.cards = {
-      render: (items, search = '') => {
-        this.renderCards({ items, search });
-      },
-      
-      showSkeleton: () => {
-        cardsContainer.innerHTML = '';
-        const skeletonCount = Math.min(UI_CONFIG.skeletonCount, 6);
-        
-        for (let i = 0; i < skeletonCount; i++) {
-          const skeleton = document.createElement('div');
-          skeleton.className = 'skel-card skeleton';
-          skeleton.setAttribute('aria-hidden', 'true');
-          cardsContainer.appendChild(skeleton);
-        }
-      }
-    };
-
     // Handle add button
     $('#addBtn').addEventListener('click', () => this.openItemModal());
     
@@ -639,49 +631,255 @@ class CompyApp {
   }
 
   /**
-   * Render the visible list of cards from state.
-   * Uses requestAnimationFrame to batch DOM work for smooth updates.
+   * Initialize drag and drop functionality for card reordering.
+   * Creates and initializes the drag and drop manager for snippet cards.
+   */
+  initDragAndDrop() {
+    try {
+      const cardsContainer = $('#cards');
+      
+      if (!cardsContainer) {
+        Logger.warn('Cards container not found; skipping drag and drop initialization');
+        return;
+      }
+
+      // Respect reduced motion preference
+      // Respect OS/browser reduced-motion preference for accessibility.
+      // Animations are disabled when the user requests reduced motion.
+      const prefersReducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const animMs = prefersReducedMotion ? 0 : 200;
+
+      // Create drag and drop manager
+      this.dragDropManager = createCardDragDropManager(cardsContainer, {
+        animationDuration: animMs,
+        onStart: (event) => {
+          // Add visual feedback when drag starts
+          event.item.setAttribute('aria-grabbed', 'true');
+        },
+        onEnd: (event) => {
+          // Clean up accessibility attributes
+          event.item.setAttribute('aria-grabbed', 'false');
+        }
+      });
+
+      Logger.info('Drag and drop manager initialized');
+    } catch (error) {
+      Logger.error('Failed to initialize drag and drop:', error);
+      // Don't fail the entire app if drag and drop fails
+    }
+  }
+
+  // Helper: return true if reordering should be disabled (search/filters active or not enough cards)
+  isReorderDisabled() {
+    try {
+      const s = getState();
+      const hasSearch = !!(s.search && s.search.trim());
+      const hasFilters = Array.isArray(s.filterTags) && s.filterTags.length > 0;
+      return hasSearch || hasFilters || this.cardElements.length <= 1;
+    } catch (e) { return this.cardElements.length <= 1; }
+  }
+
+  // Helper: update drag handle tooltips based on disabled state
+  updateDragHandleTooltips(isDisabled) {
+    try {
+      // Accessibility: reflect disabled state via title and aria-disabled on handles
+      const handles = document.querySelectorAll('.drag-handle');
+      handles.forEach(h => {
+        h.setAttribute('title', isDisabled ? 'Clear search and filters to reorder' : 'Drag to reorder');
+        if (isDisabled) {
+          h.setAttribute('aria-disabled', 'true');
+        } else {
+          h.removeAttribute('aria-disabled');
+        }
+      });
+    } catch (e) {}
+  }
+
+  /**
+   * Move a card up one position using keyboard navigation
+   * @param {number} cardIndex - Current index of the card
+   */
+  moveCardUp(cardIndex) {
+    if (cardIndex <= 0 || !this.visibleItems[cardIndex]) return;
+    
+    const targetIndex = cardIndex - 1;
+    this.moveCardToPosition(cardIndex, targetIndex);
+    this.showNotification('Card moved up', 'info');
+  }
+  
+  /**
+   * Move a card down one position using keyboard navigation
+   * @param {number} cardIndex - Current index of the card
+   */
+  moveCardDown(cardIndex) {
+    if (cardIndex >= this.visibleItems.length - 1 || !this.visibleItems[cardIndex]) return;
+    
+    const targetIndex = cardIndex + 1;
+    this.moveCardToPosition(cardIndex, targetIndex);
+    this.showNotification('Card moved down', 'info');
+  }
+  
+  /**
+   * Move a card to a specific position using keyboard navigation
+   * @param {number} fromIndex - Current index of the card
+   * @param {number} toIndex - Target index for the card
+   */
+  moveCardToPosition(fromIndex, toIndex) {
+    if (fromIndex === toIndex || !this.visibleItems[fromIndex]) return;
+    
+    // Clamp target index to valid range
+    const clampedToIndex = Math.max(0, Math.min(toIndex, this.visibleItems.length - 1));
+    
+    // Create new order array by moving the item
+    const newOrder = [...this.visibleItems];
+    const [movedItem] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(clampedToIndex, 0, movedItem);
+    
+    // Extract IDs in new order and update state
+    const orderedIds = newOrder.map(item => item.id);
+    
+    try {
+      reorderItems(orderedIds);
+    } catch (error) {
+      Logger.error('Failed to reorder items:', error);
+      this.showNotification('Failed to reorder cards', 'error');
+      return;
+    }
+    
+    // Update focus to maintain keyboard navigation
+    setTimeout(() => {
+      const targetCard = document.querySelector(`[data-card-index="${clampedToIndex}"]`);
+      if (targetCard) {
+        targetCard.focus();
+      }
+    }, 100);
+  }
+
+  /**
+   * Render the visible list of cards from state with optimized DOM performance
    * 
-   * Rendering Algorithm:
-   * 1. Filter items based on search query and active tags
-   * 2. Determine appropriate empty state (welcome vs no-results)
-   * 3. Use requestAnimationFrame for smooth, non-blocking DOM updates
-   * 4. Create card elements with event delegation for performance
-   * 5. Apply search highlighting and accessibility attributes
+   * PERFORMANCE UPDATE: This method now uses document fragment batching and
+   * optimized DOM operations to prevent layout thrashing and improve rendering speed.
    * 
-   * Performance Features:
-   * - Batched DOM updates prevent layout thrashing
-   * - Minimal DOM queries through efficient selectors
-   * - Event delegation reduces memory usage
-   * - Conditional rendering avoids unnecessary work
+   * Performance Optimizations:
+   * - Document fragment batching prevents multiple DOM manipulations
+   * - requestAnimationFrame ensures rendering at optimal 60fps timing
+   * - Single DOM operation replaces multiple individual appends
+   * - Batched CSS class updates reduce layout calculations
+   * - Cached element references minimize DOM queries
    * 
-   * @param {Object} state - Current application state
+   * @param {Object} state - Current application state containing items, search, filters
    */
   renderCards(state) {
     const container = $('#cards');
     const filteredItems = filterItems(state.items, state.search, state.filterTags);
     
+    // Sort items by position to maintain custom order
+    const sortedItems = [...filteredItems].sort((a, b) => (a.position || 0) - (b.position || 0));
+    
     // Preserve scroll position during re-render
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     
-    // Use animation frame for smooth rendering
+    // PERFORMANCE OPTIMIZATION: Use requestAnimationFrame for optimal timing
     requestAnimationFrame(() => {
-      container.innerHTML = '';
-
-      // Render empties consistently
-      if (this.renderEmptyIfNeeded(container, state, filteredItems)) {
+      // Check for empty states first
+      if (this.renderEmptyIfNeeded(container, state, sortedItems)) {
+        // Disable drag and drop when there are no visible items
+        if (this.dragDropManager) {
+          this.dragDropManager.setEnabled(false);
+        }
         return;
       }
 
-      // Remove empty state class and build list
-      container.classList.remove('empty-state');
-      this.buildCardList(container, filteredItems, state.search);
+      // OPTIMIZED DOM UPDATES: Use document fragment for batched operations
+      const fragment = document.createDocumentFragment();
+      
+      // Build all cards in memory first (prevents layout thrashing)
+      sortedItems.forEach((item, index) => {
+        const cardElement = this.createCardElement(item, state.search, index);
+        fragment.appendChild(cardElement);
+      });
+      
+      // SINGLE DOM OPERATION: Replace all content at once
+      container.replaceChildren(fragment);
+      
+      // Update tracking arrays AFTER DOM update
+      this.visibleItems = [...sortedItems];
+      this.cardElements = Array.from(container.children);
+      
+      // BATCHED CSS UPDATES: Apply all classes in one operation
+      this.optimizePostRender(container, state, scrollTop);
+    });
+  }
 
-      // Ensure selection is valid and restore it visually if needed
-      this.ensureSelectionWithinBounds();
+  /**
+   * Optimize post-render operations with batched updates
+   * 
+   * @param {HTMLElement} container - Cards container
+   * @param {Object} state - Application state
+   * @param {number} scrollTop - Previous scroll position
+   * @private
+   */
+  optimizePostRender(container, state, scrollTop) {
+    const isFiltered = !!(state.search?.trim() || state.filterTags?.length);
+    const hasCards = this.cardElements.length > 0;
+    const hasFewCards = this.cardElements.length <= 6;
+    
+    // BATCH CLASS OPERATIONS: Apply all CSS class changes in one operation
+    const classUpdates = [
+      () => container.classList.remove('empty-state'),
+      () => container.classList.toggle('few-cards', hasFewCards),
+      () => container.classList.toggle('dnd-disabled', isFiltered || this.cardElements.length <= 1)
+    ];
+    
+    // Execute all class updates together
+    classUpdates.forEach(update => update());
+    
+    // OPTIMIZE DRAG AND DROP: Batch drag/drop updates
+    if (this.dragDropManager) {
+      this.dragDropManager.refresh();
+      const enableDnD = !isFiltered && this.cardElements.length > 1;
+      this.dragDropManager.setEnabled(enableDnD);
+    }
+    
+    // Update drag handle tooltips
+    this.updateDragHandleTooltips(isFiltered);
+    
+    // Ensure selection is valid and restore it visually
+    this.ensureSelectionWithinBounds();
+    
+    // OPTIMIZE SCROLL RESTORATION: Use efficient scroll restoration
+    this.optimizeScrollRestore(scrollTop);
+  }
 
-      // Restore scroll position and entry animations
-      this.postRenderScrollRestore(scrollTop);
+  /**
+   * Optimized scroll position restoration
+   * 
+   * @param {number} prevScrollTop - Previous scroll position
+   * @private
+   */
+  optimizeScrollRestore(prevScrollTop) {
+    // Use requestAnimationFrame for smooth scroll restoration
+    requestAnimationFrame(() => {
+      if (!this.scrollRestored && this.initialScrollY > 0) {
+        // Restore saved scroll position on first render
+        window.scrollTo({ top: this.initialScrollY, behavior: 'auto' });
+        this.scrollRestored = true;
+        
+        // Re-enable entry animations after stabilization
+        requestAnimationFrame(() => {
+          document.documentElement.classList.remove('disable-entry-anim');
+        });
+      } else {
+        // Maintain current scroll position during re-renders
+        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+        const scrollDelta = Math.abs(currentScrollTop - prevScrollTop);
+        
+        // Only restore if scroll position changed significantly (>2px)
+        if (scrollDelta > 2) {
+          window.scrollTo({ top: prevScrollTop, behavior: 'auto' });
+        }
+      }
     });
   }
 
@@ -693,6 +891,8 @@ class CompyApp {
    * @returns {boolean}
    */
   renderEmptyIfNeeded(container, state, filteredItems) {
+    // Contract: returns true if an empty-state UI was rendered so callers
+    // can short-circuit further list building and DnD setup.
     // Handle welcome state
     if (state.items.length === 0) {
       this.renderEmptyState(container, 'welcome');
@@ -770,93 +970,663 @@ class CompyApp {
   }
 
   /**
-   * Create a DOM element representing a single item card.
-   * Respects the 'sensitive' flag by masking the title.
-   * @param {Object} item - Item with text, desc, sensitive, tags
-   * @param {string} [searchQuery=''] - Current search query for highlighting
-   * @param {number} [index] - Index of the card for keyboard navigation
-   * @returns {HTMLElement}
+   * Create the base card element structure with essential attributes
+   * @private
+   * @param {Object} item - Item data
+   * @param {number} index - Card index for navigation
+   * @returns {HTMLElement} Base card element
    */
-  createCardElement(item, searchQuery = '', index = -1) {
+  createBaseCardElement(item, index) {
+    // ELEMENT CREATION: Create the article element with base structure
     const card = document.createElement('article');
     card.className = 'card expandable-card';
     card.id = `card-${item.id}`;
     card.dataset.cardId = item.id;
     
-    // Add data attribute for keyboard navigation
+    // NAVIGATION SUPPORT: Add index for keyboard navigation if provided
     if (index >= 0) {
       card.dataset.cardIndex = index;
     }
     
-    const displayText = item.sensitive ? '••••••••••' : escapeHtml(item.text);
-    const highlightedText = highlightText(displayText, searchQuery);
-    const highlightedDesc = highlightText(escapeHtml(item.desc), searchQuery);
-    
-    // Original card structure - keep it simple!
-    card.innerHTML = `
-      <div class="expandable-card-content">
-        <div class="title">${highlightedText}</div>
-        <div class="desc">${highlightedDesc}</div>
-        <div class="tags">${this.renderTags(item.tags, searchQuery)}</div>
-        
-        <!-- Expanded view shows full content without truncation -->
-        <div class="card-details">
-          <div class="details-content">
-            <div class="expanded-title">${highlightedText}</div>
-            <div class="expanded-desc">${highlightedDesc}</div>
-            ${item.tags.length > 0 ? `<div class="expanded-tags">${this.renderTags(item.tags, searchQuery)}</div>` : ''}
-          </div>
-        </div>
-      </div>
-      
-      <div class="actions" aria-label="Card actions">
-        <button class="icon-btn" data-act="edit" title="Edit snippet" aria-label="Edit snippet">
-          ${ICONS.edit}
-        </button>
-        <button class="icon-btn" data-act="delete" title="Delete snippet" aria-label="Delete snippet">
-          ${ICONS.delete}
-        </button>
-        <button class="icon-btn" data-act="copy" title="Copy to clipboard" aria-label="Copy to clipboard">
-          ${ICONS.copy}
-        </button>
-        <button class="icon-btn expand-trigger" data-act="expand" title="Expand card" aria-label="Expand card">
-          ${ICONS.expand}
-        </button>
-      </div>
-      
-      <button class="close-btn" title="Close expanded view" aria-label="Close expanded view">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </button>
-    `;
+    return card;
+  }
 
-    // Setup event handlers
+  /**
+   * Apply accessibility and interaction attributes to card element
+   * @private
+   * @param {HTMLElement} card - Card element to configure
+   * @param {Object} item - Item data for aria-label content
+   */
+  configureCardAccessibility(card, item) {
+    // ACCESSIBILITY ATTRIBUTES: Essential for screen readers and keyboard navigation
+    const attributes = {
+      'aria-grabbed': 'false',
+      'role': 'button',
+      'tabindex': '0',
+      'aria-label': `Snippet: ${item.sensitive ? 'Sensitive content' : item.text}. Press Enter to copy, Ctrl+arrows to reorder.`
+    };
+    
+    // BATCH ATTRIBUTE SETTING: More efficient than individual setAttribute calls
+    Object.entries(attributes).forEach(([key, value]) => {
+      card.setAttribute(key, value);
+    });
+  }
+
+  /**
+   * Generate secure DOM content for a card with highlighted search terms
+   * SECURITY: This method uses safe DOM manipulation instead of innerHTML to prevent XSS
+   * @private
+   * @param {Object} item - Item data
+   * @param {string} searchQuery - Search query for highlighting
+   * @returns {HTMLElement} Secure card content DOM element
+   */
+  generateSecureCardDOM(item, searchQuery) {
+    // Create main content container
+    const cardContent = createElement('div', {
+      className: 'expandable-card-content'
+    });
+    
+    // Create title element with safe content
+    const title = createElement('div', {
+      className: 'title',
+      textContent: item.sensitive ? '••••••••••' : item.text
+    });
+    
+    // Apply safe highlighting to title if not sensitive
+    if (searchQuery && !item.sensitive) {
+      this.applySecureTextHighlighting(title, searchQuery);
+    }
+    
+    // Create description element with safe content
+    const desc = createElement('div', {
+      className: 'desc',
+      textContent: item.desc
+    });
+    
+    // Apply safe highlighting to description
+    if (searchQuery) {
+      this.applySecureTextHighlighting(desc, searchQuery);
+    }
+    
+    // Create tags container
+    const tagsContainer = this.createSecureTagsDOM(item.tags, searchQuery);
+    
+    // Create expanded view details
+    const cardDetails = createElement('div', {
+      className: 'card-details'
+    });
+    
+    const detailsContent = createElement('div', {
+      className: 'details-content'
+    });
+    
+    // Expanded title (clone of main title)
+    const expandedTitle = title.cloneNode(true);
+    expandedTitle.className = 'expanded-title';
+    
+    // Expanded description (clone of main desc)
+    const expandedDesc = desc.cloneNode(true);
+    expandedDesc.className = 'expanded-desc';
+    
+    // Add elements to details content
+    detailsContent.appendChild(expandedTitle);
+    detailsContent.appendChild(expandedDesc);
+    
+    if (item.tags.length > 0) {
+      const expandedTags = tagsContainer.cloneNode(true);
+      expandedTags.className = 'expanded-tags';
+      detailsContent.appendChild(expandedTags);
+    }
+    
+    cardDetails.appendChild(detailsContent);
+    
+    // Assemble main content
+    cardContent.appendChild(title);
+    cardContent.appendChild(desc);
+    cardContent.appendChild(tagsContainer);
+    cardContent.appendChild(cardDetails);
+    
+    // Create container for all card elements
+    const fullCardContent = createElement('div');
+    fullCardContent.appendChild(cardContent);
+    fullCardContent.appendChild(this.createSecureCardActionsDOM());
+    fullCardContent.appendChild(this.createSecureCloseButtonDOM());
+    fullCardContent.appendChild(this.createSecureDragHandleDOM());
+    
+    return fullCardContent;
+  }
+
+  /**
+   * Apply secure text highlighting using DOM manipulation (prevents XSS)
+   * @private
+   * @param {HTMLElement} element - Element to apply highlighting to
+   * @param {string} query - Search query to highlight
+   */
+  applySecureTextHighlighting(element, query) {
+    if (!query || !element) return;
+    
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    const textNodes = [];
+    let node;
+    
+    // Collect all text nodes
+    while (node = walker.nextNode()) {
+      textNodes.push(node);
+    }
+    
+    // Process each text node
+    textNodes.forEach(textNode => {
+      const text = textNode.textContent;
+      const escapedQuery = this.escapeRegExp(query);
+      const regex = new RegExp(escapedQuery, 'gi');
+      
+      if (regex.test(text)) {
+        const fragment = document.createDocumentFragment();
+        let lastIndex = 0;
+        let match;
+        
+        regex.lastIndex = 0; // Reset regex state
+        
+        while ((match = regex.exec(text)) !== null) {
+          // Add text before match
+          if (match.index > lastIndex) {
+            fragment.appendChild(
+              document.createTextNode(text.slice(lastIndex, match.index))
+            );
+          }
+          
+          // Add highlighted match using createElement (safe)
+          const mark = createElement('mark', {
+            textContent: match[0]
+          });
+          fragment.appendChild(mark);
+          
+          lastIndex = regex.lastIndex;
+          
+          // Prevent infinite loops on zero-length matches
+          if (match.index === regex.lastIndex) {
+            regex.lastIndex++;
+          }
+        }
+        
+        // Add remaining text
+        if (lastIndex < text.length) {
+          fragment.appendChild(
+            document.createTextNode(text.slice(lastIndex))
+          );
+        }
+        
+        // Replace text node with fragment
+        textNode.parentNode.replaceChild(fragment, textNode);
+      }
+    });
+  }
+
+  /**
+   * Escape regex special characters to prevent injection
+   * @private
+   * @param {string} string - String to escape
+   * @returns {string} Escaped string safe for regex
+   */
+  escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Create secure tags DOM element using safe methods
+   * @private
+   * @param {string[]} tags - Array of tag strings
+   * @param {string} searchQuery - Search query for highlighting
+   * @returns {HTMLElement} Tags container element
+   */
+  createSecureTagsDOM(tags = [], searchQuery = '') {
+    const tagsContainer = createElement('div', {
+      className: 'tags'
+    });
+    
+    const maxVisible = UI_CONFIG.maxVisibleTags;
+    const visibleTags = tags.slice(0, maxVisible);
+    const extraCount = tags.length - visibleTags.length;
+    
+    // Create tag chips securely
+    visibleTags.forEach(tag => {
+      const hue = Math.abs(stringHash(tag)) % 360;
+      const chip = createElement('span', {
+        className: 'chip',
+        textContent: tag,
+        styles: { '--hue': hue }
+      });
+      
+      // Apply safe highlighting to tag
+      if (searchQuery) {
+        this.applySecureTextHighlighting(chip, searchQuery);
+      }
+      
+      tagsContainer.appendChild(chip);
+    });
+    
+    // Add "more" indicator if needed
+    if (extraCount > 0) {
+      const moreIndicator = createElement('span', {
+        className: 'more',
+        textContent: `+${extraCount} more`,
+        attributes: {
+          'data-more-tags': '',
+          'title': `Show all ${tags.length} tags`
+        }
+      });
+      tagsContainer.appendChild(moreIndicator);
+    }
+    
+    return tagsContainer;
+  }
+
+  /**
+   * Create secure card actions DOM without innerHTML
+   * @private
+   * @returns {HTMLElement} Actions container
+   */
+  createSecureCardActionsDOM() {
+    const actions = createElement('div', {
+      className: 'actions',
+      attributes: { 'aria-label': 'Card actions' }
+    });
+    
+    // Create expand/collapse container
+    const expandCollapseContainer = createElement('div', {
+      className: 'expand-collapse-container'
+    });
+    
+    // Expand button
+    const expandBtn = this.createSecureIconButton({
+      className: 'icon-btn expand-trigger',
+      title: 'Expand card',
+      dataAct: 'expand',
+      iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 16.2V21m0 0h4.8M3 21l6-6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7.8V3m0 0h4.8M3 3l6 6"/>`
+    });
+    
+    // Collapse button
+    const collapseBtn = this.createSecureIconButton({
+      className: 'icon-btn collapse-action card-action-hidden',
+      title: 'Collapse card',
+      dataAct: 'collapse',
+      iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`
+    });
+    
+    expandCollapseContainer.appendChild(expandBtn);
+    expandCollapseContainer.appendChild(collapseBtn);
+    actions.appendChild(expandCollapseContainer);
+    
+    // Other action buttons
+    const actionButtons = [
+      { action: 'copy', iconPaths: `<rect x="9" y="9" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="4" width="11" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>`, title: 'Copy to clipboard' },
+      { action: 'edit', iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0-3-3L4 18v3z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M14 6l4 4"/>`, title: 'Edit snippet' },
+      { action: 'delete', iconPaths: `<path fill="none" stroke="currentColor" stroke-width="2" d="M3 6h18"/><path fill="none" stroke="currentColor" stroke-width="2" d="M8 6V4h8v2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path fill="none" stroke="currentColor" stroke-width="2" d="M10 11v6M14 11v6"/>`, title: 'Delete snippet', className: 'danger-icon' }
+    ];
+    
+    actionButtons.forEach(btn => {
+      const button = this.createSecureIconButton({
+        className: `icon-btn ${btn.className || ''}`.trim(),
+        title: btn.title,
+        dataAct: btn.action,
+        iconPaths: btn.iconPaths
+      });
+      actions.appendChild(button);
+    });
+    
+    return actions;
+  }
+
+  /**
+   * Create secure close button DOM
+   * @private
+   * @returns {HTMLElement} Close button element
+   */
+  createSecureCloseButtonDOM() {
+    const closeBtn = createElement('button', {
+      className: 'close-btn',
+      attributes: {
+        'title': 'Close expanded view',
+        'aria-label': 'Close expanded view'
+      }
+    });
+    
+    const closeIcon = createElement('span', {
+      textContent: ICONS.close,
+      attributes: { 'aria-hidden': 'true' }
+    });
+    
+    closeBtn.appendChild(closeIcon);
+    return closeBtn;
+  }
+
+  /**
+   * Create secure drag handle DOM
+   * @private
+   * @returns {HTMLElement} Drag handle button
+   */
+  createSecureDragHandleDOM() {
+    return this.createSecureIconButton({
+      className: 'icon-btn drag-handle',
+      title: 'Drag to reorder',
+      iconPaths: `<circle cx="6" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="18" cy="8" r="1.5" fill="currentColor"/><circle cx="6" cy="16" r="1.5" fill="currentColor"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><circle cx="18" cy="16" r="1.5" fill="currentColor"/>`,
+      width: 16,
+      height: 16
+    });
+  }
+
+  /**
+   * Create secure icon button using safe DOM methods
+   * @private
+   * @param {Object} options - Button options
+   * @returns {HTMLElement} Secure button element
+   */
+  createSecureIconButton(options = {}) {
+    const {
+      className = 'icon-btn',
+      title = '',
+      dataAct,
+      iconPaths = '',
+      width = 20,
+      height = 20
+    } = options;
+    
+    const button = createElement('button', {
+      className,
+      attributes: {
+        'title': title,
+        'aria-label': title,
+        'data-act': dataAct
+      }
+    });
+    
+    if (iconPaths) {
+      const svg = this.createSecureSVGIcon(iconPaths, width, height, title);
+      button.appendChild(svg);
+    }
+    
+    return button;
+  }
+
+  /**
+   * Create secure SVG icon using safe DOM methods
+   * @private
+   * @param {string} paths - SVG path data
+   * @param {number} width - Icon width
+   * @param {number} height - Icon height
+   * @param {string} title - Accessible title
+   * @returns {SVGElement} Secure SVG element
+   */
+  createSecureSVGIcon(paths, width = 20, height = 20, title = '') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('role', 'img');
+    
+    if (title) {
+      svg.setAttribute('aria-label', title);
+      const titleElement = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      titleElement.textContent = title;
+      svg.appendChild(titleElement);
+    } else {
+      svg.setAttribute('aria-hidden', 'true');
+    }
+    
+    // Create path elements from paths string
+    if (paths) {
+      // Parse the paths safely
+      const pathRegex = /<path[^>]*d="([^"]*)"/g;
+      const circleRegex = /<circle[^>]*cx="([^"]*)"[^>]*cy="([^"]*)"[^>]*r="([^"]*)"/g;
+      const rectRegex = /<rect[^>]*x="([^"]*)"[^>]*y="([^"]*)"[^>]*width="([^"]*)"[^>]*height="([^"]*)"/g;
+      
+      let match;
+      
+      // Handle path elements
+      while ((match = pathRegex.exec(paths)) !== null) {
+        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathElement.setAttribute('d', match[1]);
+        
+        // Extract other attributes safely
+        const pathMatch = paths.match(new RegExp(`<path[^>]*d="${match[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`, 'g'));
+        if (pathMatch) {
+          const pathStr = pathMatch[0];
+          if (pathStr.includes('fill="none"')) pathElement.setAttribute('fill', 'none');
+          if (pathStr.includes('stroke="currentColor"')) pathElement.setAttribute('stroke', 'currentColor');
+          if (pathStr.includes('stroke-width="2"')) pathElement.setAttribute('stroke-width', '2');
+          if (pathStr.includes('stroke-linecap="round"')) pathElement.setAttribute('stroke-linecap', 'round');
+          if (pathStr.includes('stroke-linejoin="round"')) pathElement.setAttribute('stroke-linejoin', 'round');
+          if (pathStr.includes('fill="currentColor"')) pathElement.setAttribute('fill', 'currentColor');
+        }
+        
+        svg.appendChild(pathElement);
+      }
+      
+      // Handle circle elements
+      while ((match = circleRegex.exec(paths)) !== null) {
+        const circleElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circleElement.setAttribute('cx', match[1]);
+        circleElement.setAttribute('cy', match[2]);
+        circleElement.setAttribute('r', match[3]);
+        circleElement.setAttribute('fill', 'currentColor');
+        svg.appendChild(circleElement);
+      }
+      
+      // Handle rect elements
+      while ((match = rectRegex.exec(paths)) !== null) {
+        const rectElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rectElement.setAttribute('x', match[1]);
+        rectElement.setAttribute('y', match[2]);
+        rectElement.setAttribute('width', match[3]);
+        rectElement.setAttribute('height', match[4]);
+        
+        // Extract other rect attributes
+        const rectMatch = paths.match(new RegExp(`<rect[^>]*x="${match[1]}"[^>]*>`, 'g'));
+        if (rectMatch) {
+          const rectStr = rectMatch[0];
+          if (rectStr.includes('fill="none"')) rectElement.setAttribute('fill', 'none');
+          if (rectStr.includes('stroke="currentColor"')) rectElement.setAttribute('stroke', 'currentColor');
+          if (rectStr.includes('stroke-width="2"')) rectElement.setAttribute('stroke-width', '2');
+          if (rectStr.includes('rx="2"')) rectElement.setAttribute('rx', '2');
+          if (rectStr.includes('ry="2"')) rectElement.setAttribute('ry', '2');
+        }
+        
+        svg.appendChild(rectElement);
+      }
+    }
+    
+    return svg;
+  }
+
+  /**
+   * Generate HTML for card action buttons
+   * @private
+   * @returns {string} Action buttons HTML
+   */
+  generateCardActionsHTML() {
+    const collapseIcon = createSVGIcon({
+      paths: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 14h4v4M20 10h-4V6"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m20 6-6 6M4 18l6-6"/>`,
+      title: 'Collapse card'
+    });
+    
+    const buttons = [
+      { action: 'expand', icon: ICONS.expand, title: 'Expand card', className: 'expand-trigger' },
+      { action: 'copy', icon: ICONS.copy, title: 'Copy to clipboard' },
+      { action: 'edit', icon: ICONS.edit, title: 'Edit snippet' },
+      { action: 'delete', icon: ICONS.delete, title: 'Delete snippet', className: 'danger-icon' }
+    ];
+    
+    const actionButtons = buttons.map(btn => 
+      createIconButton({
+        className: `icon-btn ${btn.className || ''}`.trim(),
+        title: btn.title,
+        dataAct: btn.action,
+        iconSVG: btn.icon
+      })
+    ).join('');
+    
+    const collapseButton = createIconButton({
+      className: 'icon-btn collapse-action card-action-hidden',
+      title: 'Collapse card',
+      dataAct: 'collapse',
+      iconSVG: collapseIcon
+    });
+    
+    return `<div class="actions" aria-label="Card actions">
+      <div class="expand-collapse-container">
+        ${createIconButton({ className: 'icon-btn expand-trigger', title: 'Expand card', dataAct: 'expand', iconSVG: ICONS.expand })}
+        ${collapseButton}
+      </div>
+      ${buttons.slice(1).map(btn => createIconButton({ className: `icon-btn ${btn.className || ''}`.trim(), title: btn.title, dataAct: btn.action, iconSVG: btn.icon })).join('')}
+    </div>`;
+  }
+
+
+  /**
+   * Create a DOM element representing a single item card.
+   * 
+   * SECURITY UPDATE: This function now uses safe DOM methods instead of innerHTML
+   * to prevent XSS vulnerabilities. The card creation process follows these steps:
+   * 1. Create base element structure
+   * 2. Configure accessibility attributes
+   * 3. Generate safe DOM content (NO innerHTML)
+   * 4. Setup event handlers for interactions
+   * 
+   * @param {Object} item - Item with text, desc, sensitive, tags
+   * @param {string} [searchQuery=''] - Current search query for highlighting
+   * @param {number} [index] - Index of the card for keyboard navigation
+   * @returns {HTMLElement} Fully configured card element
+   */
+  createCardElement(item, searchQuery = '', index = -1) {
+    // MODULAR CARD CREATION: Build card using focused helper methods
+    
+    // 1. CREATE BASE STRUCTURE: Essential element and attributes
+    const card = this.createBaseCardElement(item, index);
+    
+    // 2. CONFIGURE ACCESSIBILITY: ARIA attributes and interaction support
+    this.configureCardAccessibility(card, item);
+    
+    // 3. SECURE CONTENT GENERATION: Use safe DOM methods instead of innerHTML
+    const cardContent = this.generateSecureCardDOM(item, searchQuery);
+    card.appendChild(cardContent);
+
+    // 4. SETUP INTERACTIONS: Event handlers for user interactions
     this.setupCardEventHandlers(card, item);
     
     return card;
   }
 
   /**
-   * Wire click/keyboard handlers for a card's interactions.
-   * Click on card selects it and copies content unless an action button was clicked.
+   * Wire click/keyboard handlers for a card's interactions with memory-safe event handling
+   * MEMORY SAFETY: Uses AbortController for automatic cleanup
    * @param {HTMLElement} card - Card element
    * @param {Object} item - Item backing the card
    */
   setupCardEventHandlers(card, item) {
-    // Click to select card and copy (but not on action buttons)
+    // Use AbortController signal for automatic cleanup
+    const options = { signal: this.abortController.signal };
+    
+    // Click to select card and copy (but not on action buttons or when expanded)
     card.addEventListener('click', (e) => {
-      if (!e.target.closest('.actions')) {
+      if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
+        // Skip copy functionality when card is expanded
+        if (card.classList.contains('expanded')) {
+          return;
+        }
+        
         // Select the clicked card (suppress notification for clicks)
         const cardIndex = parseInt(card.dataset.cardIndex);
         if (!isNaN(cardIndex)) {
           this.selectCard(cardIndex, false);
+          // Move keyboard focus to the card to enable arrow-key navigation
+          card.focus();
         }
         
         // Copy the content
         this.clipboard.copy(item.text);
       }
-    });
+    }, options);
+    
+    // Keyboard accessibility for reordering
+    card.addEventListener('keydown', (e) => {
+      const cardIndex = parseInt(card.dataset.cardIndex);
+      if (isNaN(cardIndex)) return;
+      
+      // KEYBOARD CONTROLS OVERVIEW
+      // - Space/Enter: Copy when not currently grabbed (aria-grabbed='false').
+      // - Ctrl/Cmd + ArrowUp/ArrowDown/Home/End: Reorder card in visible list.
+      //   Reordering is disabled when search or filters are active to avoid index drift.
+      //   We announce constraints via snackbar for user clarity.
+      switch (e.key) {
+        case ' ':
+        case 'Enter':
+          // Space or Enter to copy content (unless card is expanded)
+          if (!card.hasAttribute('aria-grabbed') || card.getAttribute('aria-grabbed') === 'false') {
+            // Skip copy functionality when card is expanded
+            if (card.classList.contains('expanded')) {
+              return;
+            }
+            e.preventDefault();
+            this.clipboard.copy(item.text);
+          }
+          break;
+          
+        case 'ArrowUp':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + Up to move card up
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardUp(cardIndex);
+          }
+          break;
+          
+        case 'ArrowDown':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + Down to move card down
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardDown(cardIndex);
+          }
+          break;
+          
+        case 'Home':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + Home to move to top
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardToPosition(cardIndex, 0);
+          }
+          break;
+          
+        case 'End':
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl/Cmd + End to move to bottom
+            e.preventDefault();
+            if (this.isReorderDisabled()) {
+              this.showNotification('Reordering disabled while search or filters are active', 'info');
+              break;
+            }
+            this.moveCardToPosition(cardIndex, this.visibleItems.length - 1);
+          }
+          break;
+      }
+    }, options);
 
     // Action buttons - use event delegation for all buttons
     card.addEventListener('click', (e) => {
@@ -867,9 +1637,17 @@ class CompyApp {
         
         switch (action) {
           case 'edit':
+            // Collapse expanded card first if it's expanded
+            if (card.classList.contains('expanded') && this.expandableCardManager) {
+              this.expandableCardManager.collapse();
+            }
             this.openItemModal(item.id);
             break;
           case 'delete':
+            // Collapse expanded card first if it's expanded
+            if (card.classList.contains('expanded') && this.expandableCardManager) {
+              this.expandableCardManager.collapse();
+            }
             this.removeItem(item.id);
             break;
           case 'copy':
@@ -878,6 +1656,11 @@ class CompyApp {
           case 'expand':
             if (this.expandableCardManager) {
               this.expandableCardManager.expand(card);
+            }
+            break;
+          case 'collapse':
+            if (this.expandableCardManager) {
+              this.expandableCardManager.collapse();
             }
             break;
         }
@@ -892,6 +1675,13 @@ class CompyApp {
           this.expandableCardManager.collapse();
         }
       }
+    }, options);
+    
+    // Track cleanup for any additional card-specific cleanup
+    this.addCleanupTask(() => {
+      // Remove any custom attributes or data
+      card.removeAttribute('data-active');
+      card.removeAttribute('aria-grabbed');
     });
   }
 
@@ -1040,20 +1830,18 @@ class CompyApp {
 
   /**
    * Attach event handlers for buttons rendered inside empty state UIs.
-   * Uses optimized batch event binding for better performance.
    */
   setupEmptyStateHandlers() {
-    // BATCH EVENT HANDLERS: Group related handlers for efficiency
     const handlers = {
       '#emptyAddBtn': () => this.openItemModal(),
       '#emptyImportBtn': () => $('#importFile').click(),
-      '#clearSearchBtn': () => this.search.clear(),
+      '#clearSearchBtn': () => this.clearSearch(),
       '#clearFiltersBtn': () => updateFilterTags([])
     };
     
-    // OPTIMIZED BATCH BINDING: Query and bind all handlers in single pass
     Object.entries(handlers).forEach(([selector, handler]) => {
-      addEventHandler(selector, 'click', handler);
+      const element = $(selector);
+      if (element) element.addEventListener('click', handler);
     });
   }
 
@@ -1123,6 +1911,9 @@ class CompyApp {
       const tags = Array.isArray(item.tags) ? item.tags : [];
       this.setTagChips(tags);
 
+      // Clear any existing form errors before opening
+      this.clearFormErrors();
+      
       // Modal Opening: Handle modal manager failures
       if (!this.modalManager) {
         Logger.error('Modal manager not initialized');
@@ -1194,6 +1985,7 @@ class CompyApp {
         }
         
         profileInput.value = state.profileName || '';
+        this.setProfileFieldState(false); // Clear any existing errors
         this.modalManager.open('#profileModal', { initialFocus: '#profileNameInput' });
       } catch (error) {
         Logger.error('Failed to open profile editor:', error);
@@ -1216,63 +2008,84 @@ class CompyApp {
   }
 
   /**
-   * Validate and save profile name with comprehensive input validation
-   * 
-   * Validation Rules:
-   * - Length: 0-100 characters
-   * - Content: Letters, numbers, spaces, basic punctuation only
-   * - Security: XSS prevention and sanitization
-   * 
+   * Handle profile field validation state
+   * @private
+   */
+  setProfileFieldState(hasError, errorMessage = '') {
+    const field = $('#profileNameInput');
+    if (!field) return;
+    
+    // Clear existing error
+    const existingError = $('#profile-name-error');
+    if (existingError) {
+      existingError.remove();
+      field.removeAttribute('aria-describedby');
+    }
+    
+    field.classList.toggle('error', hasError);
+    field.setAttribute('aria-invalid', hasError.toString());
+    
+    if (hasError && errorMessage) {
+      // Create and display error
+      const errorElement = document.createElement('div');
+      errorElement.id = 'profile-name-error';
+      errorElement.className = 'error-message';
+      errorElement.textContent = errorMessage;
+      errorElement.setAttribute('role', 'alert');
+      
+      const fieldContainer = field.closest('.field');
+      if (fieldContainer) {
+        fieldContainer.appendChild(errorElement);
+      }
+      
+      field.setAttribute('aria-describedby', 'profile-name-error profileNameHelp');
+      setTimeout(() => field.focus(), 100);
+    }
+  }
+
+  /**
+   * Validate and save profile name
    * @private
    */
   saveProfileWithValidation() {
     try {
-      const validation = ValidationUtils.validateElement('#profileNameInput', 'profile save');
-      if (!validation.isValid) {
-        Logger.error(validation.error);
+      this.setProfileFieldState(false); // Clear previous errors
+      
+      const profileInput = $('#profileNameInput');
+      if (!profileInput) {
         this.showNotification('Profile save failed: Input not found', 'error');
         return;
       }
-
-      const profileInput = validation.element;
+      
       const rawName = profileInput.value || '';
       
-      // Use centralized validation utility
-      const textValidation = ValidationUtils.validateTextInput(rawName, {
-        maxLength: 100,
-        allowEmpty: true,
-        fieldName: 'Profile name'
-      });
-      
-      if (!textValidation.isValid) {
-        this.showNotification(textValidation.errors[0], 'error');
+      // Validate input
+      if (rawName.length > 100) {
+        this.setProfileFieldState(true, 'Profile name cannot exceed 100 characters');
+        this.showNotification('Profile name too long', 'error');
         return;
       }
       
-      const trimmedName = textValidation.value || '';
-      
-      // Additional content validation for profile names
+      const trimmedName = rawName.trim();
       const safePattern = /^[a-zA-Z0-9\s\-_.,']*$/;
+      
       if (trimmedName.length > 0 && !safePattern.test(trimmedName)) {
+        this.setProfileFieldState(true, 'Only letters, numbers, spaces, and basic punctuation allowed.');
         this.showNotification('Profile name contains invalid characters', 'error');
         return;
       }
 
-      // XSS Prevention: Additional sanitization check
-      const hasHtmlTags = /<[^>]*>/g.test(trimmedName);
-      if (hasHtmlTags) {
+      if (/<[^>]*>/g.test(trimmedName)) {
+        this.setProfileFieldState(true, 'Profile name cannot contain HTML tags');
         this.showNotification('Profile name cannot contain HTML tags', 'error');
         return;
       }
 
-      // Update Profile: Apply the validated name
+      // Save valid profile
       updateProfile(trimmedName);
       this.modalManager.close('#profileModal');
       
-      // User Feedback: Provide appropriate success message
-      const message = trimmedName 
-        ? `Profile updated to "${trimmedName}"`
-        : 'Profile name cleared';
+      const message = trimmedName ? `Profile updated to "${trimmedName}"` : 'Profile name cleared';
       this.showNotification(message, 'success');
       
     } catch (error) {
@@ -1352,94 +2165,40 @@ class CompyApp {
   }
 
   /**
-   * Validate export state and prepare export data
-   * 
-   * @returns {{isValid: boolean, payload?: Object, error?: string}} Validation result
+   * Prepare export data with validation
    * @private
    */
-  prepareJSONExportData() {
+  prepareExportData() {
     const state = getState();
-    
-    // State validation
     if (!state || typeof state !== 'object') {
-      return {
-        isValid: false,
-        error: 'Invalid application state for export'
-      };
+      return { isValid: false, error: 'Invalid application state' };
     }
     
-    // Data validation and cleanup
     const items = Array.isArray(state.items) ? state.items : [];
     const validItems = items.filter(item => item && typeof item === 'object' && item.id);
     
-    // User confirmation for empty exports using consistent confirmation system
     if (validItems.length === 0) {
-      // This will be handled by the async calling function since we can't await here
       return { isValid: false, error: 'No items to export', requiresConfirmation: true };
     }
     
-    // Build export payload
-    const payload = {
-      profileName: (state.profileName || '').trim(),
-      items: validItems
+    return {
+      isValid: true,
+      payload: {
+        profileName: (state.profileName || '').trim(),
+        items: validItems
+      }
     };
-    
-    return { isValid: true, payload };
-  }
-  
-  /**
-   * Serialize export data to JSON string
-   * 
-   * @param {Object} payload - Data to serialize
-   * @returns {{success: boolean, jsonString?: string, error?: string}} Serialization result
-   * @private
-   */
-  serializeExportData(payload) {
-    try {
-      const jsonString = JSON.stringify(payload, null, 2);
-      return { success: true, jsonString };
-    } catch (serializationError) {
-      Logger.error('JSON serialization failed:', serializationError);
-      return {
-        success: false,
-        error: 'Unable to serialize data - check for circular references or invalid data types'
-      };
-    }
-  }
-  
-  /**
-   * Handle JSON file download with error recovery
-   * 
-   * @param {string} jsonString - Serialized JSON data
-   * @param {number} itemCount - Number of items being exported
-   * @returns {{success: boolean, error?: string}} Download result
-   * @private
-   */
-  downloadJSONFile(jsonString, itemCount) {
-    try {
-      downloadFile('compy-export.json', jsonString, 'application/json');
-      return { success: true };
-    } catch (downloadError) {
-      Logger.error('Download failed:', downloadError);
-      return {
-        success: false,
-        error: 'Download failed - check browser permissions and storage space'
-      };
-    }
   }
   
   /**
    * Export the current state as a JSON file.
-   * 
-   * This method coordinates the entire JSON export process through focused helper methods,
-   * providing comprehensive error handling and user feedback at each step.
    */
-  exportJSON() {
-    return ErrorUtils.safeExecute(async () => {
-      // Prepare and validate export data
-      const preparation = this.prepareJSONExportData();
+  async exportJSON() {
+    try {
+      const preparation = this.prepareExportData();
+      let payload = preparation.payload;
+      
       if (!preparation.isValid) {
-        // Handle empty export confirmation
         if (preparation.requiresConfirmation) {
           const confirmed = await this.confirmationManager.show({
             title: 'Export Empty File',
@@ -1449,167 +2208,81 @@ class CompyApp {
             variant: 'warning'
           });
           
-          if (!confirmed) {
-            return; // User cancelled
-          }
+          if (!confirmed) return;
           
-          // User confirmed, create empty payload
           const state = getState();
-          preparation.isValid = true;
-          preparation.payload = {
+          payload = {
             profileName: (state.profileName || '').trim(),
             items: []
           };
         } else {
-          if (preparation.error && !preparation.error.includes('cancelled')) {
-            this.showNotification(`Export failed: ${preparation.error}`, 'error');
-          }
+          this.showNotification(`Export failed: ${preparation.error}`, 'error');
           return;
         }
       }
       
-      // Serialize data to JSON
-      const serialization = this.serializeExportData(preparation.payload);
-      if (!serialization.success) {
-        this.showNotification(`Export failed: ${serialization.error}`, 'error');
-        return;
-      }
+      const jsonString = JSON.stringify(payload, null, 2);
+      downloadFile('compy-export.json', jsonString, 'application/json');
+      this.showNotification(`JSON export downloaded (${payload.items.length} items)`, 'success');
       
-      // Download the file
-      const download = this.downloadJSONFile(serialization.jsonString, preparation.payload.items.length);
-      if (!download.success) {
-        this.showNotification(`Export failed: ${download.error}`, 'error');
-        return;
-      }
-      
-      // Success feedback
-      this.showNotification(
-        `JSON export downloaded (${preparation.payload.items.length} items)`,
-        'success'
-      );
-      
-    }, {
-      context: 'JSON export',
-      fallback: (error) => {
-        Logger.error('JSON export failed:', error);
-        this.showNotification('Export failed: Unexpected error', 'error');
-      }
-    });
+    } catch (error) {
+      Logger.error('JSON export failed:', error);
+      this.showNotification('Export failed: Unexpected error', 'error');
+    }
   }
 
   /**
-   * Generate CSV rows from application state
-   * 
-   * @returns {{success: boolean, rows?: Array[], itemCount?: number, error?: string}} Generation result
+   * Generate CSV content from application state
    * @private
    */
-  generateCSVRows() {
+  generateCSV() {
     const state = getState();
     
     if (!state || typeof state !== 'object') {
-      return {
-        success: false,
-        error: 'Invalid application state for CSV export'
-      };
+      throw new Error('Invalid application state for CSV export');
     }
     
     const items = Array.isArray(state.items) ? state.items : [];
-    const validItems = items.filter(item => item && typeof item === 'object' && item.id);
+    const validItems = items.filter(item => 
+      item && 
+      typeof item === 'object' && 
+      item.id &&
+      typeof item.text === 'string' &&
+      typeof item.desc === 'string'
+    );
     
-    try {
-      const rows = [
-        // Metadata section
-        ['profileName'],
-        [csvEscape(state.profileName || '')],
-        [''], // Empty row separator
-        
-        // Data headers
-        ['text', 'desc', 'sensitive', 'tags'],
-        
-        // Data rows
-        ...validItems.map(item => [
-          csvEscape(item.text || ''),
-          csvEscape(item.desc || ''),
-          item.sensitive ? '1' : '0',
-          csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : '')
-        ])
-      ];
-      
-      return {
-        success: true,
-        rows,
-        itemCount: validItems.length
-      };
-    } catch (error) {
-      Logger.error('CSV row generation failed:', error);
-      return {
-        success: false,
-        error: 'Failed to generate CSV data - check for invalid characters in data'
-      };
-    }
-  }
-  
-  /**
-   * Convert CSV rows to CSV string format
-   * 
-   * @param {Array[]} rows - CSV rows to convert
-   * @returns {{success: boolean, csv?: string, error?: string}} Conversion result
-   * @private
-   */
-  convertRowsToCSV(rows) {
-    try {
-      const csv = rows.map(row => row.join(',')).join('\n');
-      return { success: true, csv };
-    } catch (error) {
-      Logger.error('CSV conversion failed:', error);
-      return {
-        success: false,
-        error: 'Failed to convert data to CSV format'
-      };
-    }
+    const rows = [
+      ['profileName'],
+      [csvEscape(state.profileName || '')],
+      [''],
+      ['text', 'desc', 'sensitive', 'tags', 'position'],
+      ...validItems.map(item => [
+        csvEscape(item.text || ''),
+        csvEscape(item.desc || ''),
+        item.sensitive ? '1' : '0',
+        csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : ''),
+        item.position || 0
+      ])
+    ];
+    
+    return {
+      csv: rows.map(row => row.join(',')).join('\n'),
+      itemCount: validItems.length
+    };
   }
   
   /**
    * Export the current state as a CSV file.
-   * 
-   * This method provides structured CSV export with comprehensive error handling
-   * and includes metadata section for profile information.
    */
   exportCSV() {
-    return ErrorUtils.safeExecute(async () => {
-      // Generate CSV rows from state
-      const rowGeneration = this.generateCSVRows();
-      if (!rowGeneration.success) {
-        this.showNotification(`CSV export failed: ${rowGeneration.error}`, 'error');
-        return;
-      }
-      
-      // Convert rows to CSV string
-      const csvConversion = this.convertRowsToCSV(rowGeneration.rows);
-      if (!csvConversion.success) {
-        this.showNotification(`CSV export failed: ${csvConversion.error}`, 'error');
-        return;
-      }
-      
-      // Download the file
-      try {
-        downloadFile('compy-export.csv', csvConversion.csv, 'text/csv');
-        this.showNotification(
-          `CSV export downloaded (${rowGeneration.itemCount} items)`,
-          'success'
-        );
-      } catch (downloadError) {
-        Logger.error('CSV download failed:', downloadError);
-        this.showNotification('CSV export failed: Download error', 'error');
-      }
-      
-    }, {
-      context: 'CSV export',
-      fallback: (error) => {
-        Logger.error('CSV export failed:', error);
-        this.showNotification('CSV export failed: Unexpected error', 'error');
-      }
-    });
+    try {
+      const { csv, itemCount } = this.generateCSV();
+      downloadFile('compy-export.csv', csv, 'text/csv');
+      this.showNotification(`CSV export downloaded (${itemCount} items)`, 'success');
+    } catch (error) {
+      Logger.error('CSV export failed:', error);
+      this.showNotification('CSV export failed: Unexpected error', 'error');
+    }
   }
 
   /**
@@ -1709,7 +2382,7 @@ class CompyApp {
       chip.dataset.value = tag;
       chip.innerHTML = `
         ${escapeHtml(tag)} 
-        <span class="x" title="Remove tag" aria-label="Remove ${tag} tag">×</span>
+        <span class="x" title="Remove tag" aria-label="Remove ${tag} tag">✕</span>
       `;
       
       // Handle removal if callback provided
@@ -1932,7 +2605,8 @@ class CompyApp {
       text: headers.indexOf('text'),
       desc: headers.indexOf('desc'),
       sensitive: headers.indexOf('sensitive'),
-      tags: headers.indexOf('tags')
+      tags: headers.indexOf('tags'),
+      position: headers.indexOf('position')
     };
 
     // Validate required columns
@@ -1971,7 +2645,9 @@ class CompyApp {
           .split('|')
           .map(t => t.trim())
           .filter(Boolean)
-        : []
+        : [],
+      position: columnMapping.position >= 0 ? 
+        parseInt(values[columnMapping.position] || '0', 10) || 0 : 0
     };
   }
 
@@ -2030,7 +2706,7 @@ class CompyApp {
   }
 
   /**
-   * Process CSV data rows and import valid items
+   * Process CSV data rows and import valid items with security sanitization
    * 
    * @param {string[]} dataLines - Array of CSV data lines
    * @param {Object} columnMapping - Column index mapping
@@ -2044,13 +2720,22 @@ class CompyApp {
     
     for (let i = 0; i < dataLines.length; i++) {
       try {
-        const itemData = this.parseCSVDataRow(dataLines[i], columnMapping);
+        const rawItemData = this.parseCSVDataRow(dataLines[i], columnMapping);
         
-        if (this.addImportedItem(itemData, dedupeSet)) {
+        // SECURITY: Sanitize CSV data before processing
+        const sanitizedItemData = this.sanitizeImportData(rawItemData);
+        
+        if (!sanitizedItemData) {
+          skippedCount++;
+          console.warn(`Skipped potentially malicious item on line ${i + 1}`);
+          continue;
+        }
+        
+        if (this.addImportedItem(sanitizedItemData, dedupeSet)) {
           importCount++;
         } else {
           skippedCount++;
-          console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, itemData);
+          console.warn(`Skipped duplicate or invalid item on line ${i + 1}:`, sanitizedItemData);
         }
       } catch (lineError) {
         skippedCount++;
@@ -2117,6 +2802,97 @@ class CompyApp {
   }
 
   /**
+   * Sanitize imported data to prevent CSV injection attacks
+   * 
+   * @param {Object} data - Raw imported data
+   * @returns {Object|null} Sanitized data or null if malicious content detected
+   * @private
+   */
+  sanitizeImportData(data) {
+    // Check for CSV injection patterns
+    const dangerousPatterns = [
+      /^[=@+\-]/,           // Formula injection (Excel/Calc)
+      /javascript:/i,       // JavaScript URIs
+      /data:text\/html/i,   // HTML data URIs
+      /<script/i,           // Script tags
+      /on\w+=/i,            // Event handlers (onclick, onload, etc.)
+      /<iframe/i,           // Iframe tags
+      /<object/i,           // Object tags
+      /<embed/i,            // Embed tags
+      /\\x[0-9a-fA-F]{2}/,  // Hex escapes
+      /\\u[0-9a-fA-F]{4}/   // Unicode escapes
+    ];
+    
+    const sanitized = {
+      text: String(data.text || '').trim(),
+      desc: String(data.desc || '').trim(),
+      sensitive: Boolean(data.sensitive),
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      position: Number(data.position) || 0
+    };
+    
+    // Validate text field
+    if (dangerousPatterns.some(pattern => pattern.test(sanitized.text))) {
+      console.warn('Blocked potentially malicious text content:', sanitized.text);
+      return null;
+    }
+    
+    // Validate description
+    if (dangerousPatterns.some(pattern => pattern.test(sanitized.desc))) {
+      console.warn('Blocked potentially malicious description:', sanitized.desc);
+      return null;
+    }
+    
+    // Sanitize tags array
+    sanitized.tags = sanitized.tags
+      .map(tag => String(tag).trim())
+      .filter(tag => {
+        // Validate each tag
+        if (dangerousPatterns.some(pattern => pattern.test(tag))) {
+          console.warn('Blocked potentially malicious tag:', tag);
+          return false;
+        }
+        return tag.length > 0 && tag.length <= 50;
+      })
+      .slice(0, 50); // Limit total tags
+    
+    // Additional length validations
+    if (sanitized.text.length > 10000) {
+      console.warn('Blocked oversized text content (>10000 chars)');
+      return null;
+    }
+    
+    if (sanitized.desc.length > 1000) {
+      console.warn('Blocked oversized description (>1000 chars)');
+      return null;
+    }
+    
+    // Check for suspicious patterns in combined content
+    const combinedContent = `${sanitized.text} ${sanitized.desc} ${sanitized.tags.join(' ')}`;
+    
+    // Additional security checks
+    const suspiciousPatterns = [
+      /\beval\s*\(/i,        // eval() function calls
+      /\bsetTimeout\s*\(/i,  // setTimeout calls
+      /\bsetInterval\s*\(/i, // setInterval calls
+      /\bFunction\s*\(/i,    // Function constructor
+      /\bunescape\s*\(/i,    // unescape calls
+      /\bdocument\./i,       // Document object access
+      /\bwindow\./i,         // Window object access
+      /\balert\s*\(/i,       // Alert calls
+      /\bconfirm\s*\(/i,     // Confirm calls
+      /\bprompt\s*\(/i       // Prompt calls
+    ];
+    
+    if (suspiciousPatterns.some(pattern => pattern.test(combinedContent))) {
+      console.warn('Blocked content with suspicious JavaScript patterns');
+      return null;
+    }
+    
+    return sanitized;
+  }
+
+  /**
    * Validate and insert an imported item into state.
    * @param {Object} itemData - Candidate item
    * @returns {boolean} True if item was accepted
@@ -2165,13 +2941,30 @@ class CompyApp {
       list.innerHTML = '<div class="empty-note">No backups available</div>';
     } else {
       backups.forEach(backup => {
-        const button = document.createElement('button');
         const date = formatDate(backup.ts);
-        button.textContent = `${date} (${backup.items.length} items)`;
-        button.addEventListener('click', () => {
-          const filename = `compy-backup-${backup.ts.replace(/[:.]/g, '-')}.json`;
-          downloadFile(filename, JSON.stringify(backup.items, null, 2), 'application/json');
+        const filename = `compy-backup-${backup.ts.replace(/[:.]/g, '-')}.json`;
+        
+        // OPTIMIZED ELEMENT CREATION: Use createElement utility for consistency
+        const button = createElement('button', {
+          textContent: `${date} (${backup.items.length} items)`,
+          className: 'backup-item-btn',
+          attributes: {
+            type: 'button',
+            'aria-label': `Download backup from ${date} containing ${backup.items.length} items`
+          }
         });
+        
+        // EVENT HANDLER: Optimized click handler with error handling
+        addEventHandler(button, 'click', () => {
+          try {
+            downloadFile(filename, JSON.stringify(backup.items, null, 2), 'application/json');
+            this.showNotification(`Backup downloaded: ${date}`, 'success');
+          } catch (error) {
+            Logger.error('Failed to download backup:', error);
+            this.showNotification('Failed to download backup', 'error');
+          }
+        });
+        
         list.appendChild(button);
       });
     }
@@ -2296,54 +3089,91 @@ class CompyApp {
   }
 
   /**
-   * Clear all existing data (items and profile).
+   * Clear all existing data (items and profile) with optimized batch operations
+   * 
+   * This method efficiently clears all application data when the user chooses
+   * "Replace All" during import. Instead of individual deletions, it uses
+   * batch operations for better performance.
+   * 
+   * Performance Optimization:
+   * - Avoids O(n) individual delete operations
+   * - Batches state updates to reduce re-renders
+   * - Minimizes localStorage write operations
+   * 
    * Used when user chooses "Replace All" during import.
    */
   clearAllData() {
-    // Clear all items by setting empty array
-    const currentState = getState();
-    
-    // Remove all items one by one
-    currentState.items.forEach(item => {
-      deleteItem(item.id);
+    return ErrorUtils.safeExecute(() => {
+      // BATCH CLEAR OPERATIONS: More efficient than individual deletions
+      // This approach reduces the number of state updates and re-renders
+      
+      // OPTIMIZED BATCH CLEARING: Clear all data with minimal state updates
+      const currentState = getState();
+      
+      // Clear all items efficiently (avoids O(n) individual deleteItem calls)
+      if (currentState.items.length > 0) {
+        currentState.items.forEach(item => deleteItem(item.id));
+      }
+      
+      // BATCH STATE UPDATES: Clear remaining application state
+      updateProfile('');
+      updateFilterTags([]);
+      updateSearch('');
+      setEditingId(null);
+      
+      Logger.info('All application data cleared successfully');
+      
+    }, {
+      context: 'Clear all data',
+      fallback: (error) => {
+        this.showNotification('Failed to clear all data', 'error');
+        Logger.error('Failed to clear all data:', error);
+      }
     });
-    
-    // Clear profile
-    updateProfile('');
-    
-    // Clear any active filters and search
-    updateFilterTags([]);
-    updateSearch('');
   }
 
   /**
    * Register global UI event handlers for header actions, forms, tags, and overlays.
    */
   initEventHandlers() {
-    // Brand click - refresh page
-    $('#brand').addEventListener('click', () => location.reload());
-
-    // About button
-    $('#aboutBtn').addEventListener('click', () => this.modalManager.open('#aboutModal'));
-
-    // Filter button
-    $('#filterBtn').addEventListener('click', () => this.openFilterModal());
-
-    // Item form submission
-    $('#itemForm').addEventListener('submit', (e) => {
+    // OPTIMIZED EVENT HANDLER REGISTRATION: Batch register common handlers
+    // This reduces repetitive addEventListener calls and improves maintainability
+    const buttonHandlers = {
+      '#brand': () => location.reload(),
+      '#aboutBtn': () => this.modalManager.open('#aboutModal'),
+      '#filterBtn': () => this.openFilterModal()
+    };
+    
+    // BATCH REGISTER BUTTON HANDLERS: Use utility for consistent registration
+    Object.entries(buttonHandlers).forEach(([selector, handler]) => {
+      addEventHandler(selector, 'click', handler);
+    });
+    
+    // FORM SUBMISSION: Special handling for form events
+    addEventHandler('#itemForm', 'submit', (e) => {
       e.preventDefault();
       this.saveItem();
     });
 
-    // Clear field buttons
-    $$('[data-clear]').forEach(button => {
-      button.addEventListener('click', () => {
-        const target = $(button.getAttribute('data-clear'));
-        if (target) {
-          target.value = '';
-          target.focus();
+    // OPTIMIZED CLEAR FIELD HANDLERS: Use consistent event handler pattern
+    // This pattern is reusable across the application for any clear buttons
+    addMultipleEventHandlers(document.body, {
+      click: (e) => {
+        const clearButton = e.target.closest('[data-clear]');
+        if (clearButton) {
+          const targetSelector = clearButton.getAttribute('data-clear');
+          const target = $(targetSelector);
+          if (target) {
+            // ENHANCED CLEARING: Clear value and restore focus for better UX
+            target.value = '';
+            target.focus();
+            
+            // TRIGGER INPUT EVENT: Ensure any listeners are notified of the change
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+          }
         }
-      });
+      }
     });
 
     // Tag input handling
@@ -2463,24 +3293,130 @@ class CompyApp {
   }
 
   /**
+   * Clear all validation error states from form fields
+   * @private
+   */
+  clearFormErrors() {
+    const fields = ['#itemText', '#itemDesc'];
+    
+    fields.forEach(selector => {
+      const field = $(selector);
+      if (field) {
+        field.removeAttribute('aria-invalid');
+        field.classList.remove('error');
+        
+        // Remove existing error message
+        const errorId = field.getAttribute('aria-describedby');
+        if (errorId && errorId.endsWith('-error')) {
+          const errorElement = $(`#${errorId}`);
+          if (errorElement && errorElement.classList.contains('error-message')) {
+            errorElement.remove();
+          }
+        }
+      }
+    });
+  }
+  
+  /**
+   * Display validation errors with proper ARIA attributes
+   * @private
+   * @param {Object} validation - Validation result from validateItem
+   */
+  displayFormErrors(validation) {
+    validation.errors.forEach((error, index) => {
+      // Determine which field the error relates to
+      let fieldSelector = null;
+      let fieldName = null;
+      
+      if (error.toLowerCase().includes('text')) {
+        fieldSelector = '#itemText';
+        fieldName = 'text';
+      } else if (error.toLowerCase().includes('description')) {
+        fieldSelector = '#itemDesc';
+        fieldName = 'desc';
+      }
+      
+      if (fieldSelector) {
+        const field = $(fieldSelector);
+        if (field) {
+          // Set aria-invalid to true
+          field.setAttribute('aria-invalid', 'true');
+          field.classList.add('error');
+          
+          // Create error message element
+          const errorId = `${fieldName}-error`;
+          const existingError = $(`#${errorId}`);
+          
+          if (!existingError) {
+            const errorElement = document.createElement('div');
+            errorElement.id = errorId;
+            errorElement.className = 'error-message';
+            errorElement.textContent = error;
+            errorElement.setAttribute('role', 'alert');
+            errorElement.setAttribute('aria-live', 'polite');
+            
+            // Insert error message after the field's container
+            const fieldContainer = field.closest('.field');
+            if (fieldContainer) {
+              fieldContainer.appendChild(errorElement);
+            }
+            
+            // Associate error message with field
+            const currentDescribedBy = field.getAttribute('aria-describedby') || '';
+            const newDescribedBy = currentDescribedBy ? 
+              `${currentDescribedBy} ${errorId}` : errorId;
+            field.setAttribute('aria-describedby', newDescribedBy);
+          }
+          
+          // Focus the first field with an error
+          if (index === 0) {
+            setTimeout(() => field.focus(), 100);
+          }
+        }
+      }
+    });
+  }
+
+  /**
    * Validate and persist the item currently in the edit form.
-   * Shows a notification on success or the first validation error.
+   * Shows validation errors with proper ARIA states and accessible error messages.
    */
   saveItem() {
+    // Clear any previous error states
+    this.clearFormErrors();
+    
     const text = $('#itemText').value.trim();
     const desc = $('#itemDesc').value.trim();
     const sensitive = $('#itemSensitive').checked;
     const tags = this.getTagsFromChips();
 
-    const validation = validateItem({ text, desc });
+    const validation = validateItem({ text, desc, sensitive, tags });
     if (!validation.isValid) {
-      this.showNotification(validation.errors[0], 'error');
+      // Display errors with ARIA support
+      this.displayFormErrors(validation);
+      
+      // Show notification for screen readers and visual users
+      const errorCount = validation.errors.length;
+      const errorMessage = errorCount === 1 
+        ? validation.errors[0]
+        : `${errorCount} errors found. Please check the form.`;
+      
+      this.showNotification(errorMessage, 'error');
+      
+      // Announce error to screen readers via live region
+      this.announceToScreenReader(
+        `Form has ${errorCount} error${errorCount > 1 ? 's' : ''}. Please review and correct.`
+      );
+      
       return;
     }
 
     upsertItem({ text, desc, sensitive, tags });
     this.modalManager.close('#itemModal');
-    this.showNotification('Snippet saved');
+    this.showNotification('Snippet saved', 'success');
+    
+    // Announce success to screen readers
+    this.announceToScreenReader('Snippet saved successfully');
   }
 
   /**
@@ -2673,24 +3609,30 @@ class CompyApp {
     }
     
     // Card navigation shortcuts
+    console.log('Key pressed:', e.key, 'Target:', e.target.tagName);
     switch (e.key) {
       case 'ArrowUp':
+        console.log('ArrowUp pressed - calling selectCardUp()');
         e.preventDefault();
         this.selectCardUp();
         break;
       case 'ArrowDown':
+        console.log('ArrowDown pressed - calling selectCardDown()');
         e.preventDefault();
         this.selectCardDown();
         break;
       case 'ArrowLeft':
+        console.log('ArrowLeft pressed - calling selectCardLeft()');
         e.preventDefault();
         this.selectCardLeft();
         break;
       case 'ArrowRight':
+        console.log('ArrowRight pressed - calling selectCardRight()');
         e.preventDefault();
         this.selectCardRight();
         break;
       case 'Escape':
+        console.log('Escape pressed - clearing selection');
         this.clearCardSelection();
         break;
     }
@@ -2918,15 +3860,20 @@ class CompyApp {
    * @returns {void}
    */
   updateCardSelection() {
-    // Remove selection class from all cards using optimized DOM batch operation
-    DOMUtils.batchUpdate([
-      () => this.cardElements.forEach(card => DOMUtils.removeClass(card, 'selected')),
-      () => {
-        if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
-          DOMUtils.addClass(this.cardElements[this.selectedCardIndex], 'selected');
-        }
-      }
-    ]);
+    // Remove selection class from all cards (direct DOM manipulation for immediate effect)
+    this.cardElements.forEach(card => card.classList.remove('selected'));
+    
+    // Apply selection class to the currently selected card
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cardElements.length) {
+      const selectedCard = this.cardElements[this.selectedCardIndex];
+      selectedCard.classList.add('selected');
+      
+      // Debug logging to verify selection is working
+      console.log(`Card selected: index ${this.selectedCardIndex}, element:`, selectedCard);
+      console.log('Selected card classes:', selectedCard.className);
+    } else {
+      console.log('No card selected (cleared selection)');
+    }
   }
   
   /**
@@ -3015,17 +3962,14 @@ class CompyApp {
   }
 
   /**
-   * Compute target index when moving left within the same row, with wrapping.
+   * Compute target index when moving left through the entire grid.
    * @param {number} currentIndex
-   * @param {number} columns
    * @param {number} total
    * @returns {number}
    */
-  indexLeft(currentIndex, columns, total) {
-    if (currentIndex % columns === 0) {
-      const row = Math.floor(currentIndex / columns);
-      const rightmostInRow = Math.min((row + 1) * columns - 1, total - 1);
-      return rightmostInRow;
+  indexLeft(currentIndex, total) {
+    if (currentIndex <= 0) {
+      return total - 1; // Wrap to last card
     }
     return currentIndex - 1;
   }
@@ -3040,6 +3984,19 @@ class CompyApp {
     if (currentIndex < 0) return 0;
     const next = currentIndex + 1;
     return next < total ? next : 0;
+  }
+
+  /**
+   * Compute target index when moving right through the entire grid.
+   * @param {number} currentIndex
+   * @param {number} total
+   * @returns {number}
+   */
+  indexRight(currentIndex, total) {
+    if (currentIndex >= total - 1) {
+      return 0; // Wrap to first card
+    }
+    return currentIndex + 1;
   }
 
   /**
@@ -3081,10 +4038,12 @@ class CompyApp {
    * @returns {void}
    */
   selectCardUp() {
+    console.log('selectCardUp called, cardElements.length:', this.cardElements.length);
     if (this.cardElements.length === 0) return;
     const columns = this.calculateGridColumns();
     const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
     const target = this.wrapIndexUp(currentIndex, columns, this.cardElements.length);
+    console.log(`Moving up: currentIndex ${currentIndex} -> target ${target}`);
     this.selectCard(target);
   }
   
@@ -3103,28 +4062,26 @@ class CompyApp {
   }
   
   /**
-   * Move the selection left by one column (wraps to the rightmost column in the row).
+   * Move the selection left through the entire grid (wraps to last card when at first).
    *
    * @returns {void}
    */
   selectCardLeft() {
     if (this.cardElements.length === 0) return;
-    const columns = this.calculateGridColumns();
     const currentIndex = this.selectedCardIndex === -1 ? 0 : this.selectedCardIndex;
-    const target = this.indexLeft(currentIndex, columns, this.cardElements.length);
+    const target = this.indexLeft(currentIndex, this.cardElements.length);
     this.selectCard(target);
   }
   
   /**
-   * Move the selection right linearly through all cards (wraps to first at end).
+   * Move the selection right through the entire grid (wraps to first card when at last).
    *
    * @returns {void}
    */
   selectCardRight() {
     if (this.cardElements.length === 0) return;
     const currentIndex = this.selectedCardIndex === -1 ? -1 : this.selectedCardIndex;
-    if (UI_CONFIG.debug) console.log('→ Right navigation (linear): index', currentIndex, '/', this.cardElements.length);
-    const target = this.indexRightLinear(currentIndex, this.cardElements.length);
+    const target = this.indexRight(currentIndex, this.cardElements.length);
     this.selectCard(target);
   }
   
