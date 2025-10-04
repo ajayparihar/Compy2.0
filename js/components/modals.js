@@ -209,6 +209,12 @@ export class ModalManager {
     
     // Add body class for styling
     document.body.classList.add(this.options.activeClass);
+
+    // HARD LOCK SCROLL: ensure background is unscrollable while any modal is open
+    // Remove any temporary override class and explicitly hide overflow on both roots
+    document.body.classList.remove('force-scrolling');
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     
     // Setup backdrop click handler
     if (this.options.closeOnBackdropClick) {

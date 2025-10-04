@@ -681,18 +681,24 @@ class CompyApp {
     const searchInput = $('#searchInput');
     const searchClear = $('#searchClear');
     
+    // Store references for later use (e.g., keyboard shortcuts)
+    this.search = searchInput;
+    this.searchClearButton = searchClear;
+    
     const clearSearch = () => {
-      searchInput.value = '';
+      if (searchInput) searchInput.value = '';
       updateSearch('');
     };
 
     // Handle search input
-    searchInput.addEventListener('input', debounce((e) => {
-      updateSearch(e.target.value);
-    }, 150));
+    if (searchInput) {
+      searchInput.addEventListener('input', debounce((e) => {
+        updateSearch(e.target.value);
+      }, 150));
+    }
 
     // Handle clear button
-    searchClear.addEventListener('click', clearSearch);
+    searchClear?.addEventListener('click', clearSearch);
     
     // Store clear function for use in empty state handlers
     this.clearSearch = clearSearch;
@@ -3880,7 +3886,28 @@ class CompyApp {
     // Search shortcuts
     if ((e.ctrlKey && e.key.toLowerCase() === 'f') || e.key === '/') {
       e.preventDefault();
-      this.search.focus();
+      e.stopPropagation();
+      const searchEl = this.search || $('#searchInput');
+      if (searchEl) {
+        // Focus and select to allow immediate typing
+        try {
+          if (typeof searchEl.focus === 'function') {
+            searchEl.focus({ preventScroll: false });
+          } else {
+            searchEl.focus();
+          }
+          if (typeof searchEl.select === 'function') {
+            searchEl.select();
+          }
+        } catch (_) {}
+        
+        // Temporary visual highlight on the search bar wrapper
+        const wrapper = searchEl.closest('.search');
+        if (wrapper) {
+          wrapper.classList.add('flash-highlight');
+          setTimeout(() => wrapper.classList.remove('flash-highlight'), 600);
+        }
+      }
       return;
     }
 
@@ -4009,6 +4036,12 @@ class CompyApp {
     const key = e.key.toLowerCase();
     const selectedItem = this.getSelectedItem();
     
+    // Do not trigger single-letter shortcuts when modifier keys are held
+    // This prevents conflicts with browser/system shortcuts like Ctrl+F
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return false;
+    }
+    
     switch (key) {
       case 'd':
         // Delete selected card or show general shortcut help
@@ -4029,10 +4062,13 @@ class CompyApp {
         break;
         
       case 'f':
-        // Open filter modal
-        e.preventDefault();
-        this.openFilterModal();
-        return true;
+        // Open filter modal only on plain 'f' (no Ctrl/Meta/Alt)
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          this.openFilterModal();
+          return true;
+        }
+        break;
         
       case 'i':
         // Import file
