@@ -1116,6 +1116,139 @@ html[data-theme^="light-"] textarea {
 }
 
 /* =================================================================
+   EMPTY STATE & HOMESCREEN STYLES
+   ================================================================= */
+
+/* Empty state */
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty h2 {
+  margin: 4px 0;
+  color: var(--text);
+}
+
+.empty .empty-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.empty .empty-tips {
+  list-style: disc;
+  text-align: left;
+  opacity: 0.85;
+}
+
+/* Center the empty state within the grid area */
+.cards.empty-state {
+  min-height: calc(100vh - 70px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure the grid gaps don't offset centering in empty state */
+.cards.empty-state {
+  grid-template-columns: 1fr;
+  gap: 0;
+  padding: 32px;
+}
+
+/* Generic small empty note (e.g., inside lists) */
+.empty-note {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 6px;
+}
+
+.empty .empty-card {
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 28px;
+  width: min(720px, 92vw);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.empty h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  color: var(--text);
+}
+
+.empty .lead {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+}
+
+.empty .divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 16px 0;
+}
+
+.empty .empty-tips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.empty .empty-tips li {
+  color: var(--text-muted);
+}
+
+.empty .hero-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+/* Skeletons */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.04)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+.skel-card {
+  height: 48px;
+  border-radius: 12px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Search highlight */
+mark {
+  background: rgba(255, 230, 0, 0.35);
+  color: inherit;
+  padding: 0; /* avoid extra spacing around highlighted text */
+  border-radius: 2px;
+}
+
+/* =================================================================
    BASE STYLES
    ================================================================= */
 

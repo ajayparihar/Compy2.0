@@ -26,6 +26,7 @@ import { createMobileNavigationManager } from './components/mobileNavigation.js?
 import { createClipboardManager } from './components/clipboard.js?v=2.0.5';
 import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.5';
 import { createProfileManager } from './components/profileManager.js?v=2.0.5';
+import { createTagAutocomplete } from './components/tagAutocomplete.js?v=2.0.5';
 
 /**
  * @typedef {Object} AppItem
