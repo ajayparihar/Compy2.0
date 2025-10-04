@@ -27,8 +27,8 @@
  */
 
 // Import necessary utilities and configuration
-import { STORAGE_KEYS, UI_CONFIG } from './constants.js?v=2.0.2';
-import { generateUID, debounce } from './utils.js?v=2.0.2';
+import { STORAGE_KEYS, UI_CONFIG } from './constants.js?v=2.0.3';
+import { generateUID, debounce } from './utils.js?v=2.0.3';
 
 // Backup service reference - loaded dynamically
 let backupService = null;
@@ -844,7 +844,7 @@ export const setupBackupInterval = () => {
  */
 export const initBackupService = async () => {
   try {
-    const backupModule = await import('./services/BackupService.js?v=2.0');
+    const backupModule = await import('./services/BackupService.js?v=2.0.3');
     backupService = backupModule.backupService;
     console.log('Auto backup service initialized successfully');
   } catch (error) {

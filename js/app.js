@@ -3,7 +3,7 @@
  * Enhanced with better code organization, error handling, and modern JavaScript practices
  */
 
-import { STORAGE_KEYS, UI_CONFIG, ICONS, ICON_PATHS, DEFAULT_THEME } from './constants.js?v=2.0.5';
+import { STORAGE_KEYS, UI_CONFIG, ICONS, ICON_PATHS, DEFAULT_THEME } from './constants.js?v=2.0.3';
 import { 
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
@@ -11,22 +11,22 @@ import {
   addEventHandler, addMultipleEventHandlers, toggleVisibility, isValidTheme, getSafeTheme,
   Logger, DOMUtils, ValidationUtils, ErrorUtils, createElement,
   createSVGIcon, createIconButton
-} from './utils.js?v=2.0.5';
+} from './utils.js?v=2.0.3';
 import {
   initState, getState, subscribe, upsertItem,
   deleteItem, updateFilterTags, updateSearch, updateProfile,
   setEditingId, getBackups, reorderItems
-} from './state.js?v=2.0.5';
-import { createModalManager } from './components/modals.js?v=2.0.5';
-import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.5';
-import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.5';
-import { createThemePicker } from './components/themePicker.js?v=2.0.5';
-import { pwaThemeManager, isPWA } from './utils/pwaUtils.js?v=2.0.5';
-import { createMobileNavigationManager } from './components/mobileNavigation.js?v=2.0.5';
-import { createClipboardManager } from './components/clipboard.js?v=2.0.5';
-import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.5';
-import { createProfileManager } from './components/profileManager.js?v=2.0.5';
-import { createTagAutocomplete } from './components/tagAutocomplete.js?v=2.0.5';
+} from './state.js?v=2.0.3';
+import { createModalManager } from './components/modals.js?v=2.0.3';
+import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.3';
+import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.3';
+import { createThemePicker } from './components/themePicker.js?v=2.0.3';
+import { pwaThemeManager, isPWA } from './utils/pwaUtils.js?v=2.0.3';
+import { createMobileNavigationManager } from './components/mobileNavigation.js?v=2.0.3';
+import { createClipboardManager } from './components/clipboard.js?v=2.0.3';
+import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.3';
+import { createProfileManager } from './components/profileManager.js?v=2.0.3';
+import { createTagAutocomplete } from './components/tagAutocomplete.js?v=2.0.3';
 
 /**
  * @typedef {Object} AppItem
@@ -1047,31 +1047,6 @@ class CompyApp {
     return false;
   }
 
-  /**
-   * Build and append card elements for the provided items and track them.
-   * @param {HTMLElement} container
-   * @param {Array} items
-   * @param {string} searchQuery
-   */
-  buildCardList(container, items, searchQuery) {
-    // Update tracking arrays for keyboard navigation
-    this.visibleItems = [...items];
-    this.cardElements = [];
-
-    // Apply few-cards class for compact layout when there are 6 or fewer cards
-    if (items.length <= 6) {
-      container.classList.add('few-cards');
-    } else {
-      container.classList.remove('few-cards');
-    }
-
-    // Render cards and track elements
-    items.forEach((item, index) => {
-      const cardElement = this.createCardElement(item, searchQuery, index);
-      container.appendChild(cardElement);
-      this.cardElements.push(cardElement);
-    });
-  }
 
   /**
    * Ensure current selection index is valid and update the visual state.
@@ -3946,16 +3921,6 @@ class CompyApp {
     }
   }
 
-  /**
-   * Close any open modal on Escape to align with common accessibility patterns.
-   * @param {KeyboardEvent} e
-   */
-  handleModalKeyboard(e) {
-    if (e.key === 'Escape' && this.modalManager && this.modalManager.hasOpenModals && this.modalManager.hasOpenModals()) {
-      // Close the topmost modal using the modal manager
-      this.modalManager.close();
-    }
-  }
 
   /**
    * Measure the navbar height and expose it as a CSS custom property (--nav-h).

@@ -23,7 +23,7 @@
  */
 
 // Centralized theme list for validation (DRY with constants)
-import { THEME_LIST } from './constants.js?v=2.0.2';
+import { THEME_LIST } from './constants.js?v=2.0.3';
 
 // =============================================================================
 // DOM MANIPULATION UTILITIES

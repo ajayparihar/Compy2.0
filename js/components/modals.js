@@ -19,7 +19,7 @@
  * @since 2025
  */
 
-import { $, $$, focusElement } from '../utils.js?v=2.0.2';
+import { $, $$, focusElement } from '../utils.js?v=2.0.3';
 
 /**
  * ModalManager handles all modal dialog operations with accessibility support

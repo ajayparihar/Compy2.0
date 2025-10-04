@@ -18,9 +18,9 @@
  * @since 2025
  */
 
-import { Logger } from '../utils.js?v=2.0.2';
-import { STORAGE_KEYS, UI_CONFIG } from '../constants.js?v=2.0.2';
-import { backupService } from '../services/BackupService.js?v=2.0';
+import { Logger } from '../utils.js?v=2.0.3';
+import { STORAGE_KEYS, UI_CONFIG } from '../constants.js?v=2.0.3';
+import { backupService } from '../services/BackupService.js?v=2.0.3';
 
 /**
  * Create and manage the profile settings component

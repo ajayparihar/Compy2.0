@@ -20,7 +20,7 @@
  * @since 2025
  */
 
-import { $, $$, focusElement } from '../utils.js?v=2.0.2';
+import { $, $$, focusElement } from '../utils.js?v=2.0.3';
 
 /**
  * ExpandableCardManager handles expandable card operations with accessibility support

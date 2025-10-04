@@ -18,8 +18,8 @@
  * @since 2025
  */
 
-import { reorderItems } from '../state.js?v=2.0.2';
-import { Logger } from '../utils.js?v=2.0.2';
+import { reorderItems } from '../state.js?v=2.0.3';
+import { Logger } from '../utils.js?v=2.0.3';
 
 /**
  * @typedef {Object} DragDropOptions

@@ -17,9 +17,9 @@
  * @since 2025
  */
 
-import { Logger } from '../utils.js?v=2.0.2';
-import { STORAGE_KEYS, DEFAULT_THEME } from '../constants.js?v=2.0.2';
-import { THEME_DEFINITIONS } from '../themes.js?v=2.0.2';
+import { Logger } from '../utils.js?v=2.0.3';
+import { STORAGE_KEYS, DEFAULT_THEME } from '../constants.js?v=2.0.3';
+import { THEME_DEFINITIONS } from '../themes.js?v=2.0.3';
 
 /**
  * PWA Theme Manager for handling theme persistence across browser/PWA contexts

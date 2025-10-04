@@ -19,8 +19,8 @@
  * @since 2025
  */
 
-import { Logger } from '../utils.js?v=2.0.2';
-import { STORAGE_KEYS, UI_CONFIG } from '../constants.js?v=2.0.2';
+import { Logger } from '../utils.js?v=2.0.3';
+import { STORAGE_KEYS, UI_CONFIG } from '../constants.js?v=2.0.3';
 
 /**
  * Backup service class for handling automatic backups to local directory
