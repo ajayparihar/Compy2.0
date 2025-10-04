@@ -9,10 +9,9 @@ Compy 2.0 is a lightweight, single‑page web app to save, organize, search, and
 ---
 
 ## Why use Compy
-- Instant copy: click a card or press Enter
+- Instant copy: click a card
 - Tagging + fast search to find snippets quickly
 - JSON/CSV import and export for backup/migration
-- 26+ accessible themes with a rich theme picker
 - Optional profile label shown in the header
 - Offline‑first by design; simple to run locally
 
@@ -22,7 +21,6 @@ Compy 2.0 is a lightweight, single‑page web app to save, organize, search, and
 - Powerful search and tag filters; reorder with drag‑and‑drop (SortableJS)
 - Import/Export JSON and CSV (deduplication and replace‑all options)
 - Auto‑backups: in‑browser snapshots with rotation; optional file‑system backups on supported browsers
-- Enhanced themes: live preview, search, categories, and WCAG‑minded color schemes
 
 ---
 
