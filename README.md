@@ -35,16 +35,9 @@ Option A — Open the file directly:
 1) Clone or download this repository
 2) Open index.html in a modern browser
 
-Option B — Use the provided dev server (requires Node 16+):
-1) Install dependencies: npm install
-2) Start the server: npm run start
-   - Serves on http://localhost:3000 and opens /index.html
-
-Other useful scripts:
-- npm run dev — live reload on js and css
-- npm run lint / npm run lint:fix — ESLint
-- npm run format / npm run format:check — Prettier
-- npm test — run the custom test runner (or see Testing for Jest suites)
+Option B — Use a local web server:
+1) Use any local web server like Python's `python -m http.server 3000` or similar
+2) Open http://localhost:3000/index.html in your browser
 
 ---
 
@@ -129,22 +122,7 @@ Tech overview:
 - SortableJS for drag‑and‑drop
 - Service Worker (sw.js) for caching when served over HTTPS/localhost
 - Optional file‑system backups via the File System Access API
-- Testing with Jest (unit, integration, e2e, security, performance)
-- Linting with ESLint; formatting with Prettier
-
-Scripts (package.json):
-- start: live‑server on port 3000
-- dev: live‑server with watch
-- test, test:unit, test:integration, test:e2e, test:security, test:performance, test:coverage, test:watch, test:ci, test:debug
-- lint, lint:fix, format, format:check, validate
-- docs (JSDoc), analyze (deps + audit)
-
-Testing:
-- npm test — custom test runner
-- Or run specific suites, for example:
-  - npm run test:unit
-  - npm run test:integration
-  - npm run test:e2e
+- No build tools required - just open index.html in a browser
 
 Browser support:
 - Modern browsers (Chrome, Edge, Firefox, Safari). Some features (e.g., file‑system backups) require Chrome/Edge.

@@ -38,14 +38,24 @@
     content="Compy 2.0 - A lightweight, offline-first clipboard and snippet manager. Save, organize, and search text snippets with tags." />
   <meta name="keywords" content="clipboard manager, snippet manager, text snippets, productivity, offline-first" />
   <meta name="author" content="Bheb Developer" />
+  <!-- Dynamic theme color - updated by PWA theme manager -->
+  <meta name="theme-color" content="#4ade80" id="themeColorMeta" />
   <meta name="theme-color" content="#4ade80" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#ea580c" media="(prefers-color-scheme: light)" />
+  
+  <!-- PWA viewport settings for standalone mode -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Compy 2.0" />
+  <meta name="msapplication-TileColor" content="#4ade80" />
+  <meta name="msapplication-tap-highlight" content="no" />
 
   <title>Compy 2.0</title>
 
   <!-- CRITICAL THEME INITIALIZATION SCRIPT -->
   <!-- This script runs immediately to prevent FOUC (Flash of Unstyled Content)
-       by applying the user's saved theme before any content renders. -->
+       by applying the user's saved theme before any content renders.
+       Enhanced with PWA detection and cross-context theme synchronization. -->
   <script>
     (function () {
       try {
@@ -62,8 +72,35 @@
         ];
 
         var fallback = 'dark-mystic-forest';
-        var saved = localStorage.getItem('compy.theme');
         var theme = fallback;
+        
+        // Detect PWA mode
+        var isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                   window.navigator.standalone === true ||
+                   window.matchMedia('(display-mode: minimal-ui)').matches;
+        
+        // Try multiple storage sources for theme
+        var saved = null;
+        if (isPWA) {
+          // In PWA mode, try PWA-specific storage first
+          saved = localStorage.getItem('compy.pwa.theme');
+          
+          // Fall back to sync data
+          if (!saved) {
+            try {
+              var syncData = localStorage.getItem('compy.theme.sync');
+              if (syncData) {
+                var parsed = JSON.parse(syncData);
+                saved = parsed.theme;
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
+        
+        // Fall back to standard storage
+        if (!saved) {
+          saved = localStorage.getItem('compy.theme');
+        }
 
         // Validate saved theme
         if (saved && typeof saved === 'string' && availableThemes.indexOf(saved) !== -1) {
@@ -71,15 +108,37 @@
         } else if (saved && typeof saved === 'string') {
           // Invalid theme found, clear it and use fallback
           localStorage.setItem('compy.theme', fallback);
+          if (isPWA) {
+            localStorage.setItem('compy.pwa.theme', fallback);
+          }
         }
 
-        // Apply theme and mark as loaded from HTML
+        // Apply theme and mark source
         document.documentElement.setAttribute('data-theme', theme);
-        document.documentElement.setAttribute('data-theme-source', 'html');
+        document.documentElement.setAttribute('data-theme-source', isPWA ? 'html-pwa' : 'html');
+        
+        // Update dynamic theme color meta tag if possible
+        try {
+          var themeColors = {
+            'dark-mystic-forest': '#4ade80',
+            'dark-crimson-night': '#f87171',
+            'dark-royal-elegance': '#a78bfa',
+            'light-sunrise': '#c2410c',
+            'light-soft-glow': '#2563eb',
+            'light-floral-breeze': '#14532d'
+            // Add more theme colors as needed
+          };
+          
+          var themeColor = themeColors[theme] || '#4ade80';
+          var themeColorMeta = document.getElementById('themeColorMeta');
+          if (themeColorMeta) {
+            themeColorMeta.content = themeColor;
+          }
+        } catch (e) { /* ignore theme color update errors */ }
 
         // Debug logging (only in development)
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          console.log('Theme loaded from HTML:', theme, saved ? '(from storage)' : '(fallback)');
+          console.log('Theme loaded from HTML:', theme, saved ? '(from storage)' : '(fallback)', isPWA ? '[PWA]' : '[Browser]');
         }
       } catch (e) {
         // If storage is unavailable (e.g., privacy mode), use fallback
@@ -103,7 +162,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <link rel="stylesheet" href="css/compy.css?v=2.0.9&t=5617" />
+  <link rel="stylesheet" href="css/compy.css?v=2.0.10&t=5618" />
   <link rel="icon" href="favicon_io/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
@@ -112,8 +171,55 @@
 
   <!-- PERFORMANCE OPTIMIZATION -->
   <!-- Preload critical resources for faster rendering -->
-  <link rel="preload" href="css/compy.css?v=2.0.9&t=5617" as="style" />
-  <link rel="modulepreload" href="js/main.js?v=2.0.2" />
+  <link rel="preload" href="css/compy.css?v=2.0.10&t=5618" as="style" />
+  <link rel="modulepreload" href="js/main.js?v=2.0.3" />
+  
+  <!-- SERVICE WORKER REGISTRATION -->
+  <!-- Register service worker for PWA functionality and theme sync -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then((registration) => {
+            console.log('Service Worker registered successfully:', registration.scope);
+            
+            // Handle service worker updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              newWorker?.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New content is available
+                  console.log('New content available, will refresh on next visit');
+                }
+              });
+            });
+          })
+          .catch((error) => {
+            console.log('Service Worker registration failed:', error);
+          });
+      });
+      
+      // Handle service worker messages
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        const { data } = event;
+        
+        switch (data.type) {
+          case 'GET_THEME':
+            // Respond with current theme
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            event.ports[0]?.postMessage({ theme: currentTheme });
+            break;
+            
+          case 'SYNC_THEME':
+            // Trigger theme synchronization
+            if (window.app && window.app.theme && window.app.theme.forceSync) {
+              window.app.theme.forceSync();
+            }
+            break;
+        }
+      });
+    }
+  </script>
   
   <!-- EXTERNAL LIBRARY DEPENDENCIES -->
   <!-- 
@@ -415,33 +521,65 @@
   <!-- Profile Modal -->
   <div id="profileModal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="profileTitle"
     aria-describedby="profileDesc">
-    <div class="modal-content small">
+    <div class="modal-content">
       <div class="modal-header">
-        <h3 id="profileTitle">Edit Profile</h3>
+        <h3 id="profileTitle">Profile & Settings</h3>
         <button class="icon-btn" data-close-modal aria-label="Close profile modal" title="Close modal">
           <span aria-hidden="true">✕</span>
         </button>
       </div>
       <div class="modal-body">
-        <p id="profileDesc" class="sr-only">Update your display name</p>
-        <form id="profileForm" novalidate>
+        <p id="profileDesc" class="sr-only">Update your profile and backup settings</p>
+        <!-- Profile Section -->
+        <section>
+          <h4>Profile Information</h4>
+          <form id="profileForm" novalidate>
+            <div class="field">
+              <label for="profileNameInput">Your name</label>
+              <div class="input-wrap with-clear">
+                <input id="profileNameInput" type="text" placeholder="e.g., Shirja" maxlength="80"
+                  aria-describedby="profileNameHelp" autocomplete="name" />
+                <button class="clear-field" type="button" data-clear="#profileNameInput" aria-label="Clear name"
+                  tabindex="-1">
+                  <span aria-hidden="true">✕</span>
+                </button>
+              </div>
+              <div id="profileNameHelp" class="hint">Displayed next to Compy in the header for personalization</div>
+            </div>
+          </form>
+        </section>
+
+        <!-- Auto Backup Section -->
+        <section class="backup-section">
+          <h4>Auto Backup</h4>
+          <p class="section-description">Automatically save your snippets to a local folder whenever you make changes. Your data stays private and secure on your computer.</p>
+          
+          <div class="backup-status">
+            <div class="status-message" id="backupStatusMessage">
+              <span id="backupStatusText">Choose a folder to enable automatic backup</span>
+            </div>
+          </div>
+          
           <div class="field">
-            <label for="profileNameInput">Your name</label>
-            <div class="input-wrap with-clear">
-              <input id="profileNameInput" type="text" placeholder="e.g., Shirja" maxlength="80"
-                aria-describedby="profileNameHelp" autocomplete="name" />
-              <button class="clear-field" type="button" data-clear="#profileNameInput" aria-label="Clear name"
-                tabindex="-1">
-                <span aria-hidden="true">✕</span>
+            <label for="backupLocation">Backup Location</label>
+            <div class="backup-location-controls">
+              <div class="backup-location" id="backupLocationDisplay">
+                <div id="backupLocationText" class="location-text">No folder selected</div>
+              </div>
+              <button id="selectBackupLocationBtn" class="secondary-btn" type="button">
+                <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path fill="currentColor" d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/>
+                </svg>
+                Choose Folder
               </button>
             </div>
-            <div id="profileNameHelp" class="hint">Displayed next to Compy in the header for personalization</div>
+            <div class="hint">JSON files with timestamp will be automatically saved to your selected folder when you add, edit, or delete snippets.</div>
           </div>
-        </form>
+        </section>
       </div>
       <div class="modal-footer">
-        <button class="secondary-btn" type="button" data-close-modal>Cancel</button>
-        <button id="profileSaveBtn" class="primary-btn" type="submit" form="profileForm">Save Profile</button>
+        <button class="secondary-btn" type="button" data-close-modal>Close</button>
+        <button id="profileSaveBtn" class="primary-btn" type="submit" form="profileForm">Save Changes</button>
       </div>
     </div>
   </div>
@@ -571,7 +709,7 @@
 
   <!-- APPLICATION JAVASCRIPT -->
   <!-- Main application entry point with ES6 module system -->
-  <script type="module" src="js/main.js?v=2.0.2" defer></script>
+  <script type="module" src="js/main.js?v=2.0.5" defer></script>
 
 </body>
 

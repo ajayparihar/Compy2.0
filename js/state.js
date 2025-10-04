@@ -30,6 +30,9 @@
 import { STORAGE_KEYS, UI_CONFIG } from './constants.js?v=2.0.2';
 import { generateUID, debounce } from './utils.js?v=2.0.2';
 
+// Backup service reference - loaded dynamically
+let backupService = null;
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -242,8 +245,20 @@ export const loadState = () => {
       }
     }
     
-    // Sanitize profile name
-    const profileName = rawProfile ? String(rawProfile).trim().slice(0, 100) : '';
+    // Parse profile name - handle both JSON object format and legacy string format
+    let profileName = '';
+    if (rawProfile) {
+      try {
+        // Try to parse as JSON first (new format: {"name": "value"})
+        const profileObj = JSON.parse(rawProfile);
+        if (profileObj && typeof profileObj === 'object' && profileObj.name) {
+          profileName = String(profileObj.name).trim().slice(0, 100);
+        }
+      } catch (parseError) {
+        // Fall back to legacy string format
+        profileName = String(rawProfile).trim().slice(0, 100);
+      }
+    }
     
     // Update state immutably with validated data
     state = {
@@ -304,9 +319,10 @@ export const saveState = () => {
     localStorage.setItem(STORAGE_KEYS.filters, JSON.stringify(state.filterTags)); // Active filter state
     
     // CONDITIONAL STORAGE: Only store profile name if it exists (reduces storage waste)
-    // Empty strings would be stored as 'compy.profile': '', which is unnecessary
+    // Store as JSON object for consistency with profile manager
     if (state.profileName) {
-      localStorage.setItem(STORAGE_KEYS.profile, state.profileName);  // User's display name
+      const profileObj = { name: state.profileName };
+      localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profileObj));  // User's display name as JSON
     }
     
     // Schedule backup creation (debounced for performance)
@@ -329,11 +345,18 @@ export const saveState = () => {
  * 
  * Uses debounce utility to delay backup creation until after a period of
  * inactivity. This prevents creating too many backups during rapid changes.
+ * Also triggers auto backup service if available.
  * 
  * @private
  */
 const scheduleBackup = debounce(() => {
+  // Traditional localStorage backup
   doBackup();
+  
+  // Trigger auto backup service if available and active
+  if (backupService && backupService.isBackupActive()) {
+    backupService.triggerAutoBackup();
+  }
 }, UI_CONFIG.backupDelay);
 
 /**
@@ -719,8 +742,13 @@ export const updateProfile = (name) => {
   const trimmedName = (name || '').trim();
   state = { ...state, profileName: trimmedName };
   
-  // Persist profile immediately for cross-session consistency
-  localStorage.setItem(STORAGE_KEYS.profile, trimmedName);
+  // Persist profile immediately for cross-session consistency as JSON object
+  if (trimmedName) {
+    const profileObj = { name: trimmedName };
+    localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profileObj));
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.profile);
+  }
   
   // Notify UI to update profile display
   notifyListeners();
@@ -804,12 +832,35 @@ export const setupBackupInterval = () => {
 };
 
 /**
+ * Initialize the backup service for auto backups
+ * 
+ * Dynamically loads the backup service module and initializes it.
+ * This is done asynchronously to avoid blocking app startup if the
+ * backup service is unavailable.
+ * 
+ * @example
+ * // Initialize backup service after app startup
+ * initBackupService();
+ */
+export const initBackupService = async () => {
+  try {
+    const backupModule = await import('./services/BackupService.js?v=2.0');
+    backupService = backupModule.backupService;
+    console.log('Auto backup service initialized successfully');
+  } catch (error) {
+    console.warn('Auto backup service not available:', error.message);
+    backupService = null;
+  }
+};
+
+/**
  * Initialize the state management system
  * 
  * This function should be called once during application startup to:
  * 1. Load existing data from localStorage
  * 2. Set up automatic backup intervals
- * 3. Prepare the state system for use
+ * 3. Initialize backup service
+ * 4. Prepare the state system for use
  * 
  * Call this before any other state operations to ensure the system
  * is properly initialized.
@@ -818,10 +869,13 @@ export const setupBackupInterval = () => {
  * // Initialize state system on app startup
  * initState();
  */
-export const initState = () => {
+export const initState = async () => {
   // Load persisted data from browser storage
   loadState();
   
   // Start automatic backup system
   setupBackupInterval();
+  
+  // Initialize backup service asynchronously
+  await initBackupService();
 };

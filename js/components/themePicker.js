@@ -286,8 +286,11 @@ export function createThemePicker(modalManager, themeManager) {
     try {
       themeManager.apply(themeId);
       modalManager.close('#themePickerModal');
-      // Notify user via global app snackbar if available
-      showNotification(`Applied theme: ${THEME_DEFINITIONS[themeId].name}`, 'success');
+      
+      // Show success notification with PWA context
+      const isPWA = themeManager.isPWA && themeManager.isPWA();
+      const context = isPWA ? ' (PWA)' : '';
+      showNotification(`Applied theme: ${THEME_DEFINITIONS[themeId].name}${context}`, 'success');
     } catch (error) {
       console.error('Failed to apply theme:', error);
       showNotification('Failed to apply theme', 'error');

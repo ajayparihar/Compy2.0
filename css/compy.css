@@ -1141,6 +1141,9 @@ body {
   scroll-behavior: auto;
   /* Prevent layout shifts during dynamic height calculations */
   min-height: 100vh;
+  /* Ensure scrolling is always enabled */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Navbar */
@@ -2178,6 +2181,13 @@ select:focus-visible {
 /* Prevent scrolling when modal is open */
 body.modal-open {
   overflow: hidden;
+}
+
+/* Force scrolling - used to override modal-open */
+body.force-scrolling,
+body.force-scrolling.modal-open {
+  overflow: auto !important;
+  overflow-y: auto !important;
 }
 .modal[aria-hidden="false"] {
   display: flex;
@@ -4462,6 +4472,13 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   pointer-events: auto;
 }
 
+/* Failsafe: ensure hidden backdrops never block interaction */
+.expandable-card-backdrop[hidden],
+.expandable-card-backdrop:not(.show) {
+  pointer-events: none !important;
+  display: none;
+}
+
 /* Hover effects (only when not expanded) */
 @media (any-hover: hover) {
   .expandable-card:not(.expanded):hover {
@@ -4786,6 +4803,185 @@ html[data-theme^="light-"] .expandable-card.expanded {
   
   .cards.cards-dragging::before {
     animation: none;
+  }
+}
+
+/* ============= BACKUP SETTINGS STYLES ============= */
+/* Backup section styling */
+.backup-section {
+  margin-top: var(--space-24);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--border-light);
+}
+
+.backup-section h4 {
+  color: var(--text);
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  margin: 0 0 var(--space-8) 0;
+}
+
+.section-description {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-16) 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* Backup status indicator */
+.backup-status {
+  margin-bottom: var(--space-16);
+}
+
+.status-message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.status-message span:first-child {
+  font-size: var(--text-lg);
+  flex-shrink: 0;
+}
+
+/* Backup location controls */
+.backup-location-controls {
+  display: flex;
+  gap: var(--space-8);
+  align-items: stretch;
+}
+
+.backup-location {
+  flex: 1;
+  padding: var(--space-8) var(--space-12);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  min-height: var(--ctrl-h-sm);
+}
+
+.location-text {
+  width: 100%;
+  line-height: var(--leading-tight);
+}
+
+.location-text .folder-name {
+  display: block;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-semibold);
+  color: var(--text);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-2);
+}
+
+.location-text .folder-description {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+#backupLocationText {
+  color: var(--text-secondary);
+}
+
+/* Backup info and stats */
+.backup-info {
+  margin-top: var(--space-16);
+  padding: var(--space-12);
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  border-radius: var(--radius);
+}
+
+.backup-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stat-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: var(--font-medium);
+  letter-spacing: 0.025em;
+}
+
+.stat-value {
+  font-size: var(--text-sm);
+  color: var(--text);
+  font-weight: var(--font-medium);
+  font-family: var(--font-family-mono);
+}
+
+.backup-actions {
+  display: flex;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.backup-actions .secondary-btn {
+  font-size: var(--text-sm);
+  padding: var(--space-6) var(--space-10);
+  min-height: var(--ctrl-h-sm);
+}
+
+.backup-actions .secondary-btn .icon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--space-4);
+}
+
+.danger-text {
+  color: var(--danger) !important;
+}
+
+.danger-text:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent) !important;
+  border-color: var(--danger) !important;
+}
+
+/* Modal content adjustments for backup settings */
+.modal-content:has(.backup-section) {
+  max-width: var(--modal-max-w);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .backup-location-controls {
+    flex-direction: column;
+  }
+  
+  .backup-stats {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+  
+  .backup-actions {
+    justify-content: stretch;
+  }
+  
+  .backup-actions .secondary-btn {
+    flex: 1;
+    min-width: 0;
   }
 }
 

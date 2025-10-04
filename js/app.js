@@ -3,7 +3,7 @@
  * Enhanced with better code organization, error handling, and modern JavaScript practices
  */
 
-import { STORAGE_KEYS, UI_CONFIG, ICONS, ICON_PATHS, DEFAULT_THEME } from './constants.js?v=2.0.2';
+import { STORAGE_KEYS, UI_CONFIG, ICONS, ICON_PATHS, DEFAULT_THEME } from './constants.js?v=2.0.5';
 import { 
   $, $$, escapeHtml, highlightText, stringHash, downloadFile, 
   parseCSVLine, csvEscape, formatDate, 
@@ -11,20 +11,21 @@ import {
   addEventHandler, addMultipleEventHandlers, toggleVisibility, isValidTheme, getSafeTheme,
   Logger, DOMUtils, ValidationUtils, ErrorUtils, createElement,
   createSVGIcon, createIconButton
-} from './utils.js?v=2.0.2';
+} from './utils.js?v=2.0.5';
 import {
   initState, getState, subscribe, upsertItem,
   deleteItem, updateFilterTags, updateSearch, updateProfile,
   setEditingId, getBackups, reorderItems
-} from './state.js?v=2.0.2';
-import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.2';
-import { createModalManager } from './components/modals.js?v=2.0.2';
-import { createTagAutocomplete } from './components/tagAutocomplete.js?v=2.0.2';
-import { createMobileNavigationManager } from './components/mobileNavigation.js?v=2.0.2';
-import { createThemePicker } from './components/themePicker.js?v=2.0.2';
-import { createClipboardManager } from './components/clipboard.js?v=2.0.2';
-import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.2';
-import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.2';
+} from './state.js?v=2.0.5';
+import { createModalManager } from './components/modals.js?v=2.0.5';
+import { createConfirmationManager, setGlobalConfirm } from './components/confirmation.js?v=2.0.5';
+import { createExpandableCardManager } from './components/expandableCard.js?v=2.0.5';
+import { createThemePicker } from './components/themePicker.js?v=2.0.5';
+import { pwaThemeManager, isPWA } from './utils/pwaUtils.js?v=2.0.5';
+import { createMobileNavigationManager } from './components/mobileNavigation.js?v=2.0.5';
+import { createClipboardManager } from './components/clipboard.js?v=2.0.5';
+import { createCardDragDropManager } from './components/dragDrop.js?v=2.0.5';
+import { createProfileManager } from './components/profileManager.js?v=2.0.5';
 
 /**
  * @typedef {Object} AppItem
@@ -95,6 +96,7 @@ class CompyApp {
     this.theme = null;
     this.expandableCardManager = null;
     this.dragDropManager = null;
+    this.profileManager = null;
     
     // UI state tracking
     this.initialScrollY = 0;
@@ -112,7 +114,7 @@ class CompyApp {
    * Initialize all application components in optimal order
    * @private
    */
-  initializeComponents() {
+  async initializeComponents() {
     // Core systems first
     this.initClipboard();
     this.initNotifications();
@@ -127,16 +129,24 @@ class CompyApp {
     
     // User features
     this.initProfile();
+    this.initProfileManager();
     this.initExport();
     this.initImport();
     this.initEventHandlers();
     
     // State and events
     subscribe(this.handleStateChange);
-    initState();
+    await initState();
     
     // MEMORY SAFE: Use AbortController for global event listeners
-    document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e), {
+    document.addEventListener('keydown', (e) => {
+      this.handleKeyboardShortcuts(e);
+      
+      // Emergency escape: Clear stuck overlays with Escape key
+      if (e.key === 'Escape') {
+        this.ensureScrollingEnabled();
+      }
+    }, {
       signal: this.abortController.signal
     });
     
@@ -146,7 +156,23 @@ class CompyApp {
     if (typeof window !== 'undefined') {
       window.app = {
         showNotification: this.showNotification.bind(this),
-        instance: this
+        instance: this,
+        // Emergency scroll fix - can be called from console
+        fixScrolling: () => {
+          if (this.modalManager?.forceScrollRestore) {
+            this.modalManager.forceScrollRestore();
+          } else {
+            this.ensureScrollingEnabled();
+          }
+        },
+        // Debug modal state
+        debugScroll: () => {
+          if (this.modalManager?.debugScrollState) {
+            this.modalManager.debugScrollState();
+          } else {
+            console.log('Modal manager not available');
+          }
+        }
       };
     }
   }
@@ -159,12 +185,15 @@ class CompyApp {
     if (this.initialized) return;
 
     try {
-      // Initialize foundational systems
-      this.initScrollPersistence();
-      this.setupResponsiveNavbar();
-      
-      // Initialize all components in dependency order
-      this.initializeComponents();
+    // Initialize foundational systems
+    this.initScrollPersistence();
+    this.setupResponsiveNavbar();
+    
+    // Ensure no stuck overlays blocking scroll
+    this.ensureScrollingEnabled();
+    
+    // Initialize all components in dependency order
+    this.initializeComponents();
       
       this.initialized = true;
       Logger.info('Compy 2.0 initialized successfully');
@@ -250,6 +279,39 @@ class CompyApp {
       
     } catch (error) {
       Logger.error('Error during app destruction:', error);
+    }
+  }
+
+  /**
+   * Ensure scrolling is enabled and no overlays are blocking interaction
+   */
+  ensureScrollingEnabled() {
+    try {
+      // Hide any stuck backdrops
+      const backdrops = document.querySelectorAll('.expandable-card-backdrop, .nav-backdrop');
+      backdrops.forEach(backdrop => {
+        backdrop.classList.remove('show');
+        backdrop.setAttribute('hidden', 'true');
+        backdrop.style.display = 'none';
+        backdrop.style.pointerEvents = 'none';
+      });
+      
+      // Ensure body can scroll
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      
+      // Remove any modal body classes that might block scrolling
+      document.body.classList.remove('modal-open', 'no-scroll');
+      
+      // Force remove overflow hidden that might be stuck
+      if (document.body.style.overflow === 'hidden') {
+        document.body.style.overflow = '';
+      }
+      
+      Logger.debug('Scrolling enabled and overlays cleared');
+      
+    } catch (error) {
+      Logger.warn('Failed to ensure scrolling enabled:', error);
     }
   }
 
@@ -503,26 +565,36 @@ class CompyApp {
   }
 
   /**
-   * Initialize enhanced theme system with picker modal.
+   * Initialize enhanced theme system with picker modal and PWA support.
    * Persists user choice in localStorage and applies smooth transitions.
+   * Includes PWA-specific theme synchronization and manifest updates.
    */
   initTheme() {
-    // Simplified theme manager
+    // Initialize PWA theme manager first
+    this.pwaThemeManager = pwaThemeManager;
+    
+    // Enhanced theme manager with PWA support
     this.theme = {
       apply: (themeName) => {
         if (!themeName || typeof themeName !== 'string') return;
         
         try {
-          document.documentElement.setAttribute('data-theme', themeName);
-          document.documentElement.setAttribute('data-theme-source', 'js');
-          localStorage.setItem(STORAGE_KEYS.theme, themeName);
+          // Use PWA theme manager for application
+          const success = this.pwaThemeManager.applyTheme(themeName);
           
-          // Smooth transition
-          const docEl = document.documentElement;
-          docEl.classList.add('theme-switching');
-          setTimeout(() => docEl.classList.remove('theme-switching'), 300);
-          
-          this.themePicker?.updateSelectedTheme?.(themeName);
+          if (success) {
+            // Smooth transition effect
+            const docEl = document.documentElement;
+            docEl.classList.add('theme-switching');
+            setTimeout(() => docEl.classList.remove('theme-switching'), 300);
+            
+            // Update theme picker if available
+            this.themePicker?.updateSelectedTheme?.(themeName);
+          } else {
+            // Fallback to default theme on failure
+            document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
+            Logger.warn('Theme application failed, using default theme');
+          }
         } catch (error) {
           Logger.error('Theme application failed:', error);
           document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
@@ -534,14 +606,21 @@ class CompyApp {
         if (themeSource === 'html' || themeSource === 'html-fallback') return;
         
         try {
-          const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || DEFAULT_THEME;
+          // Use PWA theme manager for loading
+          const savedTheme = this.pwaThemeManager.loadTheme();
           this.theme.apply(savedTheme);
         } catch (error) {
+          Logger.error('Theme loading failed:', error);
           document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
         }
       },
       
-      getCurrentTheme: () => document.documentElement.getAttribute('data-theme') || DEFAULT_THEME
+      getCurrentTheme: () => document.documentElement.getAttribute('data-theme') || DEFAULT_THEME,
+      
+      // Add PWA-specific methods
+      isPWA: () => this.pwaThemeManager.isPWA,
+      getStatus: () => this.pwaThemeManager.getStatus(),
+      forceSync: () => this.pwaThemeManager.forceSyncTheme()
     };
 
     // Load saved theme (respecting HTML head application)
@@ -2159,6 +2238,28 @@ class CompyApp {
       badge.textContent = count;
     }
     toggleVisibility(badge, shouldShow);
+  }
+
+  /**
+   * Initialize the profile manager component with backup functionality
+   */
+  initProfileManager() {
+    try {
+      // Create profile manager with required dependencies
+      this.profileManager = createProfileManager(
+        this.modalManager,
+        this.notifications
+      );
+
+      // Initialize the profile manager
+      this.profileManager.init();
+
+      Logger.info('Profile manager with backup functionality initialized');
+
+    } catch (error) {
+      Logger.error('Failed to initialize profile manager:', error);
+      // Don't fail the entire app if profile manager fails
+    }
   }
 
   /**

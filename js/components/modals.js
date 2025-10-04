@@ -75,6 +75,9 @@ export class ModalManager {
     
     // Initialize event listeners
     this.initializeEventListeners();
+    
+    // Start periodic cleanup to prevent stuck states
+    this.startPeriodicCleanup();
   }
 
   /**
@@ -345,14 +348,40 @@ export class ModalManager {
     // Handle focus restoration BEFORE hiding modal to avoid ARIA issues
     this.handleFocusRestoration(modalInfo);
     
+    // Call onClose callback if provided
+    if (modalInfo.config.onClose && typeof modalInfo.config.onClose === 'function') {
+      try {
+        modalInfo.config.onClose(modalInfo);
+      } catch (error) {
+        console.warn('Modal onClose callback error:', error);
+      }
+    }
+    
     // Small delay to ensure focus is moved before hiding modal
     setTimeout(() => {
       this.hideModal(modalInfo.element);
     }, 10);
     
-    // Update body class if no modals remain
+    // Update body class and ensure scrolling is restored if no modals remain
     if (this.modalStack.length === 0) {
       document.body.classList.remove(this.options.activeClass);
+      
+      // IMMEDIATE scroll restoration with CSS class override
+      document.body.classList.add('force-scrolling');
+      
+      // Clean up after a short delay
+      setTimeout(() => {
+        document.body.classList.remove('force-scrolling');
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        
+        // Double-check the class is removed
+        if (document.body.classList.contains(this.options.activeClass)) {
+          document.body.classList.remove(this.options.activeClass);
+        }
+        
+        console.debug('Modal scrolling restored');
+      }, 100);
     }
     
     return true;
@@ -536,6 +565,86 @@ export class ModalManager {
    */
   updateOptions(newOptions) {
     this.options = { ...this.options, ...newOptions };
+  }
+
+  /**
+   * Start periodic cleanup to prevent stuck modal states
+   * 
+   * Runs every 5 seconds to check for inconsistencies between modal stack
+   * and actual DOM state, fixing any issues automatically.
+   * 
+   * @private
+   */
+  startPeriodicCleanup() {
+    setInterval(() => {
+      try {
+        // Check if body has modal-open class but no modals are actually open
+        const hasModalOpenClass = document.body.classList.contains(this.options.activeClass);
+        const hasOpenModals = this.modalStack.length > 0;
+        const hasVisibleModals = document.querySelector('.modal[aria-hidden="false"]') !== null;
+        
+        // If body has modal-open class but no modals are open, clean up
+        if (hasModalOpenClass && (!hasOpenModals || !hasVisibleModals)) {
+          document.body.classList.remove(this.options.activeClass);
+          document.body.classList.add('force-scrolling');
+          
+          // Clean up after delay
+          setTimeout(() => {
+            document.body.classList.remove('force-scrolling');
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+          }, 50);
+          
+          // Clear modal stack if it's inconsistent
+          if (this.modalStack.length > 0 && !hasVisibleModals) {
+            this.modalStack.length = 0;
+            this.previousFocus = null;
+          }
+          
+          console.debug('Modal cleanup: removed stuck modal-open class');
+        }
+      } catch (error) {
+        console.warn('Modal periodic cleanup error:', error);
+      }
+    }, 5000); // Check every 5 seconds
+  }
+
+  /**
+   * Debug scroll state
+   * 
+   * Logs current scroll-related state for debugging purposes
+   */
+  debugScrollState() {
+    console.log('=== SCROLL STATE DEBUG ===');
+    console.log('Modal stack length:', this.modalStack.length);
+    console.log('Body classes:', Array.from(document.body.classList));
+    console.log('Body overflow:', window.getComputedStyle(document.body).overflow);
+    console.log('Document overflow:', window.getComputedStyle(document.documentElement).overflow);
+    console.log('Visible modals:', document.querySelectorAll('.modal[aria-hidden="false"]').length);
+    console.log('Modal backdrops:', document.querySelectorAll('.modal-backdrop').length);
+    console.log('==========================');
+  }
+
+  /**
+   * Force scroll restoration (emergency function)
+   */
+  forceScrollRestore() {
+    console.log('Force restoring scroll...');
+    document.body.classList.remove(this.options.activeClass);
+    document.body.classList.add('force-scrolling');
+    
+    setTimeout(() => {
+      document.body.classList.remove('force-scrolling');
+      document.body.style.overflow = '';
+      document.body.style.overflowX = 'hidden';
+      document.documentElement.style.overflow = '';
+      
+      // Remove any stuck backdrops
+      const backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(backdrop => backdrop.remove());
+      
+      console.log('Scroll restoration complete');
+    }, 10);
   }
 
   /**
