@@ -162,6 +162,15 @@
   --z-popover: 1060;
   --z-tooltip: 1070;
   --z-toast: 1080;
+  
+  /* ============= BLUR SYSTEM ============= */
+  /* Modal backdrop blur intensity */
+  --modal-backdrop-blur: 12px;
+  --modal-backdrop-blur-fallback: 8px;
+  
+  /* Background content blur when modal is open */
+  --modal-bg-blur: 4px;
+  --modal-bg-blur-reduced: 2px;
 }
 
 /* =================================================================
@@ -1099,9 +1108,24 @@ html[data-theme^="light-"] textarea {
   
   .modal {
     transition: none !important;
+    /* Reduce blur intensity for users with motion sensitivity */
+    backdrop-filter: blur(var(--modal-bg-blur-reduced)) !important;
+    -webkit-backdrop-filter: blur(var(--modal-bg-blur-reduced)) !important;
   }
   
   .expandable-card {
+    transition: none !important;
+  }
+  
+  /* Reduce background blur for users with motion sensitivity */
+  body.modal-open .navbar,
+  body.modal-open main,
+  body.modal-open #main,
+  body.modal-open .cards,
+  body.modal-open .fab-add,
+  body.modal-open .nav-backdrop {
+    filter: blur(var(--modal-bg-blur-reduced)) !important;
+    -webkit-filter: blur(var(--modal-bg-blur-reduced)) !important;
     transition: none !important;
   }
 }
@@ -1249,10 +1273,92 @@ mark {
 }
 
 /* =================================================================
-   BASE STYLES
+   EMERGENCY PERFORMANCE FIXES FOR BLUR DELAY
    ================================================================= */
 
-* {
+/* Disable all blur effects when performance mode is active */
+body.performance-mode .modal {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--modal-overlay) !important;
+}
+
+body.performance-mode.modal-open .navbar,
+body.performance-mode.modal-open main,
+body.performance-mode.modal-open #main,
+body.performance-mode.modal-open .cards,
+body.performance-mode.modal-open .fab-add,
+body.performance-mode.modal-open .nav-backdrop {
+  filter: none !important;
+  -webkit-filter: none !important;
+  transition: none !important;
+}
+
+/* Disable all expensive transitions in performance mode */
+body.performance-mode *,
+body.performance-mode *::before,
+body.performance-mode *::after {
+  transition: none !important;
+  animation: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  box-shadow: none !important;
+  will-change: auto !important;
+  transform: none !important;
+}
+
+/* Keep essential functionality while disabling visual effects */
+body.performance-mode .card:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+  transform: none !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+body.performance-mode .search:focus-within {
+  transform: none !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+body.performance-mode .expandable-card {
+  transform: none !important;
+  transition: none !important;
+}
+
+/* Additional override for modal-open class combination with performance-mode */
+body.modal-open.performance-mode .navbar,
+body.modal-open.performance-mode main,
+body.modal-open.performance-mode #main,
+body.modal-open.performance-mode .cards,
+body.modal-open.performance-mode .fab-add,
+body.modal-open.performance-mode .nav-backdrop {
+  filter: none !important;
+  -webkit-filter: none !important;
+  transform: none !important;
+  transition: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  will-change: auto !important;
+  backface-visibility: visible !important;
+}
+
+/* Force override of any existing blur styles in performance mode */
+body.performance-mode * {
+  filter: none !important;
+  -webkit-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* =================================================================
+   RESPONSIVE DESIGN
+   =================================================================
+
+/* On phones: hide the brand text and use hamburger for navigation */
   box-sizing: border-box;
 }
 
@@ -2311,16 +2417,17 @@ select:focus-visible {
 }
 
 /* Modal */
-}.modal {
+.modal {
   position: fixed;
   inset: 0;
   display: none;
   align-items: center;
   justify-content: center;
   background: var(--modal-overlay);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(var(--modal-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur));
   z-index: var(--z-modal);
+  transition: backdrop-filter var(--duration-normal) var(--ease-out);
 }
 
 /* Prevent scrolling when modal is open */
@@ -2328,11 +2435,56 @@ body.modal-open {
   overflow: hidden;
 }
 
+/* Background blur effect when modal is open */
+body.modal-open .navbar,
+body.modal-open main,
+body.modal-open #main,
+body.modal-open .cards,
+body.modal-open .fab-add,
+body.modal-open .nav-backdrop {
+  filter: blur(var(--modal-bg-blur));
+  -webkit-filter: blur(var(--modal-bg-blur));
+  transition: filter var(--duration-normal) var(--ease-out);
+  will-change: filter;
+  /* Performance optimizations for smooth blur effect */
+  transform: translateZ(0); /* Force hardware acceleration */
+  backface-visibility: hidden; /* Optimize rendering */
+}
+
 /* Force scrolling - used to override modal-open */
 body.force-scrolling,
 body.force-scrolling.modal-open {
   overflow: auto !important;
   overflow-y: auto !important;
+}
+
+/* Remove blur when force-scrolling to prevent visual artifacts */
+body.force-scrolling .navbar,
+body.force-scrolling main,
+body.force-scrolling #main,
+body.force-scrolling .cards,
+body.force-scrolling .fab-add,
+body.force-scrolling .nav-backdrop {
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(1px)) {
+  .modal {
+    background: color-mix(in srgb, var(--modal-overlay) 85%, transparent);
+  }
+  
+  /* Increase background blur on main content for better separation */
+  body.modal-open .navbar,
+  body.modal-open main,
+  body.modal-open #main,
+  body.modal-open .cards,
+  body.modal-open .fab-add,
+  body.modal-open .nav-backdrop {
+    filter: blur(calc(var(--modal-bg-blur) * 1.5));
+    -webkit-filter: blur(calc(var(--modal-bg-blur) * 1.5));
+  }
 }
 .modal[aria-hidden="false"] {
   display: flex;
@@ -2521,6 +2673,15 @@ button[data-close-modal]:active {
   max-height: 90vh;
   overflow: auto;
   margin: clamp(8px, 2vw, 16px);
+  /* Ensure modal content is never blurred and stays crisp */
+  filter: none !important;
+  -webkit-filter: none !important;
+  /* Add subtle enhancement to modal content */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: var(--shadow-xl), 
+              0 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 .modal-content.small {
   width: min(520px, 92vw);
@@ -2916,9 +3077,19 @@ html[data-theme^="light-"] .snackbar.error {
 }
 
 /* High contrast theme adjustments for accessibility */
-html[data-theme$="high-contrast"] .snackbar {
-  border-width: 2px;
-  font-weight: var(--font-semibold);
+html[data-theme$="high-contrast"] {
+  --text-muted: #ffffff;
+  /* Reduce blur for high contrast themes to maintain clarity */
+  --modal-bg-blur: 2px;
+  --modal-backdrop-blur: 8px;
+}
+
+/* Light theme blur adjustments */
+html[data-theme^="light-"] {
+  /* Slightly less blur for light themes to maintain readability */
+  --modal-bg-blur: 3px;
+  --modal-backdrop-blur: 10px;
+}
   padding: 12px 18px;
 }
 
@@ -4671,6 +4842,11 @@ html.disable-entry-anim .cards:not(.empty-state) .card {
   animation: expandCard var(--duration-slower) var(--ease-spring);
 }
 
+/* Performance-mode exception: keep transform centering for expanded card */
+body.performance-mode .expandable-card.expanded {
+  transform: translate(-50%, -50%) !important;
+}
+
 /* Ensure card works well with existing themes */
 html[data-theme^="light-"] .expandable-card {
   box-shadow: var(--shadow), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -4760,6 +4936,20 @@ html[data-theme^="light-"] .expandable-card.expanded {
 
 .cards.dnd-disabled .drag-handle:hover svg {
   color: var(--text-muted) !important;
+}
+
+/* Ghost card used to keep layout filled while real card is expanded */
+.card.card-ghost,
+.expandable-card.card-ghost {
+  opacity: 0.55;
+  filter: grayscale(0.2);
+  pointer-events: none !important;
+}
+.card.card-ghost .actions,
+.card.card-ghost .drag-handle,
+.expandable-card.card-ghost .actions,
+.expandable-card.card-ghost .drag-handle {
+  visibility: hidden;
 }
 
 /* ============= DRAG AND DROP STYLES ============= */

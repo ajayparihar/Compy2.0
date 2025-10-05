@@ -67,6 +67,10 @@ export class ExpandableCardManager {
     this.previousFocus = null;              // Element that had focus before expansion
     this.backdrop = null;                   // Backdrop element
     this.isAnimating = false;               // Animation state lock
+
+    // Portal container for expanded cards (prevents CSS filter/transform ancestors from breaking fixed positioning)
+    this.portalContainer = null;            // Detatched layer attached to <body>
+    this.expandedCardOriginal = null;       // { parent, placeholder }
     
     // Bind methods to maintain context
     this.init = this.init.bind(this);
@@ -77,6 +81,9 @@ export class ExpandableCardManager {
     this.handleBackdropClick = this.handleBackdropClick.bind(this);
     this.handleExpandTrigger = this.handleExpandTrigger.bind(this);
     this.handleCloseTrigger = this.handleCloseTrigger.bind(this);
+    this.setupPortalContainer = this.setupPortalContainer.bind(this);
+    this.moveCardToPortal = this.moveCardToPortal.bind(this);
+    this.restoreCardFromPortal = this.restoreCardFromPortal.bind(this);
   }
 
   /**
@@ -96,6 +103,9 @@ export class ExpandableCardManager {
     
     // Setup backdrop
     this.setupBackdrop();
+
+    // Setup portal container where expanded cards will live (above blurred/filtered content)
+    this.setupPortalContainer();
     
     console.debug('ExpandableCardManager initialized');
   }
@@ -276,6 +286,88 @@ export class ExpandableCardManager {
   }
 
   /**
+   * Ensure a portal container exists for expanded cards.
+   * We intentionally move the expanded card to a top-level container attached to <body>
+   * so CSS filters/transforms on ancestors (like .cards blur) do not break position: fixed centering.
+   * @private
+   */
+  setupPortalContainer() {
+    // Reuse existing container if present
+    this.portalContainer = document.querySelector('#expandable-card-portal');
+    if (this.portalContainer) return;
+
+    // Create container and append as the last child of <body>
+    const portal = document.createElement('div');
+    portal.id = 'expandable-card-portal';
+    // Keep container inert; the card itself manages its z-index and interactions
+    portal.style.position = 'relative';
+    portal.style.zIndex = String(9999); // Fallback if CSS vars unavailable; card still has its own z-index
+    document.body.appendChild(portal);
+    this.portalContainer = portal;
+  }
+
+  /**
+   * Replace the card in its grid position with a placeholder and move the card to the portal container.
+   * @param {HTMLElement} card
+   * @private
+   */
+  moveCardToPortal(card) {
+    if (!this.portalContainer) this.setupPortalContainer();
+    if (!this.portalContainer) return;
+
+    const parent = card.parentNode;
+    if (!parent) return;
+
+    // Create a non-interactive visual clone so the list doesn't show a hole
+    const ghost = card.cloneNode(true);
+    ghost.removeAttribute('id');
+    ghost.classList.remove('expanded', 'expanding');
+    ghost.classList.add('card-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.setAttribute('tabindex', '-1');
+    ghost.style.pointerEvents = 'none';
+
+    // Disable any focusable elements inside the ghost
+    ghost.querySelectorAll('button, [href], input, select, textarea, [tabindex]')
+      .forEach(el => {
+        el.setAttribute('tabindex', '-1');
+        el.setAttribute('aria-hidden', 'true');
+      });
+
+    // Replace the original card with the ghost in the grid
+    parent.replaceChild(ghost, card);
+
+    // Append the original card to the portal (as a top-level layer)
+    this.portalContainer.appendChild(card);
+
+    // Save original location for restoration later
+    this.expandedCardOriginal = { parent, ghost };
+  }
+
+  /**
+   * Restore the card from the portal back to its original grid position and remove the placeholder.
+   * @param {HTMLElement} card
+   * @private
+   */
+  restoreCardFromPortal(card) {
+    if (!this.expandedCardOriginal) return;
+    const { parent, ghost } = this.expandedCardOriginal;
+
+    try {
+      if (parent && ghost && ghost.parentNode === parent) {
+        parent.replaceChild(card, ghost);
+      } else if (parent) {
+        parent.appendChild(card);
+      }
+    } finally {
+      if (ghost && ghost.parentNode) {
+        ghost.parentNode.removeChild(ghost);
+      }
+      this.expandedCardOriginal = null;
+    }
+  }
+
+  /**
    * Handle expand trigger activation
    * 
    * @param {HTMLElement} card - Card to expand
@@ -350,6 +442,9 @@ export class ExpandableCardManager {
     
     // Store previous focus
     this.previousFocus = document.activeElement;
+
+    // Move card to top-level portal to ensure perfect centering relative to the viewport
+    this.moveCardToPortal(card);
 
     try {
       // Prevent body scrolling when card is expanded
@@ -455,6 +550,9 @@ export class ExpandableCardManager {
       if (details) {
         details.hidden = true;
       }
+
+      // Restore card to its original grid position before finalizing collapse
+      this.restoreCardFromPortal(card);
 
       // Hide close button
       const closeBtn = card.querySelector('.close-btn');

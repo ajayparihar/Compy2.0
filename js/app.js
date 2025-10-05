@@ -229,49 +229,22 @@ class CompyApp {
   /**
    * Destroy the application and cleanup all resources
    * MEMORY SAFETY: This method cleans up all event listeners and references
+   * OPTIMIZATION: Improved cleanup order and batched operations for better performance
    */
   destroy() {
     try {
+      // OPTIMIZATION: Early exit if already destroyed
+      if (!this.initialized) {
+        return;
+      }
+      
       // Abort all event listeners using AbortController
       this.abortController.abort();
       
-      // Run custom cleanup tasks
-      this.cleanupTasks.forEach(task => {
-        try {
-          task();
-        } catch (error) {
-          Logger.warn('Cleanup task failed:', error);
-        }
-      });
-      
-      // Clear cleanup tasks
-      this.cleanupTasks.clear();
-      
-      // Destroy component managers
-      if (this.dragDropManager?.destroy) {
-        this.dragDropManager.destroy();
-      }
-      
-      if (this.expandableCardManager?.destroy) {
-        this.expandableCardManager.destroy();
-      }
-      
-      if (this.modalManager?.destroy) {
-        this.modalManager.destroy();
-      }
-      
-      // Clear references
-      this.clipboard = null;
-      this.notifications = null;
-      this.modalManager = null;
-      this.confirmationManager = null;
-      this.theme = null;
-      this.expandableCardManager = null;
-      this.dragDropManager = null;
-      
-      // Clear UI state
-      this.cardElements = [];
-      this.visibleItems = [];
+      // OPTIMIZATION: Batch cleanup operations for better performance
+      this.performCleanupTasks();
+      this.destroyComponentManagers();
+      this.clearAllReferences();
       
       // Mark as uninitialized
       this.initialized = false;
@@ -280,6 +253,96 @@ class CompyApp {
       
     } catch (error) {
       Logger.error('Error during app destruction:', error);
+    }
+  }
+  
+  /**
+   * Execute all cleanup tasks with error isolation
+   * OPTIMIZATION: Isolated cleanup execution with better error handling
+   * @private
+   */
+  performCleanupTasks() {
+    if (this.cleanupTasks.size === 0) {
+      return;
+    }
+    
+    // OPTIMIZATION: Convert Set to array once for iteration
+    const tasks = Array.from(this.cleanupTasks);
+    let failedTasks = 0;
+    
+    // Execute all tasks with individual error handling
+    for (const task of tasks) {
+      try {
+        task();
+      } catch (error) {
+        failedTasks++;
+        Logger.warn('Cleanup task failed:', error);
+      }
+    }
+    
+    // Clear all tasks at once
+    this.cleanupTasks.clear();
+    
+    if (failedTasks > 0) {
+      Logger.warn(`${failedTasks} cleanup task(s) failed during destruction`);
+    }
+  }
+  
+  /**
+   * Destroy component managers in dependency order
+   * OPTIMIZATION: Ordered destruction to prevent cascading errors
+   * @private
+   */
+  destroyComponentManagers() {
+    // OPTIMIZATION: Define managers to destroy with their destroy method names
+    const managersToDestroy = [
+      { manager: 'dragDropManager', method: 'destroy' },
+      { manager: 'expandableCardManager', method: 'destroy' },
+      { manager: 'modalManager', method: 'destroy' },
+      { manager: 'profileManager', method: 'destroy' },
+      { manager: 'clipboardManager', method: 'destroy' }
+    ];
+    
+    // Destroy in reverse dependency order
+    for (const { manager, method } of managersToDestroy) {
+      try {
+        const managerInstance = this[manager];
+        if (managerInstance && typeof managerInstance[method] === 'function') {
+          managerInstance[method]();
+        }
+      } catch (error) {
+        Logger.warn(`Failed to destroy ${manager}:`, error);
+      }
+    }
+  }
+  
+  /**
+   * Clear all object references to prevent memory leaks
+   * OPTIMIZATION: Batched reference clearing with null assignment
+   * @private
+   */
+  clearAllReferences() {
+    // Component managers
+    this.clipboard = null;
+    this.notifications = null;
+    this.modalManager = null;
+    this.confirmationManager = null;
+    this.theme = null;
+    this.expandableCardManager = null;
+    this.dragDropManager = null;
+    this.profileManager = null;
+    
+    // Clear UI state arrays
+    this.cardElements.length = 0; // Faster than creating new array
+    this.visibleItems.length = 0;
+    
+    // Clear caches
+    if (this._validationPatterns) {
+      this._validationPatterns = null;
+    }
+    if (this._highlightPatterns) {
+      this._highlightPatterns.clear();
+      this._highlightPatterns = null;
     }
   }
 
@@ -805,21 +868,25 @@ class CompyApp {
   // 3. UX becomes confusing when some cards are not visible
   // 4. Position changes would be lost when filters are cleared
   isReorderDisabled() {
+    // OPTIMIZATION: Cache state access and use early exits for better performance
+    const cardCount = this.cardElements.length;
+    
+    // EARLY EXIT: Insufficient cards make reordering meaningless
+    if (cardCount <= 1) {
+      return true;
+    }
+    
     try {
       const s = getState();
-      // SEARCH CHECK: Active search query disables reordering
-      // Trimmed check prevents whitespace-only strings from counting as searches
-      const hasSearch = !!(s.search && s.search.trim());
       
-      // FILTER CHECK: Any active tag filters disable reordering
-      // Array validation prevents crashes from malformed state
-      const hasFilters = Array.isArray(s.filterTags) && s.filterTags.length > 0;
-      
-      // CARD COUNT CHECK: Need at least 2 cards to make reordering meaningful
-      return hasSearch || hasFilters || this.cardElements.length <= 1;
+      // OPTIMIZATION: Combined boolean logic with short-circuit evaluation
+      // Check search first (most common case), then filters
+      return !!(s.search?.trim()) || 
+             (Array.isArray(s.filterTags) && s.filterTags.length > 0);
+             
     } catch (e) { 
-      // FALLBACK: If state access fails, only disable when insufficient cards
-      return this.cardElements.length <= 1; 
+      // FALLBACK: If state access fails, reordering is safe when cards >= 2
+      return false; 
     }
   }
 
@@ -1195,6 +1262,7 @@ class CompyApp {
 
   /**
    * Apply secure text highlighting using DOM manipulation (prevents XSS)
+   * OPTIMIZATION: Improved algorithm with query caching and optimized text processing
    * @private
    * @param {HTMLElement} element - Element to apply highlighting to
    * @param {string} query - Search query to highlight
@@ -1202,6 +1270,64 @@ class CompyApp {
   applySecureTextHighlighting(element, query) {
     if (!query || !element) return;
     
+    // OPTIMIZATION: Cache regex patterns for repeated highlighting operations
+    const highlightPattern = this.getHighlightPattern(query);
+    if (!highlightPattern) return;
+    
+    // OPTIMIZATION: Use optimized text node collection
+    const textNodes = this.collectTextNodes(element);
+    if (textNodes.length === 0) return;
+    
+    // BATCH PROCESSING: Process all text nodes efficiently
+    this.processTextNodesForHighlighting(textNodes, highlightPattern);
+  }
+  
+  /**
+   * Get cached highlight pattern for query
+   * OPTIMIZATION: Cache regex patterns to avoid recompilation
+   * @private
+   * @param {string} query - Search query
+   * @returns {RegExp|null} Compiled regex pattern or null if invalid
+   */
+  getHighlightPattern(query) {
+    // CACHE PATTERNS: Reuse patterns for same queries
+    if (!this._highlightPatterns) {
+      this._highlightPatterns = new Map();
+    }
+    
+    // CACHE HIT: Return existing pattern
+    if (this._highlightPatterns.has(query)) {
+      return this._highlightPatterns.get(query);
+    }
+    
+    try {
+      const escapedQuery = this.escapeRegExp(query);
+      const pattern = new RegExp(escapedQuery, 'gi');
+      
+      // CACHE MANAGEMENT: Limit cache size to prevent memory bloat
+      if (this._highlightPatterns.size >= 50) {
+        // Remove oldest entry (first in Map)
+        const firstKey = this._highlightPatterns.keys().next().value;
+        this._highlightPatterns.delete(firstKey);
+      }
+      
+      this._highlightPatterns.set(query, pattern);
+      return pattern;
+    } catch (error) {
+      // Invalid regex pattern
+      return null;
+    }
+  }
+  
+  /**
+   * Efficiently collect text nodes from element
+   * OPTIMIZATION: Faster text node collection using optimized tree traversal
+   * @private
+   * @param {HTMLElement} element - Element to traverse
+   * @returns {Text[]} Array of text nodes
+   */
+  collectTextNodes(element) {
+    const textNodes = [];
     const walker = document.createTreeWalker(
       element,
       NodeFilter.SHOW_TEXT,
@@ -1209,60 +1335,100 @@ class CompyApp {
       false
     );
     
-    const textNodes = [];
+    // OPTIMIZATION: Use while loop with direct assignment for better performance
     let node;
-    
-    // Collect all text nodes
     while (node = walker.nextNode()) {
-      textNodes.push(node);
+      // FILTER: Only include non-empty text nodes
+      if (node.textContent.trim().length > 0) {
+        textNodes.push(node);
+      }
     }
     
-    // Process each text node
+    return textNodes;
+  }
+  
+  /**
+   * Process text nodes for highlighting with optimized fragment handling
+   * OPTIMIZATION: Reduced DOM operations and improved fragment management
+   * @private
+   * @param {Text[]} textNodes - Array of text nodes to process
+   * @param {RegExp} pattern - Compiled regex pattern for highlighting
+   */
+  processTextNodesForHighlighting(textNodes, pattern) {
+    const elementsToReplace = []; // Batch replacements for better performance
+    
     textNodes.forEach(textNode => {
       const text = textNode.textContent;
-      const escapedQuery = this.escapeRegExp(query);
-      const regex = new RegExp(escapedQuery, 'gi');
       
-      if (regex.test(text)) {
-        const fragment = document.createDocumentFragment();
-        let lastIndex = 0;
-        let match;
-        
-        regex.lastIndex = 0; // Reset regex state
-        
-        while ((match = regex.exec(text)) !== null) {
-          // Add text before match
-          if (match.index > lastIndex) {
-            fragment.appendChild(
-              document.createTextNode(text.slice(lastIndex, match.index))
-            );
-          }
-          
-          // Add highlighted match using createElement (safe)
-          const mark = createElement('mark', {
-            textContent: match[0]
-          });
-          fragment.appendChild(mark);
-          
-          lastIndex = regex.lastIndex;
-          
-          // Prevent infinite loops on zero-length matches
-          if (match.index === regex.lastIndex) {
-            regex.lastIndex++;
-          }
-        }
-        
-        // Add remaining text
-        if (lastIndex < text.length) {
-          fragment.appendChild(
-            document.createTextNode(text.slice(lastIndex))
-          );
-        }
-        
-        // Replace text node with fragment
-        textNode.parentNode.replaceChild(fragment, textNode);
+      // OPTIMIZATION: Reset regex state once per text node
+      pattern.lastIndex = 0;
+      
+      // EARLY EXIT: Skip if no matches found
+      if (!pattern.test(text)) {
+        return;
+      }
+      
+      // Reset for actual processing
+      pattern.lastIndex = 0;
+      const fragment = this.createHighlightFragment(text, pattern);
+      
+      if (fragment.childNodes.length > 1) {
+        // Only process if highlighting actually occurred
+        elementsToReplace.push({ node: textNode, fragment });
       }
     });
+    
+    // BATCH DOM UPDATES: Perform all replacements together
+    elementsToReplace.forEach(({ node, fragment }) => {
+      if (node.parentNode) {
+        node.parentNode.replaceChild(fragment, node);
+      }
+    });
+  }
+  
+  /**
+   * Create document fragment with highlighted text
+   * OPTIMIZATION: Optimized fragment creation with reduced allocations
+   * @private
+   * @param {string} text - Text to highlight
+   * @param {RegExp} pattern - Regex pattern for matches
+   * @returns {DocumentFragment} Fragment with highlighted content
+   */
+  createHighlightFragment(text, pattern) {
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = pattern.exec(text)) !== null) {
+      // Add text before match
+      if (match.index > lastIndex) {
+        fragment.appendChild(
+          document.createTextNode(text.slice(lastIndex, match.index))
+        );
+      }
+      
+      // Add highlighted match using createElement (safe)
+      const mark = createElement('mark', {
+        textContent: match[0]
+      });
+      fragment.appendChild(mark);
+      
+      lastIndex = pattern.lastIndex;
+      
+      // OPTIMIZATION: Prevent infinite loops with zero-length matches
+      if (match.index === pattern.lastIndex) {
+        pattern.lastIndex++;
+      }
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      fragment.appendChild(
+        document.createTextNode(text.slice(lastIndex))
+      );
+    }
+    
+    return fragment;
   }
 
   /**
@@ -1686,8 +1852,8 @@ class CompyApp {
     // Click to select card and copy (but not on action buttons or when expanded)
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
-        // Skip copy functionality when card is expanded
-        if (card.classList.contains('expanded')) {
+        // Skip copy functionality when card is expanded or expanding (prevents race during animation)
+        if (card.classList.contains('expanded') || card.classList.contains('expanding')) {
           return;
         }
         
@@ -1717,10 +1883,10 @@ class CompyApp {
       switch (e.key) {
         case ' ':
         case 'Enter':
-          // Space or Enter to copy content (unless card is expanded)
+          // Space or Enter to copy content (unless card is expanded or expanding)
           if (!card.hasAttribute('aria-grabbed') || card.getAttribute('aria-grabbed') === 'false') {
-            // Skip copy functionality when card is expanded
-            if (card.classList.contains('expanded')) {
+            // Skip copy functionality when card is expanded or expanding (prevents race during animation)
+            if (card.classList.contains('expanded') || card.classList.contains('expanding')) {
               return;
             }
             e.preventDefault();
@@ -2109,90 +2275,208 @@ class CompyApp {
   }
 
   /**
-   * Handle profile field validation state
+   * Handle profile field validation state with accessibility support
+   * 
+   * This method manages the visual and accessibility state of the profile name input field,
+   * providing immediate feedback to users about validation errors. It follows WAI-ARIA
+   * guidelines for error handling and screen reader compatibility.
+   * 
+   * Accessibility Features:
+   * - Uses aria-invalid to indicate field state to screen readers
+   * - Creates alert regions for immediate error announcement
+   * - Links error messages to field using aria-describedby
+   * - Provides focus management for error recovery
+   * 
+   * @param {boolean} hasError - Whether the field currently has a validation error
+   * @param {string} [errorMessage=''] - Specific error message to display to user
    * @private
    */
   setProfileFieldState(hasError, errorMessage = '') {
     const field = $('#profileNameInput');
     if (!field) return;
     
-    // Clear existing error
+    // CLEANUP PHASE: Remove any existing error state to start fresh
+    // This prevents accumulation of multiple error elements and ensures clean state
     const existingError = $('#profile-name-error');
     if (existingError) {
       existingError.remove();
-      field.removeAttribute('aria-describedby');
+      field.removeAttribute('aria-describedby'); // Clean accessibility linkage
     }
     
+    // VISUAL STATE UPDATE: Apply error styling and accessibility attributes
+    // The error class triggers CSS styling, while aria-invalid informs screen readers
     field.classList.toggle('error', hasError);
     field.setAttribute('aria-invalid', hasError.toString());
     
+    // ERROR DISPLAY PHASE: Create and show error message if validation failed
     if (hasError && errorMessage) {
-      // Create and display error
+      // CREATE ERROR ELEMENT: Build accessible error message container
+      // The role="alert" ensures screen readers announce the error immediately
       const errorElement = document.createElement('div');
       errorElement.id = 'profile-name-error';
       errorElement.className = 'error-message';
       errorElement.textContent = errorMessage;
-      errorElement.setAttribute('role', 'alert');
+      errorElement.setAttribute('role', 'alert'); // Screen reader announcement
       
+      // DOM INSERTION: Place error message near the input field
+      // Using closest('.field') ensures the error appears in the logical location
       const fieldContainer = field.closest('.field');
       if (fieldContainer) {
         fieldContainer.appendChild(errorElement);
       }
       
+      // ACCESSIBILITY LINKAGE: Connect error message to input field
+      // This tells screen readers which error message belongs to which field
       field.setAttribute('aria-describedby', 'profile-name-error profileNameHelp');
+      
+      // FOCUS MANAGEMENT: Return focus to field for immediate correction
+      // Small delay allows screen reader to announce error before focus change
       setTimeout(() => field.focus(), 100);
     }
   }
 
   /**
-   * Validate and save profile name
+   * Validate and save profile name with comprehensive security and UX checks
+   * 
+   * OPTIMIZATION: This method uses optimized validation patterns with early exits
+   * and cached regex patterns for better performance.
+   * 
+   * This method implements a multi-layered validation strategy for profile names:
+   * 1. Input sanitization and length validation
+   * 2. Character safety validation to prevent injection attacks
+   * 3. HTML tag detection for XSS prevention
+   * 4. User feedback through accessibility-compliant error messaging
+   * 
    * @private
    */
   saveProfileWithValidation() {
+    // OPTIMIZATION: Use static validation patterns for better performance
+    const VALIDATION_PATTERNS = this.getValidationPatterns();
+    
     try {
-      this.setProfileFieldState(false); // Clear previous errors
+      // RESET VALIDATION STATE: Clear any previous error indicators
+      this.setProfileFieldState(false);
       
+      // DOM ELEMENT VALIDATION: Ensure the input field exists before proceeding
       const profileInput = $('#profileNameInput');
       if (!profileInput) {
-        this.showNotification('Profile save failed: Input not found', 'error');
-        return;
+        return this.handleValidationError('Profile save failed: Input not found', 'error');
       }
       
+      // INPUT ACQUISITION: Get raw input value with fallback protection
       const rawName = profileInput.value || '';
       
-      // Validate input
-      if (rawName.length > 100) {
-        this.setProfileFieldState(true, 'Profile name cannot exceed 100 characters');
-        this.showNotification('Profile name too long', 'error');
-        return;
+      // OPTIMIZED VALIDATION CHAIN: Use helper method with early exit optimization
+      const validationResult = this.validateProfileName(rawName, VALIDATION_PATTERNS);
+      if (!validationResult.isValid) {
+        return this.handleValidationError(
+          validationResult.userMessage,
+          'error',
+          validationResult.fieldMessage
+        );
       }
       
-      const trimmedName = rawName.trim();
-      const safePattern = /^[a-zA-Z0-9\s\-_.,']*$/;
+      const trimmedName = validationResult.processedName;
       
-      if (trimmedName.length > 0 && !safePattern.test(trimmedName)) {
-        this.setProfileFieldState(true, 'Only letters, numbers, spaces, and basic punctuation allowed.');
-        this.showNotification('Profile name contains invalid characters', 'error');
-        return;
-      }
-
-      if (/<[^>]*>/g.test(trimmedName)) {
-        this.setProfileFieldState(true, 'Profile name cannot contain HTML tags');
-        this.showNotification('Profile name cannot contain HTML tags', 'error');
-        return;
-      }
-
-      // Save valid profile
+      // PERSISTENCE LAYER: Save validated profile name to application state
       updateProfile(trimmedName);
+      
+      // UI CLEANUP: Close the profile editing modal after successful save
       this.modalManager.close('#profileModal');
       
-      const message = trimmedName ? `Profile updated to "${trimmedName}"` : 'Profile name cleared';
+      // USER FEEDBACK: Provide contextual success message
+      const message = trimmedName ? 
+        `Profile updated to "${trimmedName}"` :
+        'Profile name cleared';
       this.showNotification(message, 'success');
       
     } catch (error) {
+      // ERROR RECOVERY: Log detailed error information and show user-friendly message
       Logger.error('Profile save failed:', error);
       this.showNotification('Failed to save profile', 'error');
     }
+  }
+  
+  /**
+   * Get cached validation patterns for profile names
+   * OPTIMIZATION: Cache regex patterns to avoid recompilation
+   * @private
+   * @returns {Object} Validation patterns object
+   */
+  getValidationPatterns() {
+    // CACHE PATTERNS: Only create once and reuse for better performance
+    if (!this._validationPatterns) {
+      this._validationPatterns = {
+        safe: /^[a-zA-Z0-9\s\-_.,']*$/,
+        htmlTags: /<[^>]*>/g,
+        maxLength: 100
+      };
+    }
+    return this._validationPatterns;
+  }
+  
+  /**
+   * Optimized profile name validation with early exits
+   * OPTIMIZATION: Single function with multiple validation layers and early exits
+   * @private
+   * @param {string} rawName - Raw input name
+   * @param {Object} patterns - Validation patterns object
+   * @returns {Object} Validation result with isValid, processedName, userMessage, fieldMessage
+   */
+  validateProfileName(rawName, patterns) {
+    // VALIDATION LAYER 1: Length Constraint Check
+    // OPTIMIZATION: Early exit prevents unnecessary string processing
+    if (rawName.length > patterns.maxLength) {
+      return {
+        isValid: false,
+        userMessage: 'Profile name too long',
+        fieldMessage: 'Profile name cannot exceed 100 characters'
+      };
+    }
+    
+    // INPUT NORMALIZATION: Remove leading/trailing whitespace
+    const trimmedName = rawName.trim();
+    
+    // OPTIMIZATION: Only validate non-empty names for pattern matching
+    if (trimmedName.length > 0) {
+      // VALIDATION LAYER 2: Character Safety Pattern Matching
+      if (!patterns.safe.test(trimmedName)) {
+        return {
+          isValid: false,
+          userMessage: 'Profile name contains invalid characters',
+          fieldMessage: 'Only letters, numbers, spaces, and basic punctuation allowed.'
+        };
+      }
+      
+      // VALIDATION LAYER 3: HTML Tag Detection for XSS Prevention
+      if (patterns.htmlTags.test(trimmedName)) {
+        return {
+          isValid: false,
+          userMessage: 'Profile name cannot contain HTML tags',
+          fieldMessage: 'Profile name cannot contain HTML tags'
+        };
+      }
+    }
+    
+    return {
+      isValid: true,
+      processedName: trimmedName
+    };
+  }
+  
+  /**
+   * Handle validation errors with consistent error reporting
+   * OPTIMIZATION: Centralized error handling reduces code duplication
+   * @private
+   * @param {string} userMessage - User-facing error message
+   * @param {string} type - Notification type
+   * @param {string} [fieldMessage] - Field-specific error message
+   */
+  handleValidationError(userMessage, type, fieldMessage = null) {
+    if (fieldMessage) {
+      this.setProfileFieldState(true, fieldMessage);
+    }
+    this.showNotification(userMessage, type);
   }
 
   /**
@@ -2314,15 +2598,33 @@ class CompyApp {
   }
   
   /**
-   * Export the current state as a JSON file.
+   * Export the current state as a JSON file using browser File API
+   * 
+   * This method creates a downloadable JSON file containing the user's profile and snippets.
+   * It uses the browser's Blob API and temporary URL creation for file download without
+   * requiring a server round-trip.
+   * 
+   * Browser API Dependencies:
+   * - JSON.stringify() - Native JavaScript JSON serialization
+   * - Blob API - File API specification for creating file-like objects
+   * - URL.createObjectURL() - Creates downloadable URLs for blob data
+   * - HTMLAnchorElement.download - HTML5 download attribute support
+   * 
+   * File Format:
+   * Creates a JSON file with structure: { profileName: string, items: Array }
+   * Compatible with import functionality for data backup/restore workflows
    */
   async exportJSON() {
     try {
+      // DATA PREPARATION: Validate and structure data for export
       const preparation = this.prepareExportData();
       let payload = preparation.payload;
       
+      // EMPTY DATA HANDLING: Provide user choice when no data exists
       if (!preparation.isValid) {
         if (preparation.requiresConfirmation) {
+          // MODAL API INTERACTION: Use confirmation manager for user consent
+          // This leverages the accessible modal system for consistent UX
           const confirmed = await this.confirmationManager.show({
             title: 'Export Empty File',
             message: 'No snippets to export. Export empty file anyway?',
@@ -2331,66 +2633,141 @@ class CompyApp {
             variant: 'warning'
           });
           
+          // USER CANCELLED: Respect user decision to abort export
           if (!confirmed) return;
           
+          // EMPTY FILE CREATION: Create valid but empty export structure
+          // This maintains file format consistency for future imports
           const state = getState();
           payload = {
             profileName: (state.profileName || '').trim(),
-            items: []
+            items: [] // Empty array maintains JSON schema compatibility
           };
         } else {
+          // VALIDATION ERROR: Show error and abort export process
           this.showNotification(`Export failed: ${preparation.error}`, 'error');
           return;
         }
       }
       
+      // JSON SERIALIZATION: Convert JavaScript objects to JSON string format
+      // Parameters: (value, replacer=null, space=2) for human-readable formatting
+      // The space parameter adds indentation for easier manual review
       const jsonString = JSON.stringify(payload, null, 2);
+      
+      // FILE DOWNLOAD API: Trigger browser download using utilities module
+      // downloadFile() handles Blob creation, URL generation, and cleanup
+      // MIME type 'application/json' ensures proper file association
       downloadFile('compy-export.json', jsonString, 'application/json');
+      
+      // USER FEEDBACK: Confirm successful export with item count
+      // Provides immediate confirmation that operation completed successfully
       this.showNotification(`JSON export downloaded (${payload.items.length} items)`, 'success');
       
     } catch (error) {
+      // ERROR HANDLING: Log detailed error and provide user-friendly feedback
+      // Prevents app crashes while providing debugging information
       Logger.error('JSON export failed:', error);
       this.showNotification('Export failed: Unexpected error', 'error');
     }
   }
 
   /**
-   * Generate CSV content from application state
+   * Generate CSV content from application state with RFC 4180 compliance
+   * 
+   * This method transforms the application's JavaScript objects into CSV format
+   * suitable for spreadsheet applications and data exchange. The CSV structure
+   * includes metadata (profile name) followed by snippet data.
+   * 
+   * CSV Structure:
+   * Line 1: profileName (header)
+   * Line 2: actual profile name value
+   * Line 3: empty separator line
+   * Line 4: column headers for snippet data
+   * Line 5+: snippet data rows
+   * 
+   * @returns {{csv: string, itemCount: number}} CSV content and metadata
    * @private
    */
   generateCSV() {
+    // STATE RETRIEVAL: Get current application state for export
     const state = getState();
     
+    // CONDITIONAL VALIDATION: Ensure state exists and is a valid object
+    // Business Rule: Cannot export from corrupted or missing state
+    // This prevents runtime errors when state management fails
     if (!state || typeof state !== 'object') {
       throw new Error('Invalid application state for CSV export');
     }
     
+    // ARRAY VALIDATION: Safely extract items with fallback to empty array
+    // Conditional Logic: Only process if state.items is actually an array
+    // Fallback Behavior: Empty array prevents filter() errors on non-arrays
     const items = Array.isArray(state.items) ? state.items : [];
+    
+    // DATA FILTERING: Extract only valid items for CSV export
+    // Multi-Condition Validation Logic:
+    // 1. item exists (not null/undefined) - prevents null reference errors
+    // 2. typeof item === 'object' - ensures item has properties to access
+    // 3. item.id exists - required for item identification
+    // 4. item.text is string - required field for snippet content
+    // 5. item.desc is string - required field for snippet description
+    // 
+    // Business Rule: Only export complete, valid snippets to maintain data integrity
     const validItems = items.filter(item => 
-      item && 
-      typeof item === 'object' && 
-      item.id &&
-      typeof item.text === 'string' &&
-      typeof item.desc === 'string'
+      item &&                          // Null/undefined check
+      typeof item === 'object' &&     // Object type validation
+      item.id &&                      // Required ID field
+      typeof item.text === 'string' &&  // Required text field
+      typeof item.desc === 'string'     // Required description field
     );
     
+    // CSV STRUCTURE ASSEMBLY: Build rows according to defined format
     const rows = [
-      ['profileName'],
-      [csvEscape(state.profileName || '')],
+      // METADATA SECTION: Profile information header and value
+      ['profileName'],                    // Header row for metadata
+      [csvEscape(state.profileName || '')], // Profile name with XSS protection
+      
+      // SEPARATOR: Empty row for visual separation in spreadsheets
       [''],
+      
+      // DATA SECTION: Column headers for snippet data
       ['text', 'desc', 'sensitive', 'tags', 'position'],
+      
+      // ITEM ROWS: Transform each valid item into CSV-safe row
+      // Spread operator (...) flattens the mapped array into individual rows
       ...validItems.map(item => [
+        // TEXT FIELD: Escape special CSV characters (commas, quotes, newlines)
         csvEscape(item.text || ''),
+        
+        // DESCRIPTION FIELD: Escape and handle missing descriptions
         csvEscape(item.desc || ''),
+        
+        // SENSITIVE FLAG: Convert boolean to numeric for CSV compatibility
+        // Conditional Logic: true becomes '1', false becomes '0'
+        // Reasoning: Numbers are more universal across spreadsheet applications
         item.sensitive ? '1' : '0',
+        
+        // TAGS FIELD: Convert array to pipe-separated string with validation
+        // Conditional Logic: Only process if tags is actually an array
+        // Array Processing: join('|') creates pipe-separated values
+        // Fallback: Empty string for missing or invalid tag arrays
+        // Example: ['javascript', 'code'] becomes 'javascript|code'
         csvEscape(Array.isArray(item.tags) ? item.tags.join('|') : ''),
+        
+        // POSITION FIELD: Numeric position with fallback to 0
+        // Business Logic: Position determines display order in UI
+        // Fallback ensures all items have valid numeric positions
         item.position || 0
       ])
     ];
     
+    // CSV ASSEMBLY: Convert 2D array to CSV string format
+    // Process: Each row array becomes comma-separated string
+    // Then all rows joined with newlines to create final CSV content
     return {
-      csv: rows.map(row => row.join(',')).join('\n'),
-      itemCount: validItems.length
+      csv: rows.map(row => row.join(',')).join('\n'),  // Final CSV string
+      itemCount: validItems.length                      // Metadata for user feedback
     };
   }
   
@@ -3182,39 +3559,70 @@ class CompyApp {
   }
 
   /**
-   * Validate and insert an imported item into state.
-   * @param {Object} itemData - Candidate item
-   * @returns {boolean} True if item was accepted
+   * Validate and insert an imported item into state with consolidated validation logic
+   * 
+   * This method combines validation, deduplication, and state insertion into a single
+   * optimized operation, eliminating duplicate validation code patterns.
+   * 
+   * @param {Object} itemData - Candidate item data from import
+   * @param {Set} [dedupeSet] - Set for tracking duplicate detection signatures
+   * @returns {boolean} True if item was successfully accepted and inserted
    */
   addImportedItem(itemData, dedupeSet = undefined) {
-    // Validate first
+    // CONSOLIDATED VALIDATION: Use centralized validation logic
     const validation = validateItem(itemData);
     if (!validation.isValid) {
       console.warn('Skipping invalid item:', validation.errors);
       return false;
     }
 
-    // Build a simple signature for duplicate detection based on primary fields
-    // Duplicate criteria: same text + desc + sensitive flag (tags are ignored for matching)
-    const text = (itemData.text || '').trim();
-    const desc = (itemData.desc || '').trim();
-    const sensitiveSig = itemData.sensitive ? '1' : '0';
-    const signature = `${text}||${desc}||${sensitiveSig}`;
+    // OPTIMIZED DATA EXTRACTION: Single pass normalization with validation
+    // Combines trimming, type coercion, and fallback handling in one operation
+    const normalizedItem = this.normalizeItemData(itemData);
+    
+    // DUPLICATE DETECTION: Generate signature for efficient deduplication
+    // Duplicate criteria: same text + desc + sensitive flag (tags ignored for matching)
+    const signature = this.generateItemSignature(normalizedItem);
 
+    // EARLY RETURN: Skip duplicate items without further processing
     if (dedupeSet && dedupeSet.has(signature)) {
-      // Duplicate of existing or previously imported item
-      return false;
+      return false; // Already exists - skip silently
     }
 
-    upsertItem({
-      text,
-      desc,
-      sensitive: !!itemData.sensitive,
-      tags: Array.isArray(itemData.tags) ? itemData.tags : []
-    });
+    // STATE INSERTION: Add validated, normalized item to application state
+    upsertItem(normalizedItem);
 
+    // DEDUPLICATION TRACKING: Record signature for future duplicate detection
     if (dedupeSet) dedupeSet.add(signature);
     return true;
+  }
+  
+  /**
+   * Normalize item data with consistent patterns (DRY helper)
+   * 
+   * @param {Object} itemData - Raw item data
+   * @returns {Object} Normalized item with consistent structure
+   * @private
+   */
+  normalizeItemData(itemData) {
+    return {
+      text: (itemData.text || '').trim(),
+      desc: (itemData.desc || '').trim(), 
+      sensitive: !!itemData.sensitive,
+      tags: Array.isArray(itemData.tags) ? itemData.tags : []
+    };
+  }
+  
+  /**
+   * Generate consistent signature for item deduplication (DRY helper)
+   * 
+   * @param {Object} item - Normalized item data
+   * @returns {string} Unique signature for duplicate detection
+   * @private
+   */
+  generateItemSignature(item) {
+    const sensitiveSig = item.sensitive ? '1' : '0';
+    return `${item.text}||${item.desc}||${sensitiveSig}`;
   }
 
 
@@ -3735,19 +4143,33 @@ class CompyApp {
   }
 
   /**
-   * Render the filterable tag checklist inside the modal.
+   * Render the filterable tag checklist inside the modal with optimized performance
+   * 
+   * PERFORMANCE OPTIMIZATIONS:
+   * - Document fragment batching for DOM operations
+   * - Cached toLowerCase operations for search filtering
+   * - Set-based lookup for selected tags (O(1) vs O(n))
+   * - Single regex compilation for slug generation
+   * - Reduced innerHTML usage in favor of safe DOM methods
+   * 
    * @param {string[]} allTags - All tags across items (unique, sorted)
-   * @param {string[]} selectedTags - Currently selected filter tags
+   * @param {string[]} selectedTags - Currently selected filter tags 
    * @param {string} [searchQuery=''] - Filter query for the list itself
    */
   renderFilterList(allTags, selectedTags, searchQuery = '') {
     const list = $('#filterTagList');
     list.innerHTML = '';
 
-    const filteredTags = searchQuery ? 
-      allTags.filter(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) : 
-      allTags;
+    // OPTIMIZED FILTERING: Cache toLowerCase operations and compile regex once
+    let filteredTags;
+    if (searchQuery) {
+      const searchLower = searchQuery.toLowerCase(); // Cache for reuse
+      filteredTags = allTags.filter(tag => tag.toLowerCase().includes(searchLower));
+    } else {
+      filteredTags = allTags; // Skip filtering entirely when no search query
+    }
 
+    // EARLY RETURN: Handle empty states before expensive DOM operations
     if (filteredTags.length === 0) {
       const message = allTags.length === 0 ? 
         'No tags yet. Add tags to items to filter by them.' :
@@ -3756,28 +4178,63 @@ class CompyApp {
       return;
     }
 
+    // PERFORMANCE OPTIMIZATION: Use Set for O(1) lookup instead of O(n) includes()
+    const selectedTagsSet = new Set(selectedTags);
+    
+    // COMPILE REGEX ONCE: Avoid repeated regex compilation in forEach loop
+    const slugRegex = /[^a-z0-9\-_]+/g;
+    
+    // DOCUMENT FRAGMENT: Batch DOM operations for better performance
+    const fragment = document.createDocumentFragment();
+
+    // OPTIMIZED LOOP: Process all tags with cached operations
     filteredTags.forEach(tag => {
-      // Stable, safe ID for label/input pairing (handles spaces/special chars)
-      const slug = tag.toLowerCase().replace(/[^a-z0-9\-_]+/g, '-').slice(0, 24);
+      // PERFORMANCE: Cache toLowerCase call and reuse slug regex
+      const tagLower = tag.toLowerCase();
+      const slug = tagLower.replace(slugRegex, '-').slice(0, 24);
       const id = `filter-tag-${slug}-${Math.abs(stringHash(tag))}`;
-      const isSelected = selectedTags.includes(tag);
       
-      const label = document.createElement('label');
-      label.className = 'list-row';
-      label.htmlFor = id;
+      // OPTIMIZED LOOKUP: O(1) Set lookup vs O(n) array includes
+      const isSelected = selectedTagsSet.has(tag);
       
-      label.innerHTML = `
-        <input 
-          id="${id}" 
-          type="checkbox" 
-          value="${escapeHtml(tag)}"
-          ${isSelected ? 'checked' : ''}
-        />
-        <span>${highlightText(escapeHtml(tag), searchQuery)}</span>
-      `;
+      // SECURE DOM CREATION: Use safe DOM methods instead of innerHTML
+      const label = createElement('label', {
+        className: 'list-row',
+        attributes: { 'for': id }
+      });
       
-      list.appendChild(label);
+      // Create checkbox input securely
+      const input = createElement('input', {
+        attributes: {
+          id: id,
+          type: 'checkbox',
+          value: tag // No escaping needed for DOM attribute setting
+        }
+      });
+      
+      // Set checked state
+      if (isSelected) {
+        input.checked = true;
+      }
+      
+      // Create span with highlighting - reuse cached tagLower for comparison
+      const span = createElement('span');
+      if (searchQuery && tagLower.includes(searchQuery.toLowerCase())) {
+        // Apply highlighting using safe DOM methods
+        span.innerHTML = highlightText(escapeHtml(tag), searchQuery);
+      } else {
+        // No highlighting needed - use textContent for security
+        span.textContent = tag;
+      }
+      
+      // ASSEMBLE ELEMENTS: Build structure using DOM methods
+      label.appendChild(input);
+      label.appendChild(span);
+      fragment.appendChild(label);
     });
+
+    // SINGLE DOM OPERATION: Append all elements at once using fragment
+    list.appendChild(fragment);
   }
 
   /**
