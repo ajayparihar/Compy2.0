@@ -1356,11 +1356,9 @@ body.performance-mode * {
 
 /* =================================================================
    RESPONSIVE DESIGN
-   =================================================================
+   ================================================================= */
 
 /* On phones: hide the brand text and use hamburger for navigation */
-  box-sizing: border-box;
-}
 
 html,
 body {
@@ -1522,7 +1520,7 @@ body {
   left: 0;
 }
 .profile-display {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
@@ -1808,9 +1806,6 @@ select:hover {
   outline-offset: 2px;
 }
 
-.file-btn .nav-icon {
-  /* Remove margin to match other buttons */
-}
 
 /* Export button with caret - ensure proper spacing */
 .icon-btn.with-caret::after {
@@ -2733,17 +2728,39 @@ button[data-close-modal]:active {
 .field.with-clear {
   position: relative;
 }
+
+/* Clear field button - unified styling for all input/textarea clear buttons */
 .clear-field {
+  /* Positioning */
   position: absolute;
   right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  
+  /* Sizing */
+  width: 24px;
+  height: 24px;
+  
+  /* Layout */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* Styling */
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
+  
+  /* Typography */
+  font-size: var(--text-base);
+  line-height: var(--leading-none);
+  
+  /* Interaction */
+  opacity: 0.85;
+  transition: all var(--duration-normal) var(--ease-out);
+  user-select: none;
 }
 
 /* Tags input */
@@ -3090,8 +3107,6 @@ html[data-theme^="light-"] {
   --modal-bg-blur: 3px;
   --modal-backdrop-blur: 10px;
 }
-  padding: 12px 18px;
-}
 
 html[data-theme$="high-contrast"] .snackbar,
 html[data-theme$="high-contrast"] .snackbar.info {
@@ -3121,7 +3136,7 @@ html[data-theme$="high-contrast"] .snackbar.error {
   gap: 10px;
   padding: 32px;
   text-align: center;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .empty h2 {
   margin: 4px 0;
@@ -3153,7 +3168,7 @@ html[data-theme$="high-contrast"] .snackbar.error {
 
 /* Generic small empty note (e.g., inside lists) */
 .empty-note {
-  color: var(--muted);
+  color: var(--text-muted);
   text-align: center;
   padding: 8px 6px;
 }
@@ -3173,7 +3188,7 @@ html[data-theme$="high-contrast"] .snackbar.error {
 }
 .empty .lead {
   margin: 0 0 16px;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .empty .divider {
   height: 1px;
@@ -3189,7 +3204,7 @@ html[data-theme$="high-contrast"] .snackbar.error {
   justify-items: start;
 }
 .empty .empty-tips li {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 .empty .hero-icon {
   font-size: 40px;
@@ -3447,24 +3462,9 @@ textarea:focus {
 .input-wrap.with-clear > textarea {
   padding-right: 36px;
 }
-.clear-field {
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0.85;
-  line-height: var(--leading-none);
-  font-size: var(--text-base);
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-}
-.clear-field:hover {
-  opacity: 1;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-}
-.clear-field:focus-visible {
-  outline: 2px solid var(--primary);
-}
+
+/* Note: .clear-field styles are defined earlier in the file (around line 2736) */
+
 
 /* Checkbox accent color - generic checkboxes (e.g., in lists) */
 .field input[type="checkbox"] {
@@ -5332,4 +5332,223 @@ html[data-theme^="light-"] .expandable-card.expanded {
   white-space: nowrap;
   border: 0;
 }
+
+/* =================================================================
+   THEME PICKER STYLES
+   ================================================================= */
+
+/* Theme controls container */
+.theme-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: 0 0 var(--space-16);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-16);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 10;
+  /* Ensure background covers scrolling content */
+  margin-top: -12px;
+  padding-top: 12px;
+}
+
+/* Theme search wrapper */
+.theme-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+/* Theme search input */
+#themeSearch {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-interactive);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: var(--space-10) var(--space-12);
+  padding-right: 36px;
+  outline: none;
+  transition: var(--transition-colors);
+}
+
+#themeSearch:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+/* Theme filters */
+.theme-filters {
+  display: flex;
+  gap: var(--space-6);
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.theme-filters::-webkit-scrollbar {
+  display: none;
+}
+
+/* Filter chips */
+.theme-filter {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.theme-filter:hover {
+  background: var(--hover-overlay);
+  color: var(--text);
+  border-color: var(--border-interactive);
+}
+
+.theme-filter.active,
+.theme-filter[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--primary) 15%, var(--surface));
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Themes Grid */
+.themes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-16);
+  padding-bottom: var(--space-4);
+}
+
+/* Theme Card */
+.theme-card {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-lg);
+  padding: var(--space-12);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  transition: all var(--duration-fast) var(--ease-out);
+  height: 100%;
+}
+
+.theme-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.theme-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
+.theme-card.current {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm);
+  background: color-mix(in srgb, var(--primary) 4%, var(--bg));
+}
+
+/* Theme Header */
+.theme-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-8);
+}
+
+.theme-name {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text);
+  line-height: 1.3;
+}
+
+/* Theme Badges */
+.theme-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.theme-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.theme-badge.accessibility {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.theme-badge.high-contrast {
+  background: var(--text);
+  color: var(--bg);
+  border: 1px solid var(--text);
+}
+
+.theme-badge.current {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+/* Theme Description */
+.theme-description {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.4;
+  flex: 1; /* Pushes footer down */
+}
+
+/* Theme Preview - Swatches */
+.theme-preview {
+  display: flex;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  margin-top: auto; /* Push to bottom */
+}
+
+.color-swatch {
+  flex: 1;
+  height: 100%;
+}
+
+/* Theme Use Case */
+.theme-use-case {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+  margin-top: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .themes-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+}
+
 

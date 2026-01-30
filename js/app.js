@@ -696,7 +696,9 @@ class CompyApp {
       this.themePicker.init();
     } catch (error) {
       Logger.warn('Failed to initialize theme picker:', error);
-      // Fallback to basic theme functionality
+      // Fallback: hide the picker button if initialization fails to prevent dead clicks
+      const btn = document.getElementById('themePickerBtn');
+      if (btn) btn.style.display = 'none';
     }
     
     // Setup cross-tab synchronization
